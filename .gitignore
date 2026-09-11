@@ -1,0 +1,25 @@
+# ---------- Android / Gradle ----------
+android/build/
+android/app/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/*.iml
+android/app/*.iml
+android/.cxx/
+android/captures/
+android/app/release/
+
+# ---------- Python / Flask ----------
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/venv/
+backend/.venv/
+backend/instance/
+backend/*.db
+backend/.env
+
+# ---------- Sistema operativo ----------
+.DS_Store
+Thumbs.db
