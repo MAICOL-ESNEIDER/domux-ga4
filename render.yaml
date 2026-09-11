@@ -1,0 +1,25 @@
+# render.yaml — Blueprint de Render. En el dashboard de Render: New + > Blueprint,
+# apunta al repo de GitHub, y Render lee este archivo solo. Crea el servicio web
+# Y la base de datos Postgres automáticamente, ya conectados entre sí.
+
+services:
+  - type: web
+    name: domux-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: domux-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.11.9
+
+databases:
+  - name: domux-db
+    plan: free
