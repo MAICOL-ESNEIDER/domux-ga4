@@ -19,13 +19,13 @@ object RetrofitClient {
     // OPCIÓN 1 (por defecto, la misma que enseñan las guías GA1-GA3):
     // backend corriendo en tu PC con `python app.py`, emulador de Android Studio.
     // 10.0.2.2 es la dirección que el emulador entiende como "localhost de mi PC".
-    private const val BASE_URL = "http://10.0.2.2:5000/"
+    // private const val BASE_URL = "http://10.10.0.220:5000"
 
     // OPCIÓN 2 (si 10.0.2.2 no te conecta, como pasó en el proyecto de e-commerce):
     // deja el backend en 127.0.0.1 y antes de correr la app ejecuta en una terminal:
     //   adb reverse tcp:5000 tcp:5000
     // luego descomenta la siguiente línea y comenta la de arriba.
-    // private const val BASE_URL = "http://127.0.0.1:5000/"
+    private const val BASE_URL = "http://127.0.0.1:5000/"
 
     // OPCIÓN 3 (backend ya desplegado en Render, para probar en un celular físico
     // o para la entrega final): reemplaza por tu URL real de Render (con HTTPS).
