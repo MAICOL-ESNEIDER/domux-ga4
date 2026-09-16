@@ -4,6 +4,7 @@
 
 package com.dracknoval.domux.data
 
+import com.dracknoval.domux.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -11,22 +12,17 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    // ---------------------------------------------------------------------
-    // BASE_URL: elige UNA de estas tres opciones según dónde esté corriendo
-    // tu backend Flask. Solo debe haber UNA línea activa (las otras comentadas).
-    // ---------------------------------------------------------------------
+    // La URL se define por variante: dev usa el backend local y prod usa Render.
+    private val baseUrl = BuildConfig.BASE_URL
 
-    // URL del backend desplegado en Render. Esta es la opción activa para que la app
-    // apunte al servicio en la nube y no a localhost ni a rutas locales del proyecto.
-    private const val BASE_URL = "https://domux-backend.onrender.com/"
-
-    // Si en algún momento quieres volver al backend local, cambia esta línea por:
-    // private const val BASE_URL = "http://10.0.2.2:5000/"
-
-    // Interceptor: "espía" cada petición y respuesta y las escribe en Logcat
-    // (filtra por "OkHttp" en Logcat para verlas).
+    // El cuerpo de las peticiones solo se registra en la variante dev para
+    // evitar exponer credenciales o tokens en Logcat durante la entrega prod.
     private val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.FLAVOR == "dev") {
+            HttpLoggingInterceptor.Level.BODY
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
     }
 
     private val client = OkHttpClient.Builder()
@@ -34,7 +30,7 @@ object RetrofitClient {
         .build()
 
     val api: ApiService = Retrofit.Builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(baseUrl)
         .client(client)
         .addConverterFactory(GsonConverterFactory.create())
         .build()

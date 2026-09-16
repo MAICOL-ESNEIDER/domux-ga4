@@ -48,7 +48,8 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Debe quedar escuchando en `http://localhost:5000/`. La primera vez que arranca
+Debe quedar escuchando en `http://localhost:5000/`. La variante Android `dev`
+lo alcanza desde el emulador mediante `http://10.0.2.2:5000/`. La primera vez que arranca
 crea la base de datos (`domux.db`, SQLite) y siembra estos **usuarios de
 prueba**:
 
@@ -70,11 +71,13 @@ JSON uniforme con las claves `error` y `status`.
 1. Abre Android Studio → **Open** → selecciona la carpeta `android/` (no la
    raíz del repo).
 2. Espera a que sincronice Gradle.
-3. En `android/app/src/main/java/com/dracknoval/domux/data/RetrofitClient.kt`
-   confirma cuál `BASE_URL` está activa (por defecto, `10.0.2.2:5000`, para
-   emulador + backend local). Si no te conecta, sigue la Opción 2 que está
-   comentada en ese mismo archivo (`adb reverse`).
-4. Corre el backend (paso 1) y luego ejecuta la app (▶ Run) en el emulador.
+3. Elige la variante de compilación según el backend:
+   - `devDebug`: backend local en `http://10.0.2.2:5000/`.
+   - `prodDebug`: backend desplegado en Render.
+   En Android Studio se selecciona desde **Build Variants**. También puedes usar
+   `./gradlew.bat :app:assembleDevDebug` o `./gradlew.bat :app:assembleProdDebug`.
+4. Para `devDebug`, corre el backend local (paso 1) antes de ejecutar la app.
+   Para `prodDebug`, no necesitas levantar Flask localmente: la app consume Render.
 5. Inicia sesión con cualquiera de los usuarios de prueba de la tabla anterior.
 
 ## 3. Desplegar el backend en Render
@@ -83,11 +86,11 @@ JSON uniforme con las claves `error` y `status`.
 2. En Render: **New +** → **Blueprint** → conecta el repo → Render detecta
    `render.yaml` solo y crea el servicio web `domux-backend` **y** la base de
    datos Postgres `domux-db`, ya conectados.
-3. Cuando termine el deploy, Render te da una URL tipo
-   `https://domux-backend.onrender.com`. Pégala en `RetrofitClient.kt`
-   (Opción 3, ya comentada en el archivo) para consumir el backend real desde
-   un celular físico o para la entrega final.
-4. `render.yaml` ya arregla el detalle de que Render entrega la URL de
+4. Cuando termine el deploy, Render te da una URL tipo
+   `https://domux-backend.onrender.com`. La variante `prod` ya está configurada
+   para consumir esa URL; si Render asigna otra, actualiza `BASE_URL` en
+   `android/app/build.gradle.kts` y recompila `prodDebug`.
+5. `render.yaml` ya arregla el detalle de que Render entrega la URL de
    Postgres como `postgres://` y la app la convierte a `postgresql://`
    automáticamente (si no, SQLAlchemy falla al conectar).
 
