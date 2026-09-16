@@ -19,7 +19,7 @@ object Session {
 
     // El backend exige el encabezado "Authorization: Bearer <token>" en las rutas
     // protegidas. Este método arma ese texto ya listo para enviar.
-    fun bearer(): String = "Bearer $token"
+    fun bearer(): String = token?.let { "Bearer $it" } ?: ""
 
     // Borra la sesión (se usa al cerrar sesión).
     fun clear() {
