@@ -4,6 +4,8 @@
 
 package com.dracknoval.domux.data
 
+import com.dracknoval.domux.BuildConfig
+
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -19,7 +21,9 @@ object RetrofitClient {
     // OPCIÓN 1 (por defecto, la misma que enseñan las guías GA1-GA3):
     // backend corriendo en tu PC con `python app.py`, emulador de Android Studio.
     // 10.0.2.2 es la dirección que el emulador entiende como "localhost de mi PC".
-    private const val BASE_URL = "http://10.0.2.2:5000/"
+    // Ahora la URL base se toma desde BuildConfig (definida en app/build.gradle.kts) para facilitar
+    // cambiar entre local y el backend desplegado en Render sin editar el código fuente.
+    private val BASE_URL = BuildConfig.BASE_URL
 
     // OPCIÓN 2 (si 10.0.2.2 no te conecta, como pasó en el proyecto de e-commerce):
     // deja el backend en 127.0.0.1 y antes de correr la app ejecuta en una terminal:

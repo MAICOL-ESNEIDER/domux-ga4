@@ -14,6 +14,10 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // URL base del backend. Cambia aquí o sobreescribe en distintos builds si lo necesitas.
+        // Por defecto apunta al servicio desplegado en Render; para desarrollo local usa 10.0.2.2:5000.
+        buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
