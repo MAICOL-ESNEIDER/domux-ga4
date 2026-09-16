@@ -6,15 +6,27 @@
 # oculte botones, el backend vuelve a comprobar todo.
 
 import os
-from datetime import datetime, timedelta
+import secrets
+import logging
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import jwt
-from flask import request, jsonify, g
+from flask import request, g
 
+from errors import error_response
 from models import User
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "clave-de-desarrollo-domux-cambiar-en-produccion")
+logger = logging.getLogger(__name__)
+
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    JWT_SECRET = secrets.token_urlsafe(32)
+    logger.warning(
+        "JWT_SECRET no está configurado; se usará una clave temporal. "
+        "Configúralo antes de ejecutar el backend en producción."
+    )
+
 JWT_ALGORITHM = "HS256"
 JWT_EXP_HOURS = 24 * 7  # el token dura 7 días
 
@@ -23,7 +35,7 @@ def generate_token(user: User) -> str:
     payload = {
         "user_id": user.id,
         "role": user.role,
-        "exp": datetime.utcnow() + timedelta(hours=JWT_EXP_HOURS),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXP_HOURS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -40,17 +52,19 @@ def token_required(f):
     def wrapper(*args, **kwargs):
         token = _extraer_token()
         if not token:
-            return jsonify({"error": "Falta el token de autenticación"}), 401
+            return error_response(401, "Falta el token de autenticación")
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         except jwt.ExpiredSignatureError:
-            return jsonify({"error": "Tu sesión venció, inicia sesión de nuevo"}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"error": "Token inválido"}), 401
+            return error_response(401, "Tu sesión venció, inicia sesión de nuevo")
+        except jwt.PyJWTError:
+            return error_response(401, "Token inválido")
 
         user = User.query.get(payload.get("user_id"))
         if user is None:
-            return jsonify({"error": "El usuario del token ya no existe"}), 401
+            return error_response(401, "El usuario del token ya no existe")
+        if not getattr(user, "is_active", True):
+            return error_response(401, "Tu cuenta se encuentra inhabilitada")
 
         g.current_user = user
         return f(*args, **kwargs)
@@ -64,7 +78,7 @@ def role_required(*roles_permitidos):
         def wrapper(*args, **kwargs):
             user = getattr(g, "current_user", None)
             if user is None or user.role not in roles_permitidos:
-                return jsonify({"error": "No tienes permiso para hacer esta acción"}), 403
+                return error_response(403, "No tienes permiso para hacer esta acción")
             return f(*args, **kwargs)
 
         return wrapper

@@ -10,11 +10,11 @@ enseñada en las guías GA1-GA3 (Retrofit + `Models.kt`/`ApiService.kt`/
 
 Tres roles, un solo login:
 
-| Rol | Puede hacer |
-|---|---|
-| **Administrador** | Crear cuentas de residente y de guardia · publicar anuncios · ver todas las PQRS y responderlas · ver todas las reservas · ver todos los registros de portería (paquetes y visitas) |
-| **Residente** | Ver anuncios · crear y ver sus PQRS · reservar/cancelar zonas comunes · ver sus notificaciones (paquetes pendientes/entregados e historial de visitas) |
-| **Guardia de seguridad** | Registrar paquetes a nombre de un residente · registrar ingreso de visitantes/domiciliarios a nombre de un residente · marcar paquetes como entregados |
+| Rol                      | Puede hacer                                                                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Administrador**        | Crear cuentas de residente y de guardia · publicar anuncios · ver todas las PQRS y responderlas · ver todas las reservas · ver todos los registros de portería (paquetes y visitas) |
+| **Residente**            | Ver anuncios · crear y ver sus PQRS · reservar/cancelar zonas comunes · ver sus notificaciones (paquetes pendientes/entregados e historial de visitas)                              |
+| **Guardia de seguridad** | Registrar paquetes a nombre de un residente · registrar ingreso de visitantes/domiciliarios a nombre de un residente · marcar paquetes como entregados                              |
 
 Cada acción reservada está protegida en **dos capas**: la app oculta las
 opciones según el rol (`Session.isAdmin` / `isResident` / `isGuard`), y el
@@ -26,6 +26,9 @@ directamente sin el permiso adecuado, recibe **403**.
 ```
 ├── android/     → Proyecto de Android Studio (ábrelo apuntando a esta carpeta)
 ├── backend/     → API REST en Flask (desplegable en Render)
+│   ├── routes/  → Blueprints separados por responsabilidad
+│   ├── errors.py → Respuestas JSON y manejo global de errores
+│   └── logging_config.py → Auditoría de solicitudes y errores
 └── render.yaml  → Blueprint para desplegar el backend en Render de un clic
 ```
 
@@ -49,12 +52,18 @@ Debe quedar escuchando en `http://localhost:5000/`. La primera vez que arranca
 crea la base de datos (`domux.db`, SQLite) y siembra estos **usuarios de
 prueba**:
 
-| Rol | Correo | Contraseña |
-|---|---|---|
-| Administrador | `admin@domux.com` | `admin123` |
-| Guardia | `guardia@domux.com` | `guardia123` |
-| Residente | `maria@domux.com` | `residente123` |
-| Residente | `carlos@domux.com` | `residente123` |
+| Rol           | Correo              | Contraseña     |
+| ------------- | ------------------- | -------------- |
+| Administrador | `admin@domux.com`   | `admin123`     |
+| Guardia       | `guardia@domux.com` | `guardia123`   |
+| Residente     | `maria@domux.com`   | `residente123` |
+| Residente     | `carlos@domux.com`  | `residente123` |
+
+El backend registra el inicio y resultado de cada solicitud, además de las
+excepciones no controladas. Por defecto escribe en la salida del servidor;
+puede usarse `LOG_LEVEL=WARNING` para cambiar el nivel y `LOG_FILE=domux.log`
+para añadir un archivo rotativo de auditoría. Los errores HTTP devuelven un
+JSON uniforme con las claves `error` y `status`.
 
 ## 2. Abrir y correr la app Android
 
@@ -84,40 +93,40 @@ prueba**:
 
 ## 4. Contrato de la API (tabla de endpoints)
 
-| Funcionalidad | Método y ruta | ¿Token? | ¿Rol? | Códigos de error |
-|---|---|---|---|---|
-| Login | `POST /api/auth/login` | No | — | 401 |
-| Listar usuarios | `GET /api/users` | Sí | ADMIN | 401, 403 |
-| Crear usuario | `POST /api/users` | Sí | ADMIN | 400, 401, 403, 409 |
-| Listar residentes (para asignar) | `GET /api/residents` | Sí | ADMIN, GUARD | 401, 403 |
-| Ver anuncios | `GET /api/announcements` | Sí | cualquiera | 401 |
-| Publicar anuncio | `POST /api/announcements` | Sí | ADMIN | 400, 401, 403 |
-| Ver PQRS | `GET /api/pqrs` | Sí | ADMIN (todas), RESIDENT (propias) | 401, 403 |
-| Crear PQRS | `POST /api/pqrs` | Sí | RESIDENT | 400, 401, 403 |
-| Responder PQRS | `PUT /api/pqrs/{id}/respond` | Sí | ADMIN | 400, 401, 403, 404 |
-| Ver zonas comunes | `GET /api/common-areas` | Sí | cualquiera | 401 |
-| Ver reservas | `GET /api/reservations` | Sí | ADMIN (todas), RESIDENT (propias) | 401, 403 |
-| Crear reserva | `POST /api/reservations` | Sí | RESIDENT | 400, 401, 403 |
-| Cancelar reserva | `PUT /api/reservations/{id}/cancel` | Sí | RESIDENT (propia), ADMIN | 401, 403, 404 |
-| Ver paquetes | `GET /api/packages` | Sí | ADMIN, GUARD (todos), RESIDENT (propios) | 401 |
-| Registrar paquete | `POST /api/packages` | Sí | GUARD | 400, 401, 403 |
-| Marcar paquete entregado | `PUT /api/packages/{id}/deliver` | Sí | GUARD | 401, 403, 404 |
-| Ver visitas | `GET /api/visits` | Sí | ADMIN, GUARD (todas), RESIDENT (propias) | 401 |
-| Registrar visita | `POST /api/visits` | Sí | GUARD | 400, 401, 403 |
+| Funcionalidad                    | Método y ruta                       | ¿Token? | ¿Rol?                                    | Códigos de error   |
+| -------------------------------- | ----------------------------------- | ------- | ---------------------------------------- | ------------------ |
+| Login                            | `POST /api/auth/login`              | No      | —                                        | 401                |
+| Listar usuarios                  | `GET /api/users`                    | Sí      | ADMIN                                    | 401, 403           |
+| Crear usuario                    | `POST /api/users`                   | Sí      | ADMIN                                    | 400, 401, 403, 409 |
+| Listar residentes (para asignar) | `GET /api/residents`                | Sí      | ADMIN, GUARD                             | 401, 403           |
+| Ver anuncios                     | `GET /api/announcements`            | Sí      | cualquiera                               | 401                |
+| Publicar anuncio                 | `POST /api/announcements`           | Sí      | ADMIN                                    | 400, 401, 403      |
+| Ver PQRS                         | `GET /api/pqrs`                     | Sí      | ADMIN (todas), RESIDENT (propias)        | 401, 403           |
+| Crear PQRS                       | `POST /api/pqrs`                    | Sí      | RESIDENT                                 | 400, 401, 403      |
+| Responder PQRS                   | `PUT /api/pqrs/{id}/respond`        | Sí      | ADMIN                                    | 400, 401, 403, 404 |
+| Ver zonas comunes                | `GET /api/common-areas`             | Sí      | cualquiera                               | 401                |
+| Ver reservas                     | `GET /api/reservations`             | Sí      | ADMIN (todas), RESIDENT (propias)        | 401, 403           |
+| Crear reserva                    | `POST /api/reservations`            | Sí      | RESIDENT                                 | 400, 401, 403      |
+| Cancelar reserva                 | `PUT /api/reservations/{id}/cancel` | Sí      | RESIDENT (propia), ADMIN                 | 401, 403, 404      |
+| Ver paquetes                     | `GET /api/packages`                 | Sí      | ADMIN, GUARD (todos), RESIDENT (propios) | 401                |
+| Registrar paquete                | `POST /api/packages`                | Sí      | GUARD                                    | 400, 401, 403      |
+| Marcar paquete entregado         | `PUT /api/packages/{id}/deliver`    | Sí      | GUARD                                    | 401, 403, 404      |
+| Ver visitas                      | `GET /api/visits`                   | Sí      | ADMIN, GUARD (todas), RESIDENT (propias) | 401                |
+| Registrar visita                 | `POST /api/visits`                  | Sí      | GUARD                                    | 400, 401, 403      |
 
 Todas las rutas protegidas exigen el encabezado `Authorization: Bearer <token>`.
 
 ## 5. Mapeo con la arquitectura de GA1-GA3
 
-| Archivo/patrón enseñado en GA1-GA3 | Dónde está en este proyecto |
-|---|---|
-| `data/Models.kt` | `android/.../data/Models.kt` |
-| `data/ApiService.kt` (Retrofit, `Response<T>`) | `android/.../data/ApiService.kt` |
-| `data/RetrofitClient.kt` | `android/.../data/RetrofitClient.kt` |
-| `data/Session.kt` (objeto en memoria) | `android/.../data/Session.kt` (con 3 roles en vez de 1 booleano `isAdmin`) |
-| `MainActivity.kt` con `NavHost` inline | `android/.../MainActivity.kt` |
-| `if (Session.isAdmin)` para ocultar opciones | Igual, extendido a `isAdmin` / `isResident` / `isGuard` en `HomeScreen.kt` y cada pantalla |
-| Backend Flask consumido por la app | `backend/app.py` (en vez del backend de e-commerce del curso) |
+| Archivo/patrón enseñado en GA1-GA3             | Dónde está en este proyecto                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `data/Models.kt`                               | `android/.../data/Models.kt`                                                               |
+| `data/ApiService.kt` (Retrofit, `Response<T>`) | `android/.../data/ApiService.kt`                                                           |
+| `data/RetrofitClient.kt`                       | `android/.../data/RetrofitClient.kt`                                                       |
+| `data/Session.kt` (objeto en memoria)          | `android/.../data/Session.kt` (con 3 roles en vez de 1 booleano `isAdmin`)                 |
+| `MainActivity.kt` con `NavHost` inline         | `android/.../MainActivity.kt`                                                              |
+| `if (Session.isAdmin)` para ocultar opciones   | Igual, extendido a `isAdmin` / `isResident` / `isGuard` en `HomeScreen.kt` y cada pantalla |
+| Backend Flask consumido por la app             | `backend/app.py` (en vez del backend de e-commerce del curso)                              |
 
 ## 6. Alcance y "versión 2" (lo que queda fuera a propósito)
 
