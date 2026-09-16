@@ -20,6 +20,10 @@ backend/instance/
 backend/*.db
 backend/.env
 
+# Heap dumps
+*.hprof
+
+
 # ---------- Sistema operativo ----------
 .DS_Store
 Thumbs.db
