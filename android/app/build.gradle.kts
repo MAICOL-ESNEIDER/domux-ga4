@@ -14,6 +14,10 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // URL base del backend. Cambia aquí o sobreescribe en distintos builds si lo necesitas.
+        // Por defecto apunta al servicio desplegado en Render; para desarrollo local usa 10.0.2.2:5000.
+        buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -29,6 +33,22 @@ android {
             )
         }
     }
+
+    // Definir flavors para poder cambiar la BASE_URL sin editar código.
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            // Usa el backend local cuando corres en emulador
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:5000/\"")
+        }
+        create("prod") {
+            dimension = "environment"
+            // URL por defecto apuntando al servicio desplegado en Render
+            buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -38,6 +58,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // Habilitar generación de BuildConfig para poder usar buildConfigField por flavor
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
