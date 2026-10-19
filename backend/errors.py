@@ -31,5 +31,5 @@ def register_error_handlers(app):
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
-        logger.exception("Error no controlado en %s %s", request.method, request.path)
+        app.logger.exception("Error no controlado en %s %s", request.method, request.path)
         return error_response(500)
