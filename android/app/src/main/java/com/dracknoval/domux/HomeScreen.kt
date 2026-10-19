@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.dracknoval.domux.data.FileLogger
 import com.dracknoval.domux.data.Session
 
 @Composable
@@ -85,9 +86,19 @@ fun HomeScreen(navController: NavController) {
             Spacer(Modifier.height(12.dp))
         }
 
-        Spacer(Modifier.height(20.dp))
+        // ----- Acceso a los logs de la app -----
+        OutlinedButton(
+            onClick = { navController.navigate("logs") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Ver / Exportar Logs de la App")
+        }
+        Spacer(Modifier.height(12.dp))
+
+        Spacer(Modifier.height(12.dp))
         OutlinedButton(
             onClick = {
+                FileLogger.log("Auth", "Cierre de sesión de usuario: ${Session.userName}")
                 Session.clear()
                 navController.navigate("login") { popUpTo(0) }
             },

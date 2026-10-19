@@ -13,11 +13,16 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dracknoval.domux.data.FileLogger
 import com.dracknoval.domux.ui.theme.DomuxAppTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Inicializar el sistema de archivo de logs
+        FileLogger.init(applicationContext)
+
         setContent {
             DomuxAppTheme {
                 Surface(
@@ -33,6 +38,7 @@ class MainActivity : ComponentActivity() {
                         composable("reservations") { ReservationsScreen(navController) }
                         composable("registry") { RegistryScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
+                        composable("logs") { LogsScreen(navController) }
                     }
                 }
             }

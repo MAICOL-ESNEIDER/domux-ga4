@@ -13,6 +13,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.dracknoval.domux.data.FileLogger
 import com.dracknoval.domux.data.LoginRequest
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
@@ -61,17 +62,20 @@ fun LoginScreen(navController: NavController) {
             onClick = {
                 if (!email.contains("@") || password.isBlank()) {
                     result = "Escribe un correo válido y tu contraseña"
+                    FileLogger.log("Auth", "Intento de inicio de sesión con correo o clave inválidos", "WARN")
                     return@Button
                 }
                 loading = true
                 result = ""
+                FileLogger.log("Auth", "Iniciando autenticación para usuario: $email")
                 scope.launch {
                     try {
                         val response = RetrofitClient.api.login(LoginRequest(email, password))
                         if (response.isSuccessful) {
                             val user = response.body()?.user
                             if (user == null) {
-                                result = "⚠️ El servidor no envió los datos del usuario"
+                                result = " El servidor no envió los datos del usuario"
+                                FileLogger.log("Auth", "Respuesta de login exitosa pero cuerpo de usuario nulo", "WARN")
                             } else {
                                 // Guardamos la sesión: token, nombre, rol y apartamento.
                                 Session.token = response.body()?.token
@@ -79,16 +83,21 @@ fun LoginScreen(navController: NavController) {
                                 Session.userName = user.name
                                 Session.role = user.role
                                 Session.apartment = user.apartment
+
+                                FileLogger.log("Auth", "Inicio de sesión exitoso. Usuario: ${user.name}, Rol: ${user.role}")
+
                                 // Vamos al menú y borramos "login" del historial.
                                 navController.navigate("home") {
                                     popUpTo("login") { inclusive = true }
                                 }
                             }
                         } else {
-                            result = "❌ ${mensajeDeError(response.code(), response.errorBody()?.string())}"
+                            result = "${mensajeDeError(response.code(), response.errorBody()?.string())}"
+                            FileLogger.log("Auth", "Error de inicio de sesión: código ${response.code()}", "ERROR")
                         }
                     } catch (e: Exception) {
-                        result = "⚠️ No se pudo conectar con el servidor: ${e.message}"
+                        result = "No se pudo conectar con el servidor: ${e.message}"
+                        FileLogger.log("Auth", "Excepción en inicio de sesión: ${e.message}", "ERROR")
                     } finally {
                         loading = false
                     }
@@ -98,6 +107,15 @@ fun LoginScreen(navController: NavController) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(if (loading) "Entrando..." else "Entrar")
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = { navController.navigate("logs") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Ver / Exportar Logs de la App")
         }
 
         if (result.isNotEmpty()) {
