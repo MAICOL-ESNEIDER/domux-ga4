@@ -39,8 +39,9 @@ android {
     productFlavors {
         create("dev") {
             dimension = "environment"
-            // Usa el backend local cuando corres en emulador
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:5000/\"")
+            // EMULADOR: "http://10.0.2.2:5000/"
+            // DISPOSITIVO FÍSICO, la IP local del PC,: "http://192.168.1.5:5000/"
+            buildConfigField("String", "BASE_URL", "\"10.0.2.2:5000/\"")
         }
         create("prod") {
             dimension = "environment"

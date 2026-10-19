@@ -4,39 +4,72 @@
 
 package com.dracknoval.domux.data
 
+import com.dracknoval.domux.BuildConfig
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
 
-    // ---------------------------------------------------------------------
-    // BASE_URL: elige UNA de estas tres opciones según dónde esté corriendo
-    // tu backend Flask. Solo debe haber UNA línea activa (las otras comentadas).
-    // ---------------------------------------------------------------------
+    // Sanitiza la URL para asegurar que empiece con http:// o https:// y termine en /
+    private val baseUrl: String
+        get() {
+            var url = BuildConfig.BASE_URL.trim()
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = "http://$url"
+            }
+            if (!url.endsWith("/")) {
+                url = "$url/"
+            }
+            return url
+        }
 
-    // URL del backend desplegado en Render. Esta es la opción activa para que la app
-    // apunte al servicio en la nube y no a localhost ni a rutas locales del proyecto.
-    private const val BASE_URL = "https://domux-backend.onrender.com/"
-
-    // Si en algún momento quieres volver al backend local, cambia esta línea por:
-    // private const val BASE_URL = "http://10.0.2.2:5000/"
-
-    // Interceptor: "espía" cada petición y respuesta y las escribe en Logcat
-    // (filtra por "OkHttp" en Logcat para verlas).
+    // El cuerpo de las peticiones solo se registra en la variante dev para Logcat.
     private val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.FLAVOR.contains("dev")) {
+            HttpLoggingInterceptor.Level.BODY
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
+    }
+
+    // Interceptor personalizado que registra cada petición y respuesta en el archivo domux_app.log
+    private val fileLoggingInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val startNs = System.nanoTime()
+        FileLogger.log("HTTP", "--> ${request.method} ${request.url}")
+
+        val response: okhttp3.Response
+        try {
+            response = chain.proceed(request)
+        } catch (e: Exception) {
+            FileLogger.log("HTTP", "<-- FALLÓ ${request.method} ${request.url}: ${e.message}", "ERROR")
+            throw e
+        }
+
+        val tookMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs)
+        FileLogger.log("HTTP", "<-- ${response.code} ${response.message} ${request.url} (${tookMs}ms)")
+        response
     }
 
     private val client = OkHttpClient.Builder()
+        .addInterceptor(fileLoggingInterceptor)
         .addInterceptor(logging)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    val api: ApiService = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .client(client)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-        .create(ApiService::class.java)
+    val api: ApiService by lazy {
+        FileLogger.log("Retrofit", "Inicializando cliente con URL base: $baseUrl")
+        Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(ApiService::class.java)
+    }
 }
