@@ -13,11 +13,14 @@ from functools import wraps
 
 import jwt
 from flask import request, g
+from dotenv import load_dotenv
 
 from errors import error_response
 from models import User
 
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 JWT_SECRET = os.environ.get("JWT_SECRET")
 if not JWT_SECRET:
