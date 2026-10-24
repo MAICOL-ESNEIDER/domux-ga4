@@ -70,6 +70,12 @@ def migrate_sqlite_schema():
                         f'ALTER TABLE "{table_name}" ADD COLUMN '
                         f'"{column_name}" {column_type}'
                     )
+        if "reservations" in existing_tables:
+            connection.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_reservation_active_slot "
+                "ON reservations (common_area_id, date, time_slot) "
+                "WHERE status IN ('activa', 'aprobada')"
+            )
 
 
 def create_app():

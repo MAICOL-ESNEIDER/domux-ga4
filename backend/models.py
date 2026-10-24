@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+from sqlalchemy import Index, text
+
 from extensions import db
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
@@ -142,6 +144,17 @@ class CommonArea(db.Model):
 
 class Reservation(db.Model):
     __tablename__ = "reservations"
+    __table_args__ = (
+        Index(
+            "uq_reservation_active_slot",
+            "common_area_id",
+            "date",
+            "time_slot",
+            unique=True,
+            sqlite_where=text("status IN ('activa', 'aprobada')"),
+            postgresql_where=text("status IN ('activa', 'aprobada')"),
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
