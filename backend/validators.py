@@ -3,12 +3,12 @@
 import re
 from datetime import date, datetime
 
-from models import MEDIA_TYPES, OCCUPANCY_TYPES
-
 PASSWORD_REGEX = re.compile(
     r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._-])"
     r"[A-Za-z\d@$!%*?&#._-]{8,}$"
 )
+MEDIA_TYPES = ("image", "video", "audio")
+OCCUPANCY_TYPES = ("propietario", "arrendatario", "arrendador", "visitante")
 VALID_TIME_SLOTS = (
     "08:00-10:00",
     "10:00-12:00",
@@ -28,7 +28,7 @@ def require_non_empty_fields(data, required_fields):
         return "El cuerpo de la solicitud debe ser un objeto JSON válido."
     for field_name, label in required_fields:
         value = data.get(field_name)
-        if value is None or (isinstance(value, str) and not value.strip()):
+        if not isinstance(value, str) or not value.strip():
             return f"El campo '{label}' es obligatorio y no puede estar vacío."
     return None
 
@@ -37,10 +37,23 @@ def validate_no_empty_strings(data):
     """Reject whitespace-only strings supplied to any write endpoint."""
     if not isinstance(data, dict):
         return "El cuerpo de la solicitud debe ser un objeto JSON válido."
-    for field_name, value in data.items():
+
+    def find_empty(value, path):
         if isinstance(value, str) and not value.strip():
-            return f"El campo '{field_name}' no puede estar vacío."
-    return None
+            return f"El campo '{path}' no puede estar vacío."
+        if isinstance(value, dict):
+            for key, nested_value in value.items():
+                error = find_empty(nested_value, f"{path}.{key}" if path else key)
+                if error:
+                    return error
+        if isinstance(value, list):
+            for index, nested_value in enumerate(value):
+                error = find_empty(nested_value, f"{path}[{index}]")
+                if error:
+                    return error
+        return None
+
+    return find_empty(data, "")
 
 
 def validate_strong_password(password):
@@ -56,6 +69,15 @@ def validate_strong_password(password):
 
 
 def validate_future_or_today_date(date_str):
+    message = validate_iso_date(date_str)
+    if message:
+        return message
+    if datetime.strptime(date_str, "%Y-%m-%d").date() < date.today():
+        return "No puedes seleccionar una fecha anterior al día de hoy."
+    return None
+
+
+def validate_iso_date(date_str):
     if not isinstance(date_str, str) or not date_str:
         return "Debes seleccionar una fecha válida del calendario (AAAA-MM-DD)."
     try:
@@ -64,8 +86,6 @@ def validate_future_or_today_date(date_str):
         return "Formato de fecha inválido. Usa el calendario en formato AAAA-MM-DD."
     if parsed_date.isoformat() != date_str:
         return "Formato de fecha inválido. Usa el calendario en formato AAAA-MM-DD."
-    if parsed_date < date.today():
-        return "No puedes seleccionar una fecha anterior al día de hoy."
     return None
 
 

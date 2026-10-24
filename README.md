@@ -55,16 +55,17 @@ prueba**:
 
 | Rol           | Correo              | Contraseña     |
 | ------------- | ------------------- | -------------- |
-| Administrador | `admin@domux.com`   | `admin123`     |
-| Guardia       | `guardia@domux.com` | `guardia123`   |
-| Residente     | `maria@domux.com`   | `residente123` |
-| Residente     | `carlos@domux.com`  | `residente123` |
+| Administrador | `admin@domux.com`   | `Admin123*`     |
+| Guardia       | `guardia@domux.com` | `Guardia123*`   |
+| Residente     | `maria@domux.com`   | `Residente123*` |
+| Residente     | `carlos@domux.com`  | `Residente123*` |
 
 El backend registra el inicio y resultado de cada solicitud, además de las
-excepciones no controladas. Por defecto escribe en la salida del servidor;
-puede usarse `LOG_LEVEL=WARNING` para cambiar el nivel y `LOG_FILE=domux.log`
-para añadir un archivo rotativo de auditoría. Los errores HTTP devuelven un
-JSON uniforme con las claves `error` y `status`.
+excepciones no controladas, únicamente en la salida de consola del servidor.
+`LOG_LEVEL=WARNING` permite cambiar el nivel de detalle. Los errores HTTP
+devuelven un JSON uniforme con las claves `error` y `status`.
+Configura `JWT_SECRET` en el entorno desplegado para mantener la clave fuera
+del código; si no está definida, el MVP usa una clave estable de respaldo.
 
 ## 2. Abrir y correr la app Android
 

@@ -7,8 +7,6 @@ from sqlalchemy import Index, text
 from extensions import db
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
-OCCUPANCY_TYPES = ("propietario", "arrendatario", "arrendador", "visitante")
-MEDIA_TYPES = ("image", "video", "audio")
 
 
 def _fmt(value):
