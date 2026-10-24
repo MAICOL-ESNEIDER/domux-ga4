@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
+from sqlalchemy import inspect
 
 from errors import register_error_handlers
 from extensions import db
@@ -14,6 +15,61 @@ from routes.security import bp as security_bp
 from seed import seed_if_empty
 
 load_dotenv()
+
+SQLITE_ADDITIONS = {
+    "users": {
+        "last_name": "VARCHAR(120)",
+        "phone": "VARCHAR(30)",
+        "document_id": "VARCHAR(40)",
+        "occupancy_type": "VARCHAR(30)",
+        "is_active": "BOOLEAN NOT NULL DEFAULT 1",
+    },
+    "announcements": {
+        "event_date": "VARCHAR(20)",
+        "event_time": "VARCHAR(20)",
+        "media_url": "TEXT",
+        "media_type": "VARCHAR(20)",
+    },
+    "pqrs": {
+        "category": "VARCHAR(40)",
+        "incident_date": "VARCHAR(20)",
+        "incident_time": "VARCHAR(20)",
+        "media_url": "TEXT",
+        "media_type": "VARCHAR(20)",
+        "updated_at": "DATETIME",
+    },
+    "packages": {
+        "media_url": "TEXT",
+        "media_type": "VARCHAR(20)",
+        "event_date": "VARCHAR(20)",
+        "event_time": "VARCHAR(20)",
+    },
+    "visits": {
+        "visitor_document": "VARCHAR(40)",
+    },
+}
+
+
+def migrate_sqlite_schema():
+    """Add model columns to existing SQLite tables without replacing user data."""
+    if db.engine.dialect.name != "sqlite":
+        return
+
+    inspector = inspect(db.engine)
+    existing_tables = set(inspector.get_table_names())
+    with db.engine.begin() as connection:
+        for table_name, additions in SQLITE_ADDITIONS.items():
+            if table_name not in existing_tables:
+                continue
+            existing_columns = {
+                column["name"] for column in inspector.get_columns(table_name)
+            }
+            for column_name, column_type in additions.items():
+                if column_name not in existing_columns:
+                    connection.exec_driver_sql(
+                        f'ALTER TABLE "{table_name}" ADD COLUMN '
+                        f'"{column_name}" {column_type}'
+                    )
 
 
 def create_app():
@@ -37,6 +93,7 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        migrate_sqlite_schema()
         seed_if_empty()
 
     return app
