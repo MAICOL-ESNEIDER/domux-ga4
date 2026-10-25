@@ -12,9 +12,9 @@ Tres roles, un solo login:
 
 | Rol                      | Puede hacer                                                                                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Administrador**        | Crear cuentas de residente y de guardia · publicar anuncios · ver todas las PQRS y responderlas · ver todas las reservas · ver todos los registros de portería (paquetes y visitas) |
-| **Residente**            | Ver anuncios · crear y ver sus PQRS · reservar/cancelar zonas comunes · ver sus notificaciones (paquetes pendientes/entregados e historial de visitas)                              |
-| **Guardia de seguridad** | Registrar paquetes a nombre de un residente · registrar ingreso de visitantes/domiciliarios a nombre de un residente · marcar paquetes como entregados                              |
+| **Administrador**        | Crear y editar usuarios · restablecer contraseñas · publicar/eliminar anuncios · gestionar PQRS y reservas · registrar paquetes y visitas · bandeja de notificaciones |
+| **Residente**            | Ver anuncios · crear y ver sus PQRS · reservar/cancelar zonas comunes · consultar paquetes, visitas y notificaciones |
+| **Guardia de seguridad** | Registrar paquetes y visitas a nombre de un residente · marcar paquetes como entregados |
 
 Cada acción reservada está protegida en **dos capas**: la app oculta las
 opciones según el rol (`Session.isAdmin` / `isResident` / `isGuard`), y el

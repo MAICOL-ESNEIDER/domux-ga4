@@ -1,12 +1,8 @@
-// RegistryScreen.kt — "Portería": paquetes y visitantes/domiciliarios, todo en una
-// sola pantalla para no duplicar código entre los 3 roles.
-// Guardia: registra paquetes y visitas, y marca paquetes como entregados.
-// Residente: ve el historial de sus propios paquetes y visitas (sus "notificaciones").
-// Administrador: ve todo lo que los guardias han registrado (solo lectura).
-
 package com.dracknoval.domux
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -25,244 +21,277 @@ import com.dracknoval.domux.data.Visit
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.launch
 
+private val packageFilters = listOf(
+    "Todos" to null,
+    "Por llegar" to "por_llegar",
+    "En portería" to "pendiente",
+    "Entregados" to "entregado"
+)
+
 @Composable
 fun RegistryScreen(navController: NavController) {
-    var cargando by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var paquetes by remember { mutableStateOf<List<PackageItem>>(emptyList()) }
-    var visitas by remember { mutableStateOf<List<Visit>>(emptyList()) }
-    var residentes by remember { mutableStateOf<List<ResidentSummary>>(emptyList()) }
+    var packages by remember { mutableStateOf<List<PackageItem>>(emptyList()) }
+    var visits by remember { mutableStateOf<List<Visit>>(emptyList()) }
+    var residents by remember { mutableStateOf<List<ResidentSummary>>(emptyList()) }
+    var selectedResident by remember { mutableStateOf<ResidentSummary?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var message by remember { mutableStateOf("") }
+    var search by remember { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf<String?>(null) }
+    var description by remember { mutableStateOf("") }
+    var packageDate by remember { mutableStateOf("") }
+    var packageTime by remember { mutableStateOf("") }
+    var mediaUrl by remember { mutableStateOf<String?>(null) }
+    var mediaType by remember { mutableStateOf<String?>(null) }
+    var mediaName by remember { mutableStateOf<String?>(null) }
+    var visitorName by remember { mutableStateOf("") }
+    var visitorDocument by remember { mutableStateOf("") }
+    var visitorType by remember { mutableStateOf("visitante") }
+    var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    var attemptedPackage by remember { mutableStateOf(false) }
+    var attemptedVisit by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val canRegister = Session.isGuard || Session.isAdmin
 
-    // Formulario de paquete (solo Guardia).
-    var residenteParaPaquete by remember { mutableStateOf<ResidentSummary?>(null) }
-    var descripcionPaquete by remember { mutableStateOf("") }
-    var enviandoPaquete by remember { mutableStateOf(false) }
-    var resultPaquete by remember { mutableStateOf("") }
-
-    // Formulario de visita (solo Guardia).
-    var residenteParaVisita by remember { mutableStateOf<ResidentSummary?>(null) }
-    var nombreVisitante by remember { mutableStateOf("") }
-    var tipoVisita by remember { mutableStateOf("visitante") }
-    var enviandoVisita by remember { mutableStateOf(false) }
-    var resultVisita by remember { mutableStateOf("") }
-
-    suspend fun cargar() {
-        cargando = true
-        error = null
+    suspend fun load() {
+        loading = true
         try {
-            val respPaquetes = RetrofitClient.api.getPackages(Session.bearer())
-            if (respPaquetes.isSuccessful) paquetes = respPaquetes.body()?.packages ?: emptyList()
-            else error = mensajeDeError(respPaquetes.code(), respPaquetes.errorBody()?.string())
+            val packageResponse = RetrofitClient.api.getPackages(
+                Session.bearer(), statusFilter, search.trim().ifEmpty { null }
+            )
+            if (packageResponse.isSuccessful) packages = packageResponse.body()?.packages.orEmpty()
+            else message = mensajeDeError(packageResponse.code(), packageResponse.errorBody()?.string())
 
-            val respVisitas = RetrofitClient.api.getVisits(Session.bearer())
-            if (respVisitas.isSuccessful) visitas = respVisitas.body()?.visits ?: emptyList()
+            val visitsResponse = RetrofitClient.api.getVisits(Session.bearer())
+            if (visitsResponse.isSuccessful) visits = visitsResponse.body()?.visits.orEmpty()
+            else message = mensajeDeError(visitsResponse.code(), visitsResponse.errorBody()?.string())
 
-            if (Session.isGuard) {
-                val respResidentes = RetrofitClient.api.getResidents(Session.bearer())
-                if (respResidentes.isSuccessful) {
-                    residentes = respResidentes.body()?.residents ?: emptyList()
-                    if (residenteParaPaquete == null) residenteParaPaquete = residentes.firstOrNull()
-                    if (residenteParaVisita == null) residenteParaVisita = residentes.firstOrNull()
-                }
+            if (canRegister && residents.isEmpty()) {
+                val residentResponse = RetrofitClient.api.getResidents(Session.bearer())
+                if (residentResponse.isSuccessful) {
+                    residents = residentResponse.body()?.residents.orEmpty()
+                    if (selectedResident == null) selectedResident = residents.firstOrNull()
+                } else message = mensajeDeError(residentResponse.code(), residentResponse.errorBody()?.string())
             }
-        } catch (e: Exception) {
-            error = "⚠️ Sin conexión con el servidor: ${e.message}"
+        } catch (exception: Exception) {
+            message = "No se pudieron cargar los registros: ${exception.message}"
         } finally {
-            cargando = false
+            loading = false
         }
     }
 
-    LaunchedEffect(Unit) { cargar() }
+    LaunchedEffect(statusFilter, search) { load() }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+    Column(Modifier.fillMaxSize().padding(18.dp)) {
         Text(
             when {
-                Session.isGuard -> "Registrar paquete / visitante"
-                Session.isResident -> "Mis notificaciones"
-                else -> "Registros de portería"
+                Session.isResident -> "Mis paquetes y visitas"
+                Session.isGuard -> "Registro de portería"
+                else -> "Paquetes y visitas"
             },
-            fontSize = 22.sp
+            fontSize = 23.sp,
+            color = MaterialTheme.colorScheme.primary
         )
-        Spacer(Modifier.height(12.dp))
+        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
 
-        if (cargando) {
-            Box(Modifier.fillMaxWidth().padding(24.dp)) { CircularProgressIndicator() }
-        } else if (error != null) {
-            Text("❌ $error")
-        } else {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                item {
-                    Text("Paquetes", fontSize = 16.sp)
-                    Spacer(Modifier.height(6.dp))
-                }
-                if (paquetes.isEmpty()) {
-                    item { Text("Sin paquetes registrados.") }
-                }
-                items(paquetes) { p ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            if (!Session.isResident) {
-                                Text("Para: ${p.residentName ?: ""}", fontSize = 12.sp)
+        OutlinedTextField(
+            search, { search = it }, label = { Text("Buscar residente, apartamento o paquete") },
+            singleLine = true, modifier = Modifier.fillMaxWidth()
+        )
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            packageFilters.forEach { (label, value) ->
+                FilterChip(selected = statusFilter == value, onClick = { statusFilter = value }, label = { Text(label) })
+            }
+        }
+
+        if (canRegister) {
+            DomuxCard(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("Registrar paquete", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        residents.forEach { resident ->
+                            FilterChip(
+                                selected = selectedResident?.id == resident.id,
+                                onClick = { selectedResident = resident },
+                                label = { Text("${resident.name} · ${resident.apartment.orEmpty()}") }
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        description, { description = it }, label = { Text("Descripción *") },
+                        isError = attemptedPackage && description.trim().isEmpty(),
+                        supportingText = { if (attemptedPackage && description.trim().isEmpty()) Text("La descripción es obligatoria") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    DatePickerField("Fecha del paquete", packageDate, { packageDate = it })
+                    TimePickerField("Hora del paquete", packageTime, { packageTime = it })
+                    MediaAttachmentPicker(mediaName, { url, type, name ->
+                        mediaUrl = url; mediaType = type; mediaName = name
+                    }, { message = it })
+                    Button(onClick = {
+                        attemptedPackage = true
+                        if (selectedResident == null || description.trim().isEmpty()) {
+                            message = "Selecciona residente y escribe la descripción del paquete."
+                            return@Button
+                        }
+                        confirmation = "¿Estás seguro de guardar este paquete?" to {
+                            scope.launch {
+                                try {
+                                    val response = RetrofitClient.api.registerPackage(
+                                        Session.bearer(),
+                                        RegisterPackageRequest(
+                                            selectedResident!!.id, description.trim(),
+                                            mediaUrl, mediaType,
+                                            packageDate.ifBlank { null }, packageTime.ifBlank { null }
+                                        )
+                                    )
+                                    message = if (response.isSuccessful) {
+                                        description = ""; mediaUrl = null; mediaType = null; mediaName = null
+                                        packageDate = ""; packageTime = ""
+                                        attemptedPackage = false
+                                        "Paquete registrado."
+                                    } else mensajeDeError(response.code(), response.errorBody()?.string())
+                                    if (response.isSuccessful) load()
+                                } catch (exception: Exception) {
+                                    message = "No se pudo registrar el paquete: ${exception.message}"
+                                }
                             }
-                            Text(p.description?.ifBlank { "Paquete sin descripción" } ?: "Paquete")
-                            Text("Estado: ${p.status}", fontSize = 12.sp)
-                            if (Session.isGuard && p.status == "pendiente") {
-                                TextButton(onClick = {
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Registrar paquete") }
+                }
+            }
+
+            DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("Registrar visita", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        residents.forEach { resident ->
+                            FilterChip(
+                                selected = selectedResident?.id == resident.id,
+                                onClick = { selectedResident = resident },
+                                label = { Text("${resident.name} · ${resident.apartment.orEmpty()}") }
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        visitorName, { visitorName = it }, label = { Text("Nombre del visitante *") },
+                        isError = attemptedVisit && visitorName.trim().isEmpty(),
+                        supportingText = { if (attemptedVisit && visitorName.trim().isEmpty()) Text("El nombre es obligatorio") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        visitorDocument, { visitorDocument = it }, label = { Text("Documento (opcional)") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    Row {
+                        listOf("visitante", "domiciliario", "contratista").forEach { value ->
+                            FilterChip(
+                                selected = visitorType == value,
+                                onClick = { visitorType = value },
+                                label = { Text(value.replaceFirstChar(Char::uppercase)) }
+                            )
+                        }
+                    }
+                    Button(onClick = {
+                        attemptedVisit = true
+                        if (selectedResident == null || visitorName.trim().isEmpty()) {
+                            message = "Selecciona residente y escribe el nombre del visitante."
+                            return@Button
+                        }
+                        scope.launch {
+                            try {
+                                val response = RetrofitClient.api.registerVisit(
+                                    Session.bearer(),
+                                    RegisterVisitRequest(
+                                        selectedResident!!.id, visitorName.trim(), visitorType,
+                                        visitorDocument.trim().ifEmpty { null }
+                                    )
+                                )
+                                message = if (response.isSuccessful) {
+                                    visitorName = ""; visitorDocument = ""
+                                    attemptedVisit = false
+                                    "Visita registrada."
+                                } else mensajeDeError(response.code(), response.errorBody()?.string())
+                                if (response.isSuccessful) load()
+                            } catch (exception: Exception) {
+                                message = "No se pudo registrar la visita: ${exception.message}"
+                            }
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Registrar visita") }
+                }
+            }
+        }
+
+        if (loading) CircularProgressIndicator()
+        else LazyColumn(Modifier.weight(1f)) {
+            item { Text("Paquetes", style = MaterialTheme.typography.titleLarge) }
+            if (packages.isEmpty()) item { Text("No hay paquetes para estos filtros.") }
+            items(packages, key = { "package-${it.id}" }) { item ->
+                DomuxCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(item.description.orEmpty(), style = MaterialTheme.typography.titleMedium)
+                        Text("Para: ${item.residentName.orEmpty()} · ${item.apartment.orEmpty()}")
+                        Text("Estado: ${when (item.status) {
+                            "por_llegar" -> "Por llegar"
+                            "pendiente" -> "En portería"
+                            else -> "Entregado"
+                        }} · ${item.createdAt.orEmpty()}")
+                        if (item.eventDate != null || item.eventTime != null) {
+                            Text("Registro: ${item.eventDate.orEmpty()} ${item.eventTime.orEmpty()}")
+                        }
+                        if (item.mediaType != null) Text("Adjunto: ${item.mediaType}", color = MaterialTheme.colorScheme.secondary)
+                        if (canRegister && item.status != "entregado") {
+                            TextButton(onClick = {
+                                confirmation = "¿Estás seguro de marcar el paquete como entregado?" to {
                                     scope.launch {
                                         try {
-                                            RetrofitClient.api.deliverPackage(Session.bearer(), p.id)
-                                            cargar()
-                                        } catch (_: Exception) { }
+                                            val response = RetrofitClient.api.deliverPackage(Session.bearer(), item.id)
+                                            message = if (response.isSuccessful) "Paquete entregado."
+                                            else mensajeDeError(response.code(), response.errorBody()?.string())
+                                            if (response.isSuccessful) load()
+                                        } catch (exception: Exception) {
+                                            message = "No se pudo entregar el paquete: ${exception.message}"
+                                        }
                                     }
-                                }) { Text("Marcar entregado") }
-                            }
+                                }
+                            }) { Text("Marcar entregado") }
                         }
                     }
                 }
-
-                item {
-                    Spacer(Modifier.height(12.dp))
-                    Text("Visitantes / domiciliarios", fontSize = 16.sp)
-                    Spacer(Modifier.height(6.dp))
-                }
-                if (visitas.isEmpty()) {
-                    item { Text("Sin visitas registradas.") }
-                }
-                items(visitas) { v ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            if (!Session.isResident) {
-                                Text("Para: ${v.residentName ?: ""}", fontSize = 12.sp)
-                            }
-                            Text("${v.visitorName} (${v.type})")
-                            Text(v.createdAt ?: "", fontSize = 12.sp)
-                        }
+            }
+            item { Text("Visitas", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp)) }
+            if (visits.isEmpty()) item { Text("No hay visitas registradas.") }
+            items(visits, key = { "visit-${it.id}" }) { item ->
+                DomuxCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(item.visitorName, style = MaterialTheme.typography.titleMedium)
+                        Text("${item.type} · ${item.createdAt.orEmpty()}")
+                        Text("Para: ${item.residentName.orEmpty()} · ${item.apartment.orEmpty()}")
                     }
                 }
             }
         }
-
-        // Solo el Guardia registra paquetes y visitas.
-        if (Session.isGuard) {
-            HorizontalDivider(Modifier.padding(vertical = 12.dp))
-            Text("Registrar paquete", fontSize = 16.sp)
-            Spacer(Modifier.height(6.dp))
-            Row {
-                residentes.take(4).forEach { r ->
-                    FilterChip(
-                        selected = residenteParaPaquete?.id == r.id,
-                        onClick = { residenteParaPaquete = r },
-                        label = { Text(r.name) },
-                        modifier = Modifier.padding(end = 6.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = descripcionPaquete, onValueChange = { descripcionPaquete = it },
-                label = { Text("Descripción (opcional)") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(6.dp))
-            Button(
-                onClick = {
-                    val r = residenteParaPaquete
-                    if (r == null) { resultPaquete = "Elige un residente"; return@Button }
-                    enviandoPaquete = true
-                    resultPaquete = ""
-                    scope.launch {
-                        try {
-                            val resp = RetrofitClient.api.registerPackage(
-                                Session.bearer(),
-                                RegisterPackageRequest(r.id, descripcionPaquete.ifBlank { null })
-                            )
-                            resultPaquete = if (resp.isSuccessful) {
-                                descripcionPaquete = ""
-                                cargar()
-                                "✅ Paquete registrado, se notificó a ${r.name}"
-                            } else {
-                                "❌ ${mensajeDeError(resp.code(), resp.errorBody()?.string())}"
-                            }
-                        } catch (e: Exception) {
-                            resultPaquete = "⚠️ ${e.message}"
-                        } finally {
-                            enviandoPaquete = false
-                        }
-                    }
-                },
-                enabled = !enviandoPaquete,
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(if (enviandoPaquete) "Registrando..." else "Registrar paquete") }
-            if (resultPaquete.isNotEmpty()) { Spacer(Modifier.height(6.dp)); Text(resultPaquete) }
-
-            Spacer(Modifier.height(16.dp))
-            Text("Registrar visitante / domiciliario", fontSize = 16.sp)
-            Spacer(Modifier.height(6.dp))
-            Row {
-                residentes.take(4).forEach { r ->
-                    FilterChip(
-                        selected = residenteParaVisita?.id == r.id,
-                        onClick = { residenteParaVisita = r },
-                        label = { Text(r.name) },
-                        modifier = Modifier.padding(end = 6.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = nombreVisitante, onValueChange = { nombreVisitante = it },
-                label = { Text("Nombre del visitante") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(6.dp))
-            Row {
-                listOf("visitante", "domiciliario").forEach { opcion ->
-                    FilterChip(
-                        selected = tipoVisita == opcion,
-                        onClick = { tipoVisita = opcion },
-                        label = { Text(opcion) },
-                        modifier = Modifier.padding(end = 6.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Button(
-                onClick = {
-                    val r = residenteParaVisita
-                    if (r == null || nombreVisitante.isBlank()) {
-                        resultVisita = "Elige un residente y escribe el nombre del visitante"
-                        return@Button
-                    }
-                    enviandoVisita = true
-                    resultVisita = ""
-                    scope.launch {
-                        try {
-                            val resp = RetrofitClient.api.registerVisit(
-                                Session.bearer(),
-                                RegisterVisitRequest(r.id, nombreVisitante, tipoVisita)
-                            )
-                            resultVisita = if (resp.isSuccessful) {
-                                nombreVisitante = ""
-                                cargar()
-                                "✅ Ingreso registrado, se notificó a ${r.name}"
-                            } else {
-                                "❌ ${mensajeDeError(resp.code(), resp.errorBody()?.string())}"
-                            }
-                        } catch (e: Exception) {
-                            resultVisita = "⚠️ ${e.message}"
-                        } finally {
-                            enviandoVisita = false
-                        }
-                    }
-                },
-                enabled = !enviandoVisita,
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(if (enviandoVisita) "Registrando..." else "Registrar ingreso") }
-            if (resultVisita.isNotEmpty()) { Spacer(Modifier.height(6.dp)); Text(resultVisita) }
-        }
-
-        Spacer(Modifier.height(12.dp))
         TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+    }
+
+    confirmation?.let { (prompt, action) ->
+        AlertDialog(
+            onDismissRequest = { confirmation = null },
+            title = { Text("Confirmar acción") },
+            text = { Text(prompt) },
+            confirmButton = {
+                TextButton(onClick = { confirmation = null; action() }) { Text("Confirmar") }
+            },
+            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancelar") } }
+        )
     }
 }
