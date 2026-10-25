@@ -2,31 +2,29 @@ package com.dracknoval.domux.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Paleta simple para Domux (tonos verde/azulados, sin depender de recursos extra).
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF2E6F55),
-    secondary = Color(0xFF4C6B5A),
-    tertiary = Color(0xFF3A5A78)
-)
-
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFF8FD9B6),
-    secondary = Color(0xFFB2CCBD),
-    tertiary = Color(0xFFA9C6E8)
+private val DomuxColors = darkColorScheme(
+    primary = Color(0xFF0EA5E9),
+    secondary = Color(0xFF06B6D4),
+    tertiary = Color(0xFF22D3EE),
+    background = Color(0xFF07111F),
+    surface = Color(0xFF081725),
+    surfaceVariant = Color(0xFF1E293B),
+    onPrimary = Color(0xFF00131C),
+    onBackground = Color(0xFFE2E8F0),
+    onSurface = Color(0xFFE2E8F0),
+    onSurfaceVariant = Color(0xFFCBD5E1),
+    error = Color(0xFFEF4444)
 )
 
 @Composable
 fun DomuxAppTheme(
-    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColors else LightColors
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = DomuxColors,
         content = content
     )
 }

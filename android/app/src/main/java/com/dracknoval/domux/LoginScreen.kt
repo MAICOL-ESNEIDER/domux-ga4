@@ -25,6 +25,7 @@ fun LoginScreen(navController: NavController) {
     var password by remember { mutableStateOf("") }
     var result by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var attemptedLogin by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -34,7 +35,7 @@ fun LoginScreen(navController: NavController) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Domux", fontSize = 30.sp)
+        Text("Domux", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
         Text("Gestión de la unidad residencial", fontSize = 14.sp)
         Spacer(Modifier.height(32.dp))
 
@@ -43,6 +44,11 @@ fun LoginScreen(navController: NavController) {
             onValueChange = { email = it },
             label = { Text("Correo") },
             singleLine = true,
+            isError = (attemptedLogin && email.trim().isEmpty()) || (email.isNotEmpty() && !email.trim().contains("@")),
+            supportingText = {
+                if (attemptedLogin && email.trim().isEmpty()) Text("El correo es obligatorio")
+                else if (email.isNotEmpty() && !email.trim().contains("@")) Text("Ingresa un correo válido")
+            },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
@@ -53,13 +59,17 @@ fun LoginScreen(navController: NavController) {
             label = { Text("Contraseña") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
+            isError = attemptedLogin && password.trim().isEmpty(),
+            supportingText = { if (attemptedLogin && password.trim().isEmpty()) Text("La contraseña es obligatoria") },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(24.dp))
 
         Button(
             onClick = {
-                if (!email.contains("@") || password.isBlank()) {
+                attemptedLogin = true
+                val normalizedEmail = email.trim().lowercase()
+                if (!normalizedEmail.contains("@") || password.trim().isEmpty()) {
                     result = "Escribe un correo válido y tu contraseña"
                     return@Button
                 }
@@ -67,7 +77,7 @@ fun LoginScreen(navController: NavController) {
                 result = ""
                 scope.launch {
                     try {
-                        val response = RetrofitClient.api.login(LoginRequest(email, password))
+                        val response = RetrofitClient.api.login(LoginRequest(normalizedEmail, password))
                         if (response.isSuccessful) {
                             val user = response.body()?.user
                             if (user == null) {
@@ -77,6 +87,8 @@ fun LoginScreen(navController: NavController) {
                                 Session.token = response.body()?.token
                                 Session.userId = user.id
                                 Session.userName = user.name
+                                Session.lastName = user.lastName
+                                Session.email = user.email
                                 Session.role = user.role
                                 Session.apartment = user.apartment
                                 // Vamos al menú y borramos "login" del historial.
@@ -100,6 +112,11 @@ fun LoginScreen(navController: NavController) {
             Text(if (loading) "Entrando..." else "Entrar")
         }
 
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Cuentas de prueba: admin@domux.com / Admin123* · guardia@domux.com / Guardia123* · maria@domux.com / Residente123*",
+            style = MaterialTheme.typography.bodySmall
+        )
         if (result.isNotEmpty()) {
             Spacer(Modifier.height(20.dp))
             Text(result)
