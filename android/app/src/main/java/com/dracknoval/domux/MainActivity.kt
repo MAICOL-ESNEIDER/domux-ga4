@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                         composable("reservations") { ReservationsScreen(navController) }
                         composable("registry") { RegistryScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
+                        composable("notifications") { NotificationsScreen(navController) }
                     }
                 }
             }

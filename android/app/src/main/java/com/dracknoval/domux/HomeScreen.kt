@@ -4,23 +4,47 @@
 
 package com.dracknoval.domux
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 
 @Composable
 fun HomeScreen(navController: NavController) {
+    var unreadCount by remember { mutableIntStateOf(0) }
+    var notificationError by remember { mutableStateOf<String?>(null) }
+    val backStackEntry by navController.currentBackStackEntryFlow.collectAsState(
+        initial = navController.currentBackStackEntry
+    )
+    LaunchedEffect(backStackEntry?.destination?.route) {
+        try {
+            if (backStackEntry?.destination?.route == "home") {
+                val response = RetrofitClient.api.getNotifications(Session.bearer())
+                if (response.isSuccessful) {
+                    unreadCount = response.body()?.notifications.orEmpty().count { !it.isRead }
+                    notificationError = null
+                } else {
+                    notificationError = "No se pudo actualizar el contador de notificaciones."
+                }
+            }
+        } catch (exception: Exception) {
+            notificationError = "Sin conexión para actualizar notificaciones: ${exception.message}"
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Saludo y rol, usando lo que guardamos en Session durante el login.
@@ -39,6 +63,14 @@ fun HomeScreen(navController: NavController) {
         Button(onClick = { navController.navigate("announcements") }, modifier = Modifier.fillMaxWidth()) {
             Text("Anuncios de la unidad")
         }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { navController.navigate("notifications") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (unreadCount > 0) "Notificaciones · $unreadCount sin leer" else "Notificaciones")
+        }
+        notificationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Spacer(Modifier.height(12.dp))
 
         // ----- Solo Administrador -----
