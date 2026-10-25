@@ -1,15 +1,16 @@
-# models.py — tablas reales de la base de datos (SQLite en local, PostgreSQL en
-# Render). Cada modelo tiene un to_dict() que arma el JSON EXACTO que espera la
-# app Android (mismos nombres de campo que las data class de Models.kt).
+"""SQLAlchemy models and Android-compatible JSON serializers."""
 
 from datetime import datetime
+
+from sqlalchemy import Index, text
+
 from extensions import db
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
 
 
-def _fmt(dt):
-    return dt.strftime("%Y-%m-%d %H:%M") if dt else None
+def _fmt(value):
+    return value.strftime("%Y-%m-%d %H:%M") if value else None
 
 
 class User(db.Model):
@@ -17,23 +18,48 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
-    email = db.Column(db.String(160), unique=True, nullable=False)
+    last_name = db.Column(db.String(120), nullable=True, default="")
+    email = db.Column(db.String(160), unique=True, nullable=False, index=True)
+    phone = db.Column(db.String(30), nullable=True, default="")
+    document_id = db.Column(db.String(40), nullable=True, default="")
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False)          # ADMIN | RESIDENT | GUARD
-    apartment = db.Column(db.String(60), nullable=True)       # solo para RESIDENT
+    role = db.Column(db.String(20), nullable=False)
+    apartment = db.Column(db.String(60), nullable=True)
+    occupancy_type = db.Column(db.String(30), nullable=True, default="propietario")
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def full_name(self):
+        name = (self.name or "").strip()
+        last_name = (self.last_name or "").strip()
+        return f"{name} {last_name}".strip()
 
     def to_dict(self):
         return {
             "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "role": self.role,
+            "name": self.full_name,
+            "lastName": self.last_name or "",
+            "fullName": self.full_name,
+            "email": self.email or "",
+            "phone": self.phone or "",
+            "documentId": self.document_id or "",
+            "role": self.role or "",
             "apartment": self.apartment,
+            "occupancyType": self.occupancy_type or "propietario",
+            "isActive": self.is_active if self.is_active is not None else True,
+            "createdAt": _fmt(self.created_at),
         }
 
     def to_resident_summary(self):
-        return {"id": self.id, "name": self.name, "apartment": self.apartment}
+        return {
+            "id": self.id,
+            "name": self.full_name,
+            "email": self.email or "",
+            "phone": self.phone or "",
+            "apartment": self.apartment,
+            "occupancyType": self.occupancy_type or "propietario",
+        }
 
 
 class Announcement(db.Model):
@@ -42,6 +68,10 @@ class Announcement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
+    event_date = db.Column(db.String(20), nullable=True)
+    event_time = db.Column(db.String(20), nullable=True)
+    media_url = db.Column(db.Text, nullable=True)
+    media_type = db.Column(db.String(20), nullable=True)
     author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -50,10 +80,14 @@ class Announcement(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "title": self.title,
-            "message": self.message,
+            "title": self.title or "",
+            "message": self.message or "",
+            "eventDate": self.event_date,
+            "eventTime": self.event_time,
+            "mediaUrl": self.media_url,
+            "mediaType": self.media_type,
             "createdAt": _fmt(self.created_at),
-            "authorName": self.author.name if self.author else None,
+            "authorName": self.author.full_name if self.author else None,
         }
 
 
@@ -62,23 +96,37 @@ class Pqrs(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    category = db.Column(db.String(40), default="Petición")
     subject = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(20), default="abierta")   # abierta | en_proceso | resuelta
+    status = db.Column(db.String(20), default="abierta")
     admin_response = db.Column(db.Text, nullable=True)
+    incident_date = db.Column(db.String(20), nullable=True)
+    incident_time = db.Column(db.String(20), nullable=True)
+    media_url = db.Column(db.Text, nullable=True)
+    media_type = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     resident = db.relationship("User")
 
     def to_dict(self):
         return {
             "id": self.id,
-            "subject": self.subject,
-            "message": self.message,
-            "status": self.status,
+            "residentId": self.resident_id,
+            "category": self.category or "Petición",
+            "subject": self.subject or "",
+            "message": self.message or "",
+            "status": self.status or "abierta",
             "adminResponse": self.admin_response,
+            "incidentDate": self.incident_date,
+            "incidentTime": self.incident_time,
+            "mediaUrl": self.media_url,
+            "mediaType": self.media_type,
             "createdAt": _fmt(self.created_at),
-            "residentName": self.resident.name if self.resident else None,
+            "updatedAt": _fmt(self.updated_at),
+            "residentName": self.resident.full_name if self.resident else None,
+            "apartment": self.resident.apartment if self.resident else None,
         }
 
 
@@ -89,18 +137,29 @@ class CommonArea(db.Model):
     name = db.Column(db.String(100), nullable=False)
 
     def to_dict(self):
-        return {"id": self.id, "name": self.name}
+        return {"id": self.id, "name": self.name or ""}
 
 
 class Reservation(db.Model):
     __tablename__ = "reservations"
+    __table_args__ = (
+        Index(
+            "uq_reservation_active_slot",
+            "common_area_id",
+            "date",
+            "time_slot",
+            unique=True,
+            sqlite_where=text("status IN ('activa', 'aprobada')"),
+            postgresql_where=text("status IN ('activa', 'aprobada')"),
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     common_area_id = db.Column(db.Integer, db.ForeignKey("common_areas.id"), nullable=False)
-    date = db.Column(db.String(20), nullable=False)         # "AAAA-MM-DD"
-    time_slot = db.Column(db.String(40), nullable=False)     # ej. "18:00-20:00"
-    status = db.Column(db.String(20), default="activa")      # activa | cancelada
+    date = db.Column(db.String(20), nullable=False)
+    time_slot = db.Column(db.String(40), nullable=False)
+    status = db.Column(db.String(20), default="activa")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     resident = db.relationship("User")
@@ -109,12 +168,15 @@ class Reservation(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "residentId": self.resident_id,
             "commonAreaId": self.common_area_id,
             "commonAreaName": self.common_area.name if self.common_area else None,
             "date": self.date,
             "timeSlot": self.time_slot,
-            "status": self.status,
-            "residentName": self.resident.name if self.resident else None,
+            "status": self.status or "activa",
+            "createdAt": _fmt(self.created_at),
+            "residentName": self.resident.full_name if self.resident else None,
+            "apartment": self.resident.apartment if self.resident else None,
         }
 
 
@@ -125,7 +187,11 @@ class PackageItem(db.Model):
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     registered_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     description = db.Column(db.String(200), nullable=True)
-    status = db.Column(db.String(20), default="pendiente")   # pendiente | entregado
+    status = db.Column(db.String(20), default="pendiente")
+    media_url = db.Column(db.Text, nullable=True)
+    media_type = db.Column(db.String(20), nullable=True)
+    event_date = db.Column(db.String(20), nullable=True)
+    event_time = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     delivered_at = db.Column(db.DateTime, nullable=True)
 
@@ -135,12 +201,18 @@ class PackageItem(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "description": self.description,
-            "status": self.status,
+            "residentId": self.resident_id,
+            "description": self.description or "",
+            "status": self.status or "pendiente",
+            "mediaUrl": self.media_url,
+            "mediaType": self.media_type,
+            "eventDate": self.event_date,
+            "eventTime": self.event_time,
             "createdAt": _fmt(self.created_at),
             "deliveredAt": _fmt(self.delivered_at),
-            "residentName": self.resident.name if self.resident else None,
-            "registeredByName": self.guard.name if self.guard else None,
+            "residentName": self.resident.full_name if self.resident else None,
+            "apartment": self.resident.apartment if self.resident else None,
+            "registeredByName": self.guard.full_name if self.guard else None,
         }
 
 
@@ -151,7 +223,8 @@ class Visit(db.Model):
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     registered_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     visitor_name = db.Column(db.String(120), nullable=False)
-    type = db.Column(db.String(20), nullable=False)          # visitante | domiciliario
+    visitor_document = db.Column(db.String(40), nullable=True)
+    type = db.Column(db.String(20), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
@@ -160,9 +233,37 @@ class Visit(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "visitorName": self.visitor_name,
-            "type": self.type,
+            "residentId": self.resident_id,
+            "visitorName": self.visitor_name or "",
+            "visitorDocument": self.visitor_document or "",
+            "type": self.type or "",
             "createdAt": _fmt(self.created_at),
-            "residentName": self.resident.name if self.resident else None,
-            "registeredByName": self.guard.name if self.guard else None,
+            "residentName": self.resident.full_name if self.resident else None,
+            "apartment": self.resident.apartment if self.resident else None,
+            "registeredByName": self.guard.full_name if self.guard else None,
+        }
+
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    title = db.Column(db.String(150), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    type = db.Column(db.String(30), default="general")
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "userId": self.user_id,
+            "title": self.title or "",
+            "message": self.message or "",
+            "type": self.type or "general",
+            "isRead": self.is_read if self.is_read is not None else False,
+            "createdAt": _fmt(self.created_at),
         }
