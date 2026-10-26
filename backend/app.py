@@ -94,6 +94,7 @@ def migrate_sqlite_schema():
 
 def create_app():
     app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
     configure_logging(app)
     CORS(app)
 
