@@ -1,0 +1,309 @@
+import os
+import unittest
+from datetime import date, timedelta
+
+os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
+
+from app import create_app
+from auth import generate_token
+from extensions import db
+from models import Notification, PackageItem, User, Visit, VisitQrPass
+from werkzeug.security import generate_password_hash
+
+
+class SecurityWorkflowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = create_app()
+        cls.app.config.update(TESTING=True)
+
+    def setUp(self):
+        self.context = self.app.app_context()
+        self.context.push()
+        db.drop_all()
+        db.create_all()
+        self.admin = User(
+            name="Admin",
+            email="security-admin@test.local",
+            password_hash=generate_password_hash("Admin123*"),
+            role="ADMIN",
+            is_active=True,
+        )
+        self.resident = User(
+            name="Resident",
+            email="security-resident@test.local",
+            password_hash=generate_password_hash("Resident123*"),
+            role="RESIDENT",
+            apartment="Torre 1 · Apto 101",
+            document_id="123456",
+            is_active=True,
+        )
+        self.other_resident = User(
+            name="Other Resident",
+            email="security-other@test.local",
+            password_hash=generate_password_hash("Other123*"),
+            role="RESIDENT",
+            apartment="Torre 2 · Apto 202",
+            is_active=True,
+        )
+        self.guard = User(
+            name="Guard",
+            email="security-guard@test.local",
+            password_hash=generate_password_hash("Guard123*"),
+            role="GUARD",
+            is_active=True,
+        )
+        db.session.add_all([self.admin, self.resident, self.other_resident, self.guard])
+        db.session.commit()
+        self.client = self.app.test_client()
+
+    def tearDown(self):
+        db.session.remove()
+        self.context.pop()
+
+    def auth(self, user):
+        return {"Authorization": f"Bearer {generate_token(user)}"}
+
+    def register_visit(self, **fields):
+        data = {
+            "residentId": self.resident.id,
+            "visitorName": "Visita de prueba",
+            "type": "visitante",
+        }
+        data.update(fields)
+        return self.client.post("/api/visits", headers=self.auth(self.guard), json=data)
+
+    def make_qr(self, max_people=1):
+        start = date.today()
+        end = start + timedelta(days=29)
+        response = self.client.post(
+            "/api/visits/qr-passes",
+            headers=self.auth(self.resident),
+            json={
+                "validFrom": start.isoformat(),
+                "validUntil": end.isoformat(),
+                "maxPeople": max_people,
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.get_json()["qrPass"]
+
+    def test_visit_needs_consent_for_document_and_notifies_resident(self):
+        response = self.register_visit(visitorDocument="1234")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Visit.query.count(), 0)
+
+        response = self.register_visit(
+            visitorDocument="1234",
+            mediaConsent=True,
+            mediaUrl="data:image/jpeg;base64,AA==",
+            mediaType="image",
+        )
+        self.assertEqual(response.status_code, 201)
+        visit = Visit.query.one()
+        self.assertEqual(visit.visitor_document, "1234")
+        self.assertTrue(visit.media_consent)
+        self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 1)
+
+    def test_resident_decision_call_authorization_entry_and_exit_are_audited(self):
+        visit_response = self.register_visit()
+        visit_id = visit_response.get_json()["visit"]["id"]
+
+        rejected = self.client.put(
+            f"/api/visits/{visit_id}/decision",
+            headers=self.auth(self.other_resident),
+            json={"decision": "aprobada"},
+        )
+        self.assertEqual(rejected.status_code, 403)
+        approved = self.client.put(
+            f"/api/visits/{visit_id}/decision",
+            headers=self.auth(self.resident),
+            json={"decision": "aprobada"},
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        entry = self.client.post(
+            f"/api/visits/{visit_id}/entry",
+            headers=self.auth(self.guard),
+            json={},
+        )
+        self.assertEqual(entry.status_code, 200)
+        exit_response = self.client.post(
+            f"/api/visits/{visit_id}/exit",
+            headers=self.auth(self.guard),
+            json={"returningToday": True},
+        )
+        self.assertEqual(exit_response.status_code, 200)
+        visit = db.session.get(Visit, visit_id)
+        self.assertEqual([event.event_type for event in visit.events], [
+            "solicitud", "aprobada", "entrada", "salida",
+        ])
+        self.assertTrue(visit.exit_returning)
+        self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 3)
+
+    def test_manual_visitor_cannot_return_after_definitive_exit(self):
+        visit_id = self.register_visit().get_json()["visit"]["id"]
+        approval = self.client.put(
+            f"/api/visits/{visit_id}/authorize-call",
+            headers=self.auth(self.guard),
+        )
+        self.assertEqual(approval.status_code, 200)
+        entry = self.client.post(
+            f"/api/visits/{visit_id}/entry",
+            headers=self.auth(self.guard),
+            json={},
+        )
+        self.assertEqual(entry.status_code, 200)
+        exit_response = self.client.post(
+            f"/api/visits/{visit_id}/exit",
+            headers=self.auth(self.guard),
+            json={"returningToday": False},
+        )
+        self.assertEqual(exit_response.status_code, 200)
+        reentry = self.client.post(
+            f"/api/visits/{visit_id}/entry",
+            headers=self.auth(self.guard),
+            json={},
+        )
+        self.assertEqual(reentry.status_code, 400)
+
+    def test_call_authorization_is_guard_only_and_guard_can_record_resident_search(self):
+        visit_id = self.register_visit().get_json()["visit"]["id"]
+        response = self.client.put(
+            f"/api/visits/{visit_id}/authorize-call",
+            headers=self.auth(self.resident),
+        )
+        self.assertEqual(response.status_code, 403)
+
+        search = self.client.get(
+            "/api/residents?search=123456",
+            headers=self.auth(self.guard),
+        )
+        self.assertEqual(search.status_code, 200)
+        self.assertEqual([item["id"] for item in search.get_json()["residents"]], [self.resident.id])
+        missing_search = self.client.get("/api/residents", headers=self.auth(self.guard))
+        self.assertEqual(missing_search.status_code, 400)
+        admin_list = self.client.get("/api/residents", headers=self.auth(self.admin))
+        self.assertEqual(admin_list.status_code, 200)
+        self.assertEqual(len(admin_list.get_json()["residents"]), 2)
+
+    def test_qr_limits_new_people_allows_same_day_reentry_and_revokes(self):
+        qr = self.make_qr()
+        token = qr["token"]
+        first = self.client.post(
+            f"/api/visits/qr/{token}/entry",
+            headers=self.auth(self.guard),
+            json={"visitorName": "Visitante Uno"},
+        )
+        self.assertEqual(first.status_code, 201)
+        visit_id = first.get_json()["visit"]["id"]
+        exit_response = self.client.post(
+            f"/api/visits/qr/{token}/exit",
+            headers=self.auth(self.guard),
+            json={"visitId": visit_id, "returningToday": True},
+        )
+        self.assertEqual(exit_response.status_code, 200)
+        reentry = self.client.post(
+            f"/api/visits/qr/{token}/entry",
+            headers=self.auth(self.guard),
+            json={"visitId": visit_id},
+        )
+        self.assertEqual(reentry.status_code, 201)
+        self.assertEqual(Visit.query.count(), 1)
+        full = self.client.post(
+            f"/api/visits/qr/{token}/entry",
+            headers=self.auth(self.guard),
+            json={"visitorName": "Otra Persona"},
+        )
+        self.assertEqual(full.status_code, 409)
+
+        revoke = self.client.put(
+            f"/api/visits/qr-passes/{qr['id']}/revoke",
+            headers=self.auth(self.resident),
+        )
+        self.assertEqual(revoke.status_code, 200)
+        revoked_entry = self.client.post(
+            f"/api/visits/qr/{token}/entry",
+            headers=self.auth(self.guard),
+            json={"visitorName": "Visitante Uno"},
+        )
+        self.assertEqual(revoked_entry.status_code, 404)
+        exit_after_revoke = self.client.post(
+            f"/api/visits/qr/{token}/exit",
+            headers=self.auth(self.guard),
+            json={"visitId": visit_id, "returningToday": False},
+        )
+        self.assertEqual(exit_after_revoke.status_code, 200)
+
+    def test_manual_visit_can_be_linked_to_qr_without_duplicating_history(self):
+        visit_response = self.register_visit(visitorName="Visitante Manual")
+        visit_id = visit_response.get_json()["visit"]["id"]
+        qr = self.make_qr()
+        linked = self.client.post(
+            f"/api/visits/qr/{qr['token']}/entry",
+            headers=self.auth(self.guard),
+            json={"visitId": visit_id},
+        )
+        self.assertEqual(linked.status_code, 201)
+        visit = db.session.get(Visit, visit_id)
+        self.assertEqual(visit.qr_pass_id, qr["id"])
+        self.assertEqual(visit.authorization_method, "qr")
+        self.assertEqual(Visit.query.count(), 1)
+        self.assertEqual(VisitQrPass.query.one().to_dict()["registeredPeople"], 1)
+
+    def test_qr_rejects_invalid_duration_and_foreign_resident_cannot_revoke(self):
+        today = date.today().isoformat()
+        too_long = self.client.post(
+            "/api/visits/qr-passes",
+            headers=self.auth(self.resident),
+            json={
+                "validFrom": today,
+                "validUntil": (date.today() + timedelta(days=30)).isoformat(),
+                "maxPeople": 2,
+            },
+        )
+        self.assertEqual(too_long.status_code, 400)
+        qr = self.make_qr()
+        forbidden = self.client.put(
+            f"/api/visits/qr-passes/{qr['id']}/revoke",
+            headers=self.auth(self.other_resident),
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+    def test_admin_cannot_create_a_resident_owned_qr_pass(self):
+        today = date.today().isoformat()
+        response = self.client.post(
+            "/api/visits/qr-passes",
+            headers=self.auth(self.admin),
+            json={"validFrom": today, "validUntil": today, "maxPeople": 1},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(VisitQrPass.query.count(), 0)
+
+    def test_package_delivery_requires_receiver_and_notifies_resident(self):
+        package = PackageItem(
+            resident_id=self.resident.id,
+            registered_by=self.guard.id,
+            description="Caja",
+        )
+        db.session.add(package)
+        db.session.commit()
+        response = self.client.put(
+            f"/api/packages/{package.id}/deliver",
+            headers=self.auth(self.guard),
+            json={"receivedBy": "  "},
+        )
+        self.assertEqual(response.status_code, 400)
+        response = self.client.put(
+            f"/api/packages/{package.id}/deliver",
+            headers=self.auth(self.guard),
+            json={"receivedBy": "María Pérez"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["packageItem"]["deliveredTo"], "María Pérez")
+        self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

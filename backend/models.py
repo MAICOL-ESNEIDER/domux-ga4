@@ -440,6 +440,7 @@ class PackageItem(db.Model):
     event_time = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     delivered_at = db.Column(db.DateTime, nullable=True)
+    delivered_to = db.Column(db.String(120), nullable=True)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
@@ -456,6 +457,7 @@ class PackageItem(db.Model):
             "eventTime": self.event_time,
             "createdAt": _fmt(self.created_at),
             "deliveredAt": _fmt(self.delivered_at),
+            "deliveredTo": self.delivered_to,
             "residentName": self.resident.full_name if self.resident else None,
             "apartment": self.resident.apartment if self.resident else None,
             "registeredByName": self.guard.full_name if self.guard else None,
@@ -470,11 +472,28 @@ class Visit(db.Model):
     registered_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     visitor_name = db.Column(db.String(120), nullable=False)
     visitor_document = db.Column(db.String(40), nullable=True)
+    visitor_photo_url = db.Column(db.Text, nullable=True)
+    visitor_photo_type = db.Column(db.String(20), nullable=True)
+    media_consent = db.Column(db.Boolean, default=False, nullable=False)
     type = db.Column(db.String(20), nullable=False)
+    description = db.Column(db.String(250), nullable=True)
+    approval_status = db.Column(db.String(20), default="pendiente", nullable=False)
+    authorization_method = db.Column(db.String(20), nullable=True)
+    entered_at = db.Column(db.DateTime, nullable=True)
+    exited_at = db.Column(db.DateTime, nullable=True)
+    exit_returning = db.Column(db.Boolean, default=False, nullable=False)
+    qr_pass_id = db.Column(db.Integer, db.ForeignKey("visit_qr_passes.id"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
+    qr_pass = db.relationship("VisitQrPass", back_populates="visits")
+    events = db.relationship(
+        "VisitEvent",
+        back_populates="visit",
+        cascade="all, delete-orphan",
+        order_by="VisitEvent.created_at, VisitEvent.id",
+    )
 
     def to_dict(self):
         return {
@@ -482,11 +501,79 @@ class Visit(db.Model):
             "residentId": self.resident_id,
             "visitorName": self.visitor_name or "",
             "visitorDocument": self.visitor_document or "",
+            "visitorPhotoUrl": self.visitor_photo_url,
+            "visitorPhotoType": self.visitor_photo_type,
+            "mediaConsent": self.media_consent,
             "type": self.type or "",
+            "description": self.description,
+            "approvalStatus": self.approval_status,
+            "authorizationMethod": self.authorization_method,
+            "enteredAt": _fmt(self.entered_at),
+            "exitedAt": _fmt(self.exited_at),
+            "exitReturning": self.exit_returning,
+            "qrPassId": self.qr_pass_id,
             "createdAt": _fmt(self.created_at),
+            "events": [event.to_dict() for event in self.events],
             "residentName": self.resident.full_name if self.resident else None,
             "apartment": self.resident.apartment if self.resident else None,
             "registeredByName": self.guard.full_name if self.guard else None,
+        }
+
+
+class VisitQrPass(db.Model):
+    __tablename__ = "visit_qr_passes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    token = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    valid_from = db.Column(db.String(10), nullable=False)
+    valid_until = db.Column(db.String(10), nullable=False)
+    max_people = db.Column(db.Integer, nullable=False)
+    revoked = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    resident = db.relationship("User")
+    visits = db.relationship("Visit", back_populates="qr_pass")
+
+    def to_dict(self, include_token=False):
+        registered_people = len(self.visits)
+        result = {
+            "id": self.id,
+            "residentId": self.resident_id,
+            "validFrom": self.valid_from,
+            "validUntil": self.valid_until,
+            "maxPeople": self.max_people,
+            "registeredPeople": registered_people,
+            "remainingPeople": max(0, self.max_people - registered_people),
+            "revoked": self.revoked,
+        }
+        if include_token:
+            result["token"] = self.token
+        return result
+
+
+class VisitEvent(db.Model):
+    __tablename__ = "visit_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    visit_id = db.Column(db.Integer, db.ForeignKey("visits.id"), nullable=False, index=True)
+    event_type = db.Column(db.String(20), nullable=False)
+    method = db.Column(db.String(20), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    returning_today = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    visit = db.relationship("Visit", back_populates="events")
+    actor = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.event_type,
+            "method": self.method,
+            "actorName": self.actor.full_name if self.actor else None,
+            "returningToday": self.returning_today,
+            "createdAt": _fmt(self.created_at),
         }
 
 

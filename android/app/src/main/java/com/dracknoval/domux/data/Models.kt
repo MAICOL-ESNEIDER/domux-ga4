@@ -297,7 +297,8 @@ data class PackageItem(
     val mediaUrl: String? = null,
     val mediaType: String? = null,
     val eventDate: String? = null,
-    val eventTime: String? = null
+    val eventTime: String? = null,
+    val deliveredTo: String? = null
 )
 data class PackagesListResponse(val packages: List<PackageItem>?)
 data class RegisterPackageRequest(
@@ -309,6 +310,7 @@ data class RegisterPackageRequest(
     val eventTime: String? = null
 )
 data class RegisterPackageResponse(val message: String?, val packageItem: PackageItem?)
+data class DeliverPackageRequest(val receivedBy: String)
 
 data class Visit(
     val id: Int,
@@ -319,16 +321,71 @@ data class Visit(
     val registeredByName: String?,
     val residentId: Int? = null,
     val apartment: String? = null,
-    val visitorDocument: String? = ""
+    val visitorDocument: String? = "",
+    val visitorPhotoUrl: String? = null,
+    val visitorPhotoType: String? = null,
+    val mediaConsent: Boolean = false,
+    val description: String? = null,
+    val approvalStatus: String = "pendiente",
+    val authorizationMethod: String? = null,
+    val enteredAt: String? = null,
+    val exitedAt: String? = null,
+    val exitReturning: Boolean = false,
+    val qrPassId: Int? = null,
+    val events: List<VisitEvent>? = null
 )
 data class VisitsListResponse(val visits: List<Visit>?)
+data class VisitEvent(
+    val id: Int,
+    val type: String,
+    val method: String,
+    val actorName: String?,
+    val returningToday: Boolean,
+    val createdAt: String?
+)
 data class RegisterVisitRequest(
     val residentId: Int,
     val visitorName: String,
     val type: String,
-    val visitorDocument: String? = null
+    val visitorDocument: String? = null,
+    val mediaConsent: Boolean = false,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null,
+    val description: String? = null
 )
 data class RegisterVisitResponse(val message: String?, val visit: Visit?)
+data class VisitDecisionRequest(val decision: String)
+data class VisitExitRequest(val returningToday: Boolean)
+data class VisitQrPass(
+    val id: Int,
+    val residentId: Int,
+    val validFrom: String,
+    val validUntil: String,
+    val maxPeople: Int,
+    val registeredPeople: Int,
+    val remainingPeople: Int,
+    val revoked: Boolean,
+    val token: String? = null,
+    val qrData: String? = null
+)
+data class VisitQrPassListResponse(val qrPasses: List<VisitQrPass>?)
+data class CreateVisitQrPassRequest(
+    val validFrom: String,
+    val validUntil: String,
+    val maxPeople: Int
+)
+data class VisitQrPassResponse(val qrPass: VisitQrPass?)
+data class VisitQrInspectionResponse(
+    val qrPass: VisitQrPass?,
+    val residentName: String?,
+    val apartment: String?,
+    val inside: List<Visit>?,
+    val canRegister: Boolean = false,
+    val registeredVisits: List<Visit>? = null,
+    val linkableVisits: List<Visit>? = null
+)
+data class QrVisitorEntryRequest(val visitorName: String? = null, val visitId: Int? = null)
+data class QrVisitorExitRequest(val visitId: Int, val returningToday: Boolean)
 
 data class NotificationItem(
     val id: Int,

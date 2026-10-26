@@ -78,7 +78,10 @@ interface ApiService {
     ): Response<GenericMessageResponse>
 
     @GET("api/residents")
-    suspend fun getResidents(@Header("Authorization") auth: String): Response<ResidentsListResponse>
+    suspend fun getResidents(
+        @Header("Authorization") auth: String,
+        @Query("search") search: String? = null
+    ): Response<ResidentsListResponse>
 
     @GET("api/announcements")
     suspend fun getAnnouncements(@Header("Authorization") auth: String): Response<AnnouncementsListResponse>
@@ -201,16 +204,84 @@ interface ApiService {
     @PUT("api/packages/{id}/deliver")
     suspend fun deliverPackage(
         @Header("Authorization") auth: String,
-        @Path("id") id: Int
+        @Path("id") id: Int,
+        @Body body: DeliverPackageRequest
     ): Response<RegisterPackageResponse>
 
     @GET("api/visits")
-    suspend fun getVisits(@Header("Authorization") auth: String): Response<VisitsListResponse>
+    suspend fun getVisits(
+        @Header("Authorization") auth: String,
+        @Query("search") search: String? = null,
+        @Query("status") status: String? = null
+    ): Response<VisitsListResponse>
 
     @POST("api/visits")
     suspend fun registerVisit(
         @Header("Authorization") auth: String,
         @Body body: RegisterVisitRequest
+    ): Response<RegisterVisitResponse>
+
+    @PUT("api/visits/{id}/decision")
+    suspend fun decideVisit(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: VisitDecisionRequest
+    ): Response<RegisterVisitResponse>
+
+    @PUT("api/visits/{id}/authorize-call")
+    suspend fun authorizeVisitByCall(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<RegisterVisitResponse>
+
+    @POST("api/visits/{id}/entry")
+    suspend fun registerVisitEntry(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<RegisterVisitResponse>
+
+    @POST("api/visits/{id}/exit")
+    suspend fun registerVisitExit(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: VisitExitRequest
+    ): Response<RegisterVisitResponse>
+
+    @GET("api/visits/qr-passes")
+    suspend fun getVisitQrPasses(
+        @Header("Authorization") auth: String
+    ): Response<VisitQrPassListResponse>
+
+    @POST("api/visits/qr-passes")
+    suspend fun createVisitQrPass(
+        @Header("Authorization") auth: String,
+        @Body body: CreateVisitQrPassRequest
+    ): Response<VisitQrPassResponse>
+
+    @PUT("api/visits/qr-passes/{id}/revoke")
+    suspend fun revokeVisitQrPass(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<GenericMessageResponse>
+
+    @GET("api/visits/qr/{token}")
+    suspend fun inspectVisitQr(
+        @Header("Authorization") auth: String,
+        @Path("token") token: String
+    ): Response<VisitQrInspectionResponse>
+
+    @POST("api/visits/qr/{token}/entry")
+    suspend fun enterVisitQr(
+        @Header("Authorization") auth: String,
+        @Path("token") token: String,
+        @Body body: QrVisitorEntryRequest
+    ): Response<RegisterVisitResponse>
+
+    @POST("api/visits/qr/{token}/exit")
+    suspend fun exitVisitQr(
+        @Header("Authorization") auth: String,
+        @Path("token") token: String,
+        @Body body: QrVisitorExitRequest
     ): Response<RegisterVisitResponse>
 
     @GET("api/notifications")

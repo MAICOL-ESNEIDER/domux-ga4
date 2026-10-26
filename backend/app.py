@@ -54,9 +54,20 @@ SQLITE_ADDITIONS = {
         "media_type": "VARCHAR(20)",
         "event_date": "VARCHAR(20)",
         "event_time": "VARCHAR(20)",
+        "delivered_to": "VARCHAR(120)",
     },
     "visits": {
         "visitor_document": "VARCHAR(40)",
+        "visitor_photo_url": "TEXT",
+        "visitor_photo_type": "VARCHAR(20)",
+        "media_consent": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "description": "VARCHAR(250)",
+        "approval_status": "VARCHAR(20) NOT NULL DEFAULT 'pendiente'",
+        "authorization_method": "VARCHAR(20)",
+        "entered_at": "DATETIME",
+        "exited_at": "DATETIME",
+        "exit_returning": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "qr_pass_id": "INTEGER REFERENCES visit_qr_passes(id)",
     },
 }
 
@@ -145,6 +156,47 @@ def migrate_admin_action_columns():
             )
 
 
+def migrate_security_columns():
+    """Add portería workflow fields to existing SQLite and PostgreSQL databases."""
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+    dialect = db.engine.dialect.name
+    additions = {
+        "packages": {"delivered_to": "VARCHAR(120)"},
+        "visits": {
+            "visitor_photo_url": "TEXT",
+            "visitor_photo_type": "VARCHAR(20)",
+            "media_consent": (
+                "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+                else "BOOLEAN NOT NULL DEFAULT 0"
+            ),
+            "description": "VARCHAR(250)",
+            "approval_status": "VARCHAR(20) NOT NULL DEFAULT 'pendiente'",
+            "authorization_method": "VARCHAR(20)",
+            "entered_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+            "exited_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+            "exit_returning": (
+                "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+                else "BOOLEAN NOT NULL DEFAULT 0"
+            ),
+            "qr_pass_id": "INTEGER REFERENCES visit_qr_passes(id)",
+        },
+    }
+    with db.engine.begin() as connection:
+        for table_name, columns in additions.items():
+            if table_name not in tables:
+                continue
+            existing_columns = {
+                column["name"] for column in inspector.get_columns(table_name)
+            }
+            for column_name, column_type in columns.items():
+                if column_name not in existing_columns:
+                    connection.exec_driver_sql(
+                        f'ALTER TABLE "{table_name}" ADD COLUMN '
+                        f'"{column_name}" {column_type}'
+                    )
+
+
 def migrate_resident_profiles():
     """Backfill apartment numbers and create unit records without deleting data."""
     residents = User.query.filter(
@@ -228,6 +280,7 @@ def create_app():
         migrate_sqlite_schema()
         migrate_profile_columns()
         migrate_admin_action_columns()
+        migrate_security_columns()
         migrate_resident_profiles()
         migrate_pqrs_conversations()
         seed_if_empty()

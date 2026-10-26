@@ -3,6 +3,7 @@
     <!-- Permiso obligatorio para que la app pueda hacer peticiones HTTP al backend. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:allowBackup="true"

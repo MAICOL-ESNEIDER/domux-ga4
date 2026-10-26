@@ -13,8 +13,8 @@ Tres roles, un solo login:
 | Rol                      | Puede hacer                                                                                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Administrador**        | Crear y editar usuarios · restablecer contraseñas · publicar/eliminar anuncios · gestionar PQRS y reservas · registrar paquetes y visitas · bandeja de notificaciones |
-| **Residente**            | Ver anuncios · crear y ver sus PQRS · reservar/cancelar zonas comunes · consultar paquetes, visitas y notificaciones |
-| **Guardia de seguridad** | Registrar paquetes y visitas a nombre de un residente · marcar paquetes como entregados |
+| **Residente**            | Ver anuncios · crear y ver sus PQRS · reservar/cancelar zonas comunes · consultar paquetes y visitas · autorizar ingresos · crear/revocar QR de visitas · ver notificaciones |
+| **Guardia de seguridad** | Buscar residentes · registrar paquetes, visitantes y domiciliarios · registrar autorizaciones por llamada, entradas y salidas · escanear QR · marcar paquetes como entregados |
 
 Cada acción reservada está protegida en **dos capas**: la app oculta las
 opciones según el rol (`Session.isAdmin` / `isResident` / `isGuard`), y el
@@ -123,9 +123,17 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Cancelar reserva                 | `PUT /api/reservations/{id}/cancel` | Sí      | RESIDENT (propia), ADMIN                 | 400, 401, 403, 404 |
 | Ver paquetes                     | `GET /api/packages`                 | Sí      | ADMIN, GUARD (todos), RESIDENT (propios) | 401                |
 | Registrar paquete                | `POST /api/packages`                | Sí      | GUARD                                    | 400, 401, 403      |
-| Marcar paquete entregado         | `PUT /api/packages/{id}/deliver`    | Sí      | GUARD                                    | 401, 403, 404      |
-| Ver visitas                      | `GET /api/visits`                   | Sí      | ADMIN, GUARD (todas), RESIDENT (propias) | 401                |
-| Registrar visita                 | `POST /api/visits`                  | Sí      | GUARD                                    | 400, 401, 403      |
+| Marcar paquete entregado         | `PUT /api/packages/{id}/deliver`    | Sí      | GUARD (requiere `receivedBy`)            | 400, 401, 403, 404 |
+| Ver visitas/historial            | `GET /api/visits`                   | Sí      | ADMIN, GUARD (todas), RESIDENT (propias) | 400, 401           |
+| Buscar residentes para portería  | `GET /api/residents?search=`        | Sí      | ADMIN, GUARD (máximo 50 resultados)      | 401, 403           |
+| Registrar visita/domiciliario    | `POST /api/visits`                  | Sí      | GUARD                                    | 400, 401, 403      |
+| Autorizar/rechazar visita        | `PUT /api/visits/{id}/decision`     | Sí      | RESIDENT (propia)                        | 400, 401, 403, 404 |
+| Autorizar ingreso por llamada    | `PUT /api/visits/{id}/authorize-call` | Sí   | GUARD                                    | 400, 401, 403, 404 |
+| Registrar entrada                | `POST /api/visits/{id}/entry`       | Sí      | GUARD                                    | 400, 401, 403, 404 |
+| Registrar salida                 | `POST /api/visits/{id}/exit`        | Sí      | GUARD                                    | 400, 401, 403, 404 |
+| Crear/listar/revocar QR          | `POST, GET /api/visits/qr-passes`, `PUT .../{id}/revoke` | Sí | RESIDENT (propios) | 400, 401, 403, 404 |
+| Consultar QR                     | `GET /api/visits/qr/{token}`        | Sí      | GUARD                                    | 400, 401, 403, 404 |
+| Registrar acceso por QR          | `POST /api/visits/qr/{token}/entry`, `POST .../exit` | Sí | GUARD | 400, 401, 403, 404, 409 |
 
 Todas las rutas protegidas exigen el encabezado `Authorization: Bearer <token>`.
 
@@ -232,6 +240,33 @@ de objetos ni carga multipart en esta fase.
   ocupación; los mensajes y adjuntos se conservan en la tabla nueva
   `reservation_messages`, sin modificar o eliminar los datos anteriores.
 
+### Fase 5 — Portería, paquetes, visitas y domiciliarios
+
+- La búsqueda de residentes permite consultar por nombre, documento o apartamento
+  desde la portería; el backend devuelve como máximo 50 residentes activos.
+- Al registrar una visita, el residente recibe una notificación para aprobar o
+  rechazar el ingreso. El guardia también puede dejar registrada una autorización
+  telefónica. Después de autorizar, registra cada entrada y salida por separado;
+  los eventos guardan fecha, método y quién los registró.
+- Foto o documento del visitante solo se acepta cuando el guardia confirma que
+  existe consentimiento. La evidencia continúa usando el formato multimedia
+  existente en Base64; no se guarda si no hay autorización.
+- Los domiciliarios usan el mismo ciclo de autorización y entrada/salida, con un
+  campo opcional para describir el pedido. El residente recibe aviso de llegada,
+  entrada y salida.
+- Para una estadía de varios días el residente puede crear un QR de 1 a 30 días,
+  con un límite positivo de personas, o revocarlo. El QR contiene un token
+  aleatorio sin datos personales; el backend valida vigencia, revocación y cupo.
+  Una persona que ya usó cupo puede salir y volver a entrar sin consumir otro.
+  También se puede vincular al QR un registro manual existente del mismo residente.
+- Una visita autorizada que no sea por QR notifica al residente cada vez que
+  entra o sale. Las entradas/salidas por QR no generan esos avisos repetidos.
+- Al entregar un paquete, portería registra quién lo recibió y el residente recibe
+  ese nombre en la notificación. Los registros históricos se conservan; las nuevas
+  columnas se agregan sin borrar datos en SQLite y PostgreSQL.
+- Android genera el QR y lo escanea con ZXing; el permiso de cámara se pide al
+  momento de escanear por el componente de lectura.
+
 ## 6. Mapeo con la arquitectura de GA1-GA3
 
 | Archivo/patrón enseñado en GA1-GA3             | Dónde está en este proyecto                                                                |
@@ -252,7 +287,8 @@ ambiciosa sin terminar"), quedan **fuera de esta entrega**:
 - Notificaciones push reales (Firebase). Las "notificaciones" son la pestaña
   de Registros/Notificaciones, que se actualiza al entrar o refrescar (polling
   por GET), no una alerta del sistema operativo.
-- Subida de fotos (paquetes, visitantes).
+- Almacenamiento separado de adjuntos: paquetes y visitantes aún usan Base64
+  en JSON (máximo 5 MB), no un servicio de archivos u objetos.
 - La app de administración ya usa búsqueda, filtros combinables y paginación
   del servidor para usuarios; no hay todavía exportación de resultados.
 - El perfil del residente es editable solo para los campos permitidos; no hay
