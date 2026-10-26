@@ -1,6 +1,7 @@
 package com.dracknoval.domux
 
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -202,7 +203,7 @@ fun PqrsScreen(navController: NavController) {
                     Column(
                         Modifier.fillMaxWidth().clickable {
                             expandedId = if (expanded) null else pqrs.id
-                        }.padding(12.dp)
+                        }.animateContentSize().padding(12.dp)
                     ) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(pqrs.category ?: "Petición", color = MaterialTheme.colorScheme.secondary)
@@ -226,7 +227,7 @@ fun PqrsScreen(navController: NavController) {
                             if (pqrs.incidentDate != null || pqrs.incidentTime != null) {
                                 Text("Incidente: ${pqrs.incidentDate.orEmpty()} ${pqrs.incidentTime.orEmpty()}")
                             }
-                            if (pqrs.mediaUrl != null) Text("Adjunto: ${pqrs.mediaType ?: "archivo"}")
+                            MediaAttachmentChip(pqrs.mediaUrl, pqrs.mediaType)
                             if (!pqrs.adminResponse.isNullOrBlank()) Text("Respuesta: ${pqrs.adminResponse}")
                             if (Session.isAdmin) {
                                 var responseText by remember(pqrs.id, pqrs.adminResponse) {

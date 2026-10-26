@@ -44,7 +44,8 @@ fun LoginScreen(navController: NavController) {
             onValueChange = { email = it },
             label = { Text("Correo") },
             singleLine = true,
-            isError = (attemptedLogin && email.trim().isEmpty()) || (email.isNotEmpty() && !email.trim().contains("@")),
+            isError = (attemptedLogin && email.trim().isEmpty()) ||
+                (email.isNotEmpty() && !email.trim().contains("@")),
             supportingText = {
                 if (attemptedLogin && email.trim().isEmpty()) Text("El correo es obligatorio")
                 else if (email.isNotEmpty() && !email.trim().contains("@")) Text("Ingresa un correo válido")
@@ -83,7 +84,6 @@ fun LoginScreen(navController: NavController) {
                             if (user == null) {
                                 result = "⚠️ El servidor no envió los datos del usuario"
                             } else {
-                                // Guardamos la sesión: token, nombre, rol y apartamento.
                                 Session.token = response.body()?.token
                                 Session.userId = user.id
                                 Session.userName = user.name
@@ -91,7 +91,6 @@ fun LoginScreen(navController: NavController) {
                                 Session.email = user.email
                                 Session.role = user.role
                                 Session.apartment = user.apartment
-                                // Vamos al menú y borramos "login" del historial.
                                 navController.navigate("home") {
                                     popUpTo("login") { inclusive = true }
                                 }
@@ -99,8 +98,8 @@ fun LoginScreen(navController: NavController) {
                         } else {
                             result = "❌ ${mensajeDeError(response.code(), response.errorBody()?.string())}"
                         }
-                    } catch (e: Exception) {
-                        result = "⚠️ No se pudo conectar con el servidor: ${e.message}"
+                    } catch (exception: Exception) {
+                        result = "⚠️ No se pudo conectar con el servidor: ${exception.message}"
                     } finally {
                         loading = false
                     }

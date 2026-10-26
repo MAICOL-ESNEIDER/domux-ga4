@@ -46,6 +46,7 @@ fun CreateUserScreen(navController: NavController) {
     var busy by remember { mutableStateOf(false) }
     var attemptedSubmit by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var userSearch by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -58,6 +59,8 @@ fun CreateUserScreen(navController: NavController) {
     var editUser by remember { mutableStateOf<UserData?>(null) }
     var resetUser by remember { mutableStateOf<UserData?>(null) }
     var resetPassword by remember { mutableStateOf("") }
+    var pendingUserUpdate by remember { mutableStateOf<Pair<Int, UpdateUserRequest>?>(null) }
+    var pendingPasswordReset by remember { mutableStateOf<Pair<Int, String>?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun loadUsers() {
@@ -74,6 +77,21 @@ fun CreateUserScreen(navController: NavController) {
     }
 
     LaunchedEffect(Unit) { loadUsers() }
+
+    val filteredUsers = users.filter { user ->
+        val query = userSearch.trim()
+        query.isBlank() || listOf(
+            user.fullName,
+            user.name,
+            user.lastName,
+            user.email,
+            user.phone,
+            user.documentId,
+            user.role,
+            user.apartment,
+            user.occupancyType
+        ).any { value -> value.orEmpty().contains(query, ignoreCase = true) }
+    }
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("Gestión de usuarios", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
@@ -161,11 +179,20 @@ fun CreateUserScreen(navController: NavController) {
 
         Spacer(Modifier.height(16.dp))
         Text("Usuarios registrados", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(
+            value = userSearch,
+            onValueChange = { userSearch = it },
+            label = { Text("Buscar por nombre, correo, teléfono, documento o apartamento") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
         if (loading) {
             CircularProgressIndicator()
+        } else if (filteredUsers.isEmpty()) {
+            Text("No se encontraron usuarios.")
         } else {
             LazyColumn(Modifier.weight(1f)) {
-                items(users, key = { it.id }) { user ->
+                items(filteredUsers, key = { it.id }) { user ->
                     DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                         Column(Modifier.padding(14.dp)) {
                             Text("${user.name} ${user.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleMedium)
@@ -234,24 +261,12 @@ fun CreateUserScreen(navController: NavController) {
                         message = "Completa los campos obligatorios."
                         return@TextButton
                     }
-                    scope.launch {
-                        try {
-                            val response = RetrofitClient.api.updateUser(
-                                Session.bearer(), user.id,
-                                UpdateUserRequest(
-                                    eName.trim(), eLastName.trim(), eEmail.trim().lowercase(),
-                                    ePhone.trim(), eDocument.trim(), eRole,
-                                    eApartment.trim().takeIf { eRole == "RESIDENT" },
-                                    eOccupancy.takeIf { eRole == "RESIDENT" }, eActive
-                                )
-                            )
-                            message = if (response.isSuccessful) "Usuario actualizado."
-                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                            if (response.isSuccessful) { editUser = null; loadUsers() }
-                        } catch (exception: Exception) {
-                            message = "No se pudo actualizar: ${exception.message}"
-                        }
-                    }
+                    pendingUserUpdate = user.id to UpdateUserRequest(
+                        eName.trim(), eLastName.trim(), eEmail.trim().lowercase(),
+                        ePhone.trim(), eDocument.trim(), eRole,
+                        eApartment.trim().takeIf { eRole == "RESIDENT" },
+                        eOccupancy.takeIf { eRole == "RESIDENT" }, eActive
+                    )
                 }) { Text("Guardar") }
             },
             dismissButton = { TextButton(onClick = { editUser = null }) { Text("Cancelar") } }
@@ -280,10 +295,54 @@ fun CreateUserScreen(navController: NavController) {
                         message = "La contraseña no cumple los requisitos."
                         return@TextButton
                     }
+                    pendingPasswordReset = user.id to resetPassword
+                }) { Text("Continuar") }
+            },
+            dismissButton = { TextButton(onClick = { resetUser = null }) { Text("Cancelar") } }
+        )
+    }
+
+    pendingUserUpdate?.let { (userId, update) ->
+        AlertDialog(
+            onDismissRequest = { pendingUserUpdate = null },
+            title = { Text("Confirmar cambios del usuario") },
+            text = { Text("Se guardarán los cambios realizados en este perfil. ¿Deseas continuar?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingUserUpdate = null
+                    scope.launch {
+                        try {
+                            val response = RetrofitClient.api.updateUser(Session.bearer(), userId, update)
+                            message = if (response.isSuccessful) "Usuario actualizado."
+                            else mensajeDeError(response.code(), response.errorBody()?.string())
+                            if (response.isSuccessful) {
+                                editUser = null
+                                loadUsers()
+                            }
+                        } catch (exception: Exception) {
+                            message = "No se pudo actualizar: ${exception.message}"
+                        }
+                    }
+                }) { Text("Confirmar y guardar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingUserUpdate = null }) { Text("Volver a editar") }
+            }
+        )
+    }
+
+    pendingPasswordReset?.let { (userId, newPassword) ->
+        AlertDialog(
+            onDismissRequest = { pendingPasswordReset = null },
+            title = { Text("Confirmar restablecimiento") },
+            text = { Text("La contraseña de este usuario será reemplazada. Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingPasswordReset = null
                     scope.launch {
                         try {
                             val response = RetrofitClient.api.resetUserPassword(
-                                Session.bearer(), user.id, ResetPasswordRequest(resetPassword)
+                                Session.bearer(), userId, ResetPasswordRequest(newPassword)
                             )
                             message = if (response.isSuccessful) "Contraseña restablecida."
                             else mensajeDeError(response.code(), response.errorBody()?.string())
@@ -292,9 +351,11 @@ fun CreateUserScreen(navController: NavController) {
                             message = "No se pudo restablecer la contraseña: ${exception.message}"
                         }
                     }
-                }) { Text("Confirmar") }
+                }) { Text("Confirmar restablecimiento") }
             },
-            dismissButton = { TextButton(onClick = { resetUser = null }) { Text("Cancelar") } }
+            dismissButton = {
+                TextButton(onClick = { pendingPasswordReset = null }) { Text("Cancelar") }
+            }
         )
     }
 }

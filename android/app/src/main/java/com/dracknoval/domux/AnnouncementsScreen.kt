@@ -120,9 +120,7 @@ fun AnnouncementsScreen(navController: NavController) {
                         if (announcement.eventDate != null || announcement.eventTime != null) {
                             Text("Evento: ${announcement.eventDate.orEmpty()} ${announcement.eventTime.orEmpty()}")
                         }
-                        if (announcement.mediaUrl != null) {
-                            Text("Adjunto: ${announcement.mediaType ?: "archivo"}", color = MaterialTheme.colorScheme.secondary)
-                        }
+                        MediaAttachmentChip(announcement.mediaUrl, announcement.mediaType)
                         Text(
                             "Por ${announcement.authorName ?: "Administración"} · ${announcement.createdAt.orEmpty()}",
                             style = MaterialTheme.typography.bodySmall

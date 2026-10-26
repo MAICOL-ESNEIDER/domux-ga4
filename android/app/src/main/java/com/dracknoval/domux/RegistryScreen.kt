@@ -248,7 +248,7 @@ fun RegistryScreen(navController: NavController) {
                         if (item.eventDate != null || item.eventTime != null) {
                             Text("Registro: ${item.eventDate.orEmpty()} ${item.eventTime.orEmpty()}")
                         }
-                        if (item.mediaType != null) Text("Adjunto: ${item.mediaType}", color = MaterialTheme.colorScheme.secondary)
+                        MediaAttachmentChip(item.mediaUrl, item.mediaType)
                         if (canRegister && item.status != "entregado") {
                             TextButton(onClick = {
                                 confirmation = "¿Estás seguro de marcar el paquete como entregado?" to {

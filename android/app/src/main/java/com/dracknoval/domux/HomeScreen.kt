@@ -16,29 +16,74 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 fun HomeScreen(navController: NavController) {
     var unreadCount by remember { mutableIntStateOf(0) }
     var notificationError by remember { mutableStateOf<String?>(null) }
+    var permissionRequested by remember { mutableStateOf(false) }
+    val knownNotificationIds = remember(Session.userId) { mutableStateOf<Set<Int>?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) notificationError = "Activa el permiso de notificaciones para recibir avisos locales."
+    }
     val backStackEntry by navController.currentBackStackEntryFlow.collectAsState(
         initial = navController.currentBackStackEntry
     )
-    LaunchedEffect(backStackEntry?.destination?.route) {
-        try {
-            if (backStackEntry?.destination?.route == "home") {
+    val currentRoute = backStackEntry?.destination?.route
+
+    LaunchedEffect(currentRoute, Session.userId) {
+        if (currentRoute != "home") return@LaunchedEffect
+        if (
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            !permissionRequested
+        ) {
+            permissionRequested = true
+            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+        while (isActive) {
+            try {
                 val response = RetrofitClient.api.getNotifications(Session.bearer())
                 if (response.isSuccessful) {
-                    unreadCount = response.body()?.notifications.orEmpty().count { !it.isRead }
-                    notificationError = null
+                    val notifications = response.body()?.notifications.orEmpty()
+                    unreadCount = notifications.count { !it.isRead }
+                    val currentIds = notifications.mapTo(mutableSetOf()) { it.id }
+                    val previousIds = knownNotificationIds.value
+                    if (previousIds != null) {
+                        notifications.filter { !it.isRead && it.id !in previousIds }.forEach { notification ->
+                            if (DomuxLocalNotifications.show(context, notification)) {
+                                notificationError = null
+                            } else if (
+                                android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                                androidx.core.content.ContextCompat.checkSelfPermission(
+                                    context,
+                                    android.Manifest.permission.POST_NOTIFICATIONS
+                                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationError = "Activa el permiso de notificaciones para recibir avisos locales."
+                            }
+                        }
+                    }
+                    knownNotificationIds.value = currentIds
+                    if (notificationError?.startsWith("No se pudo") == true) notificationError = null
                 } else {
                     notificationError = "No se pudo actualizar el contador de notificaciones."
                 }
+            } catch (exception: Exception) {
+                notificationError = "Sin conexión para actualizar notificaciones: ${exception.message}"
             }
-        } catch (exception: Exception) {
-            notificationError = "Sin conexión para actualizar notificaciones: ${exception.message}"
+            delay(30_000)
         }
     }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -47,7 +92,6 @@ fun HomeScreen(navController: NavController) {
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Saludo y rol, usando lo que guardamos en Session durante el login.
         Text("Hola, ${Session.userName ?: "usuario"}", fontSize = 24.sp)
         Text(
             when {
@@ -59,7 +103,6 @@ fun HomeScreen(navController: NavController) {
         )
         Spacer(Modifier.height(32.dp))
 
-        // ----- Opciones visibles para TODOS los roles autenticados -----
         Button(onClick = { navController.navigate("announcements") }, modifier = Modifier.fillMaxWidth()) {
             Text("Anuncios de la unidad")
         }
@@ -73,7 +116,6 @@ fun HomeScreen(navController: NavController) {
         notificationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Spacer(Modifier.height(12.dp))
 
-        // ----- Solo Administrador -----
         if (Session.isAdmin) {
             Button(onClick = { navController.navigate("pqrs") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Ver PQRS de residentes")
@@ -93,7 +135,6 @@ fun HomeScreen(navController: NavController) {
             Spacer(Modifier.height(12.dp))
         }
 
-        // ----- Solo Residente -----
         if (Session.isResident) {
             Button(onClick = { navController.navigate("pqrs") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Mis PQRS")
@@ -109,7 +150,6 @@ fun HomeScreen(navController: NavController) {
             Spacer(Modifier.height(12.dp))
         }
 
-        // ----- Solo Guardia -----
         if (Session.isGuard) {
             Button(onClick = { navController.navigate("registry") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Registrar paquete / visitante")

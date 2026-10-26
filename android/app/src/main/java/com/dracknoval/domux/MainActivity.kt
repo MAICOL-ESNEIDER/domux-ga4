@@ -18,6 +18,7 @@ import com.dracknoval.domux.ui.theme.DomuxAppTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DomuxLocalNotifications.createChannel(this)
         setContent {
             DomuxAppTheme {
                 Surface(
