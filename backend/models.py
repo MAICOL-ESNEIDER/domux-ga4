@@ -109,8 +109,21 @@ class Pqrs(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     resident = db.relationship("User")
+    conversation = db.relationship(
+        "PqrsMessage",
+        back_populates="pqrs",
+        cascade="all, delete-orphan",
+        order_by="PqrsMessage.created_at, PqrsMessage.id",
+    )
+    satisfaction_ratings = db.relationship(
+        "PqrsSatisfaction",
+        back_populates="pqrs",
+        cascade="all, delete-orphan",
+        order_by="PqrsSatisfaction.created_at, PqrsSatisfaction.id",
+    )
 
     def to_dict(self):
+        latest_rating = self.satisfaction_ratings[-1] if self.satisfaction_ratings else None
         return {
             "id": self.id,
             "residentId": self.resident_id,
@@ -123,10 +136,64 @@ class Pqrs(db.Model):
             "incidentTime": self.incident_time,
             "mediaUrl": self.media_url,
             "mediaType": self.media_type,
+            "messages": [message.to_dict() for message in self.conversation],
+            "satisfactionRating": latest_rating.rating if latest_rating else None,
+            "satisfactionComment": latest_rating.comment if latest_rating else None,
+            "satisfactionHistory": [rating.to_dict() for rating in self.satisfaction_ratings],
             "createdAt": _fmt(self.created_at),
             "updatedAt": _fmt(self.updated_at),
             "residentName": self.resident.full_name if self.resident else None,
             "apartment": self.resident.apartment if self.resident else None,
+        }
+
+
+class PqrsMessage(db.Model):
+    __tablename__ = "pqrs_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    pqrs_id = db.Column(db.Integer, db.ForeignKey("pqrs.id"), nullable=False, index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    author_role = db.Column(db.String(20), nullable=False)
+    message = db.Column(db.Text, nullable=True)
+    media_url = db.Column(db.Text, nullable=True)
+    media_type = db.Column(db.String(20), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    pqrs = db.relationship("Pqrs", back_populates="conversation")
+    author = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "pqrsId": self.pqrs_id,
+            "authorId": self.author_id,
+            "authorName": self.author.full_name if self.author else None,
+            "authorRole": self.author_role,
+            "message": self.message,
+            "mediaUrl": self.media_url,
+            "mediaType": self.media_type,
+            "createdAt": _fmt(self.created_at),
+        }
+
+
+class PqrsSatisfaction(db.Model):
+    __tablename__ = "pqrs_satisfaction"
+
+    id = db.Column(db.Integer, primary_key=True)
+    pqrs_id = db.Column(db.Integer, db.ForeignKey("pqrs.id"), nullable=False, index=True)
+    rating = db.Column(db.Integer, nullable=False)
+    comment = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    pqrs = db.relationship("Pqrs", back_populates="satisfaction_ratings")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "pqrsId": self.pqrs_id,
+            "rating": self.rating,
+            "comment": self.comment,
+            "createdAt": _fmt(self.created_at),
         }
 
 

@@ -1,10 +1,20 @@
+from datetime import datetime
+
 from flask import Blueprint, g, jsonify, request
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from auth import role_required, token_required
 from errors import error_response
 from extensions import db
-from models import Announcement, CommonArea, Pqrs, Reservation, User
+from models import (
+    Announcement,
+    CommonArea,
+    Pqrs,
+    PqrsMessage,
+    PqrsSatisfaction,
+    Reservation,
+    User,
+)
 from services.notification_service import notify_residents, notify_user
 from services.reservation_service import (
     ACTIVE_RESERVATION_STATUSES,
@@ -147,7 +157,6 @@ def get_pqrs():
 
 @bp.post("/pqrs")
 @token_required
-@role_required("RESIDENT")
 def create_pqrs():
     data, failure = _json_body()
     if failure:
@@ -160,6 +169,8 @@ def create_pqrs():
         return error_response(400, validation_error)
     if error := _media_and_event_error(data, "incidentDate", "incidentTime"):
         return error_response(400, error)
+    if g.current_user.role not in ("RESIDENT", "ADMIN"):
+        return error_response(403, "No tienes permiso para crear PQRS")
     resident = _resident_for_write(data)
     if resident is None:
         return error_response(400, "Selecciona un residente válido")
@@ -178,6 +189,21 @@ def create_pqrs():
         media_type=data.get("mediaType"),
     )
     db.session.add(pqrs)
+    db.session.flush()
+    pqrs.conversation.append(PqrsMessage(
+        author_id=g.current_user.id,
+        author_role=g.current_user.role,
+        message=data["message"].strip(),
+        media_url=data.get("mediaUrl"),
+        media_type=data.get("mediaType"),
+    ))
+    if g.current_user.role == "ADMIN":
+        notify_user(
+            resident.id,
+            "Nueva PQRS registrada",
+            f"Administración registró una PQRS a tu nombre: {pqrs.subject}.",
+            "pqrs",
+        )
     db.session.commit()
     return jsonify({"message": "PQRS enviada", "pqrs": pqrs.to_dict()}), 201
 
@@ -191,25 +217,198 @@ def respond_pqrs(pqrs_id):
         return failure
     if "status" not in data or data["status"] not in VALID_PQRS_STATUSES:
         return error_response(400, "Estado de PQRS inválido")
-    if "adminResponse" in data and data["adminResponse"] is not None and not isinstance(data["adminResponse"], str):
-        return error_response(400, "La respuesta debe ser texto")
+    response_text = data.get("adminResponse")
+    if not isinstance(response_text, str) or not response_text.strip():
+        return error_response(400, "Escribe una respuesta antes de actualizar la PQRS.")
+    if error := validate_media_fields(data):
+        return error_response(400, error)
 
     pqrs = db.session.get(Pqrs, pqrs_id)
     if pqrs is None:
         return error_response(404, "PQRS no encontrada")
-    new_response = data.get("adminResponse", pqrs.admin_response)
-    changed = pqrs.status != data["status"] or pqrs.admin_response != new_response
+    if data["status"] == "resuelta" and not response_text.strip():
+        return error_response(400, "No puedes resolver una PQRS sin escribir una respuesta.")
+    previous_status = pqrs.status
     pqrs.status = data["status"]
-    pqrs.admin_response = new_response.strip() if isinstance(new_response, str) else None
-    if changed:
-        notify_user(
-            pqrs.resident_id,
-            "Actualización de PQRS",
-            f"Tu solicitud '{pqrs.subject}' ahora está {pqrs.status}.",
-            "pqrs",
-        )
+    pqrs.admin_response = response_text.strip()
+    if previous_status != pqrs.status:
+        pqrs.updated_at = datetime.utcnow()
+    pqrs.conversation.append(PqrsMessage(
+        author_id=g.current_user.id,
+        author_role="ADMIN",
+        message=response_text.strip(),
+        media_url=data.get("mediaUrl"),
+        media_type=data.get("mediaType"),
+    ))
+    notify_user(
+        pqrs.resident_id,
+        "Actualización de PQRS",
+        f"Tu solicitud '{pqrs.subject}' ahora está {pqrs.status}.",
+        "pqrs",
+    )
     db.session.commit()
     return jsonify({"message": "PQRS actualizada", "pqrs": pqrs.to_dict()})
+
+
+@bp.post("/pqrs/<int:pqrs_id>/messages")
+@token_required
+@role_required("RESIDENT")
+def add_pqrs_message(pqrs_id):
+    data, failure = _json_body()
+    if failure:
+        return failure
+    if error := validate_media_fields(data):
+        return error_response(400, error)
+    message = data.get("message")
+    if message is not None and not isinstance(message, str):
+        return error_response(400, "El mensaje debe ser texto.")
+    if not (message and message.strip()) and not data.get("mediaUrl"):
+        return error_response(400, "Escribe un mensaje o adjunta un archivo.")
+
+    pqrs = db.session.get(Pqrs, pqrs_id)
+    if pqrs is None:
+        return error_response(404, "PQRS no encontrada")
+    if pqrs.resident_id != g.current_user.id:
+        return error_response(403, "Solo puedes responder tus propias PQRS.")
+
+    was_resolved = pqrs.status == "resuelta"
+    if was_resolved:
+        pqrs.status = "abierta"
+        pqrs.updated_at = datetime.utcnow()
+    pqrs.conversation.append(PqrsMessage(
+        author_id=g.current_user.id,
+        author_role="RESIDENT",
+        message=message.strip() if message and message.strip() else None,
+        media_url=data.get("mediaUrl"),
+        media_type=data.get("mediaType"),
+    ))
+    if was_resolved:
+        admins = User.query.filter_by(role="ADMIN", is_active=True).all()
+        for admin in admins:
+            notify_user(
+                admin.id,
+                "PQRS reabierta",
+                f"El residente respondió la PQRS '{pqrs.subject}', que volvió a estado abierta.",
+                "pqrs",
+            )
+    db.session.commit()
+    return jsonify({"message": "Mensaje agregado", "pqrs": pqrs.to_dict()}), 201
+
+
+@bp.put("/pqrs/<int:pqrs_id>/satisfaction")
+@token_required
+@role_required("RESIDENT")
+def rate_pqrs(pqrs_id):
+    data, failure = _json_body()
+    if failure:
+        return failure
+    rating = data.get("rating")
+    if not isinstance(rating, int) or isinstance(rating, bool) or not 1 <= rating <= 5:
+        return error_response(400, "La calificación debe ser un número entre 1 y 5.")
+    comment = data.get("comment")
+    if comment is not None and not isinstance(comment, str):
+        return error_response(400, "El comentario debe ser texto.")
+
+    pqrs = db.session.get(Pqrs, pqrs_id)
+    if pqrs is None:
+        return error_response(404, "PQRS no encontrada")
+    if pqrs.resident_id != g.current_user.id:
+        return error_response(403, "Solo puedes calificar tus propias PQRS.")
+    if pqrs.status != "resuelta":
+        return error_response(400, "Solo puedes calificar una PQRS resuelta.")
+
+    rated_this_cycle = None
+    if pqrs.updated_at:
+        rated_this_cycle = PqrsSatisfaction.query.filter(
+            PqrsSatisfaction.pqrs_id == pqrs.id,
+            PqrsSatisfaction.created_at >= pqrs.updated_at,
+        ).order_by(PqrsSatisfaction.created_at.desc(), PqrsSatisfaction.id.desc()).first()
+    if rated_this_cycle is None:
+        rated_this_cycle = PqrsSatisfaction(pqrs_id=pqrs.id)
+        db.session.add(rated_this_cycle)
+    rated_this_cycle.rating = rating
+    rated_this_cycle.comment = comment.strip() if comment and comment.strip() else None
+    rated_this_cycle.created_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"message": "Calificación guardada", "pqrs": pqrs.to_dict()})
+
+
+@bp.post("/pqrs/batch/respond")
+@token_required
+@role_required("ADMIN")
+def respond_pqrs_batch():
+    data, failure = _json_body()
+    if failure:
+        return failure
+    ids = data.get("pqrsIds")
+    status = data.get("status")
+    message = data.get("message")
+    if (
+        not isinstance(ids, list)
+        or not ids
+        or any(not isinstance(pqrs_id, int) or isinstance(pqrs_id, bool) or pqrs_id <= 0 for pqrs_id in ids)
+    ):
+        return error_response(400, "Selecciona una o más PQRS válidas.")
+    if len(set(ids)) != len(ids):
+        return error_response(400, "La selección contiene PQRS repetidas.")
+    if status not in ("en_proceso", "resuelta"):
+        return error_response(400, "El estado debe ser 'en_proceso' o 'resuelta'.")
+    if not isinstance(message, str) or not message.strip():
+        return error_response(400, "Escribe una respuesta para todas las PQRS seleccionadas.")
+    if error := validate_media_fields(data):
+        return error_response(400, error)
+
+    pqrs_items = Pqrs.query.filter(Pqrs.id.in_(ids)).all()
+    if len(pqrs_items) != len(ids):
+        found_ids = {item.id for item in pqrs_items}
+        missing_ids = [pqrs_id for pqrs_id in ids if pqrs_id not in found_ids]
+        return jsonify({
+            "error": "Algunas PQRS ya no existen; no se actualizó ninguna.",
+            "status": 404,
+            "failedPqrsIds": missing_ids,
+            "updatedCount": 0,
+        }), 404
+    categories = {item.category or "Petición" for item in pqrs_items}
+    if len(categories) != 1:
+        return error_response(400, "La respuesta por lotes solo permite PQRS de la misma categoría.")
+
+    resident_ids = {item.resident_id for item in pqrs_items}
+    for pqrs in pqrs_items:
+        previous_status = pqrs.status
+        pqrs.status = status
+        pqrs.admin_response = message.strip()
+        if previous_status != status:
+            pqrs.updated_at = datetime.utcnow()
+        pqrs.conversation.append(PqrsMessage(
+            author_id=g.current_user.id,
+            author_role="ADMIN",
+            message=message.strip(),
+            media_url=data.get("mediaUrl"),
+            media_type=data.get("mediaType"),
+        ))
+    for resident_id in resident_ids:
+        notify_user(
+            resident_id,
+            "Actualización de PQRS",
+            f"Administración respondió {sum(item.resident_id == resident_id for item in pqrs_items)} "
+            "de tus solicitudes.",
+            "pqrs",
+        )
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            "error": "No se pudo guardar la respuesta; ninguna PQRS fue modificada.",
+            "status": 500,
+            "failedPqrsIds": ids,
+            "updatedCount": 0,
+        }), 500
+    return jsonify({
+        "message": "Las PQRS seleccionadas fueron actualizadas.",
+        "updatedCount": len(pqrs_items),
+        "pqrsIds": ids,
+    })
 
 
 @bp.get("/common-areas")

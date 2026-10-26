@@ -89,7 +89,22 @@ data class Pqrs(
     val incidentTime: String? = null,
     val mediaUrl: String? = null,
     val mediaType: String? = null,
-    val apartment: String? = null
+    val apartment: String? = null,
+    val messages: List<PqrsMessageItem>? = null,
+    val satisfactionRating: Int? = null,
+    val satisfactionComment: String? = null,
+    val satisfactionUpdatedAt: String? = null
+)
+data class PqrsMessageItem(
+    val id: Int,
+    val pqrsId: Int,
+    val authorId: Int?,
+    val authorName: String?,
+    val authorRole: String,
+    val message: String?,
+    val mediaUrl: String?,
+    val mediaType: String?,
+    val createdAt: String?
 )
 data class PqrsListResponse(val pqrs: List<Pqrs>?)
 data class CreatePqrsRequest(
@@ -103,7 +118,30 @@ data class CreatePqrsRequest(
     val residentId: Int? = null
 )
 data class CreatePqrsResponse(val message: String?, val pqrs: Pqrs?)
-data class RespondPqrsRequest(val status: String, val adminResponse: String)
+data class RespondPqrsRequest(
+    val status: String,
+    val adminResponse: String,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null
+)
+data class AddPqrsMessageRequest(
+    val message: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null
+)
+data class RatePqrsRequest(val rating: Int, val comment: String? = null)
+data class BatchRespondPqrsRequest(
+    val pqrsIds: List<Int>,
+    val status: String,
+    val message: String,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null
+)
+data class BatchRespondPqrsResponse(
+    val message: String?,
+    val updatedCount: Int,
+    val pqrsIds: List<Int>
+)
 
 data class CommonArea(val id: Int, val name: String)
 data class CommonAreasListResponse(val areas: List<CommonArea>?)

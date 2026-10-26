@@ -9,6 +9,7 @@ from sqlalchemy import inspect
 from errors import error_response, register_error_handlers
 from extensions import db
 from logging_config import configure_logging
+from models import Pqrs, PqrsMessage, User
 from routes.admin import bp as admin_bp
 from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
@@ -92,6 +93,30 @@ def migrate_sqlite_schema():
             )
 
 
+def migrate_pqrs_conversations():
+    """Preserve the legacy PQRS description and response as conversation messages."""
+    admin_id = db.session.query(User.id).filter_by(role="ADMIN").first()
+    for pqrs in Pqrs.query.all():
+        if pqrs.conversation:
+            continue
+        pqrs.conversation.append(PqrsMessage(
+            author_id=pqrs.resident_id,
+            author_role="RESIDENT",
+            message=pqrs.message,
+            media_url=pqrs.media_url,
+            media_type=pqrs.media_type,
+            created_at=pqrs.created_at,
+        ))
+        if pqrs.admin_response and pqrs.admin_response.strip():
+            pqrs.conversation.append(PqrsMessage(
+                author_id=admin_id[0] if admin_id else None,
+                author_role="ADMIN",
+                message=pqrs.admin_response,
+                created_at=pqrs.updated_at or pqrs.created_at,
+            ))
+    db.session.commit()
+
+
 def create_app():
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
@@ -130,6 +155,7 @@ def create_app():
     with app.app_context():
         db.create_all()
         migrate_sqlite_schema()
+        migrate_pqrs_conversations()
         seed_if_empty()
 
     return app

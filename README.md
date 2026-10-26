@@ -106,8 +106,11 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Ver anuncios                     | `GET /api/announcements`            | Sí      | cualquiera                               | 401                |
 | Publicar anuncio                 | `POST /api/announcements`           | Sí      | ADMIN                                    | 400, 401, 403      |
 | Ver PQRS                         | `GET /api/pqrs`                     | Sí      | ADMIN (todas), RESIDENT (propias)        | 401, 403           |
-| Crear PQRS                       | `POST /api/pqrs`                    | Sí      | RESIDENT                                 | 400, 401, 403      |
-| Responder PQRS                   | `PUT /api/pqrs/{id}/respond`        | Sí      | ADMIN                                    | 400, 401, 403, 404 |
+| Crear PQRS                       | `POST /api/pqrs`                   | Sí      | RESIDENT; ADMIN con `residentId`         | 400, 401, 403      |
+| Agregar mensaje a PQRS           | `POST /api/pqrs/{id}/messages`     | Sí      | RESIDENT (propia)                        | 400, 401, 403, 404 |
+| Responder/actualizar PQRS        | `PUT /api/pqrs/{id}/respond`       | Sí      | ADMIN                                    | 400, 401, 403, 404 |
+| Responder varias PQRS            | `POST /api/pqrs/batch/respond`     | Sí      | ADMIN                                    | 400, 401, 403, 404, 500 |
+| Calificar una PQRS resuelta      | `PUT /api/pqrs/{id}/satisfaction`  | Sí      | RESIDENT (propia)                        | 400, 401, 403, 404 |
 | Ver zonas comunes                | `GET /api/common-areas`             | Sí      | cualquiera                               | 401                |
 | Ver reservas                     | `GET /api/reservations`             | Sí      | ADMIN (todas), RESIDENT (propias)        | 401, 403           |
 | Crear reserva                    | `POST /api/reservations`            | Sí      | RESIDENT                                 | 400, 401, 403      |
@@ -119,6 +122,40 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Registrar visita                 | `POST /api/visits`                  | Sí      | GUARD                                    | 400, 401, 403      |
 
 Todas las rutas protegidas exigen el encabezado `Authorization: Bearer <token>`.
+
+### Flujo actualizado de PQRS
+
+- El residente crea la solicitud con asunto, descripción, categoría y, si aplica,
+  fecha/hora del incidente y un adjunto. Se guarda inicialmente como `abierta`.
+- La descripción inicial y las respuestas posteriores se conservan como mensajes
+  dentro de una conversación. Las PQRS existentes se migran al iniciar el backend:
+  la descripción original queda como primer mensaje del residente y la respuesta
+  anterior del administrador como mensaje administrativo. La migración es idempotente.
+- El administrador puede registrar una PQRS a nombre de un residente enviando su
+  `residentId`; el backend rechaza esta acción para guardias y otros roles.
+- El residente puede escribir después de una respuesta. Si la solicitud ya estaba
+  resuelta, su nuevo mensaje la reabre automáticamente como `abierta` y avisa a los
+  administradores.
+- El administrador debe escribir una respuesta no vacía (no basta con adjuntar un
+  archivo) antes de actualizar el estado o resolver una PQRS. Puede adjuntar imagen,
+  video o audio además del texto.
+- La respuesta por lotes acepta `pqrsIds`, `status`, `message` y adjunto opcional.
+  Solo admite solicitudes de una misma categoría y estado `en_proceso` o `resuelta`.
+  Todas se guardan en una sola transacción; si falta una PQRS o falla el guardado,
+  no se modifica ninguna y la respuesta identifica los IDs fallidos. Se crea una
+  notificación por residente afectado.
+- Al estar resuelta, el residente puede calificar de 1 a 5 estrellas y agregar un
+  comentario opcional. Las calificaciones se guardan como historial: al reabrirse
+  la PQRS, las anteriores se conservan y, tras resolverse otra vez, se registra una
+  nueva calificación. Si vuelve a calificar durante la misma resolución, se actualiza
+  la calificación de ese ciclo.
+- La pantalla agrupa las solicitudes por categoría, muestra pendientes por categoría
+  y permite buscar/filtrar por estado y categoría. La selección por lotes se limita a
+  una categoría a la vez.
+
+Los adjuntos continúan viajando como Base64 en JSON; la app limita el archivo original
+a 5 MB y el backend admite solicitudes de hasta 12 MB. No se implementó almacenamiento
+de objetos ni carga multipart en esta fase.
 
 ## 5. Mapeo con la arquitectura de GA1-GA3
 

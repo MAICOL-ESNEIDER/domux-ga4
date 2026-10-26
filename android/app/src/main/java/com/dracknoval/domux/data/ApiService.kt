@@ -76,6 +76,26 @@ interface ApiService {
         @Body body: RespondPqrsRequest
     ): Response<CreatePqrsResponse>
 
+    @POST("api/pqrs/{id}/messages")
+    suspend fun addPqrsMessage(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: AddPqrsMessageRequest
+    ): Response<CreatePqrsResponse>
+
+    @PUT("api/pqrs/{id}/satisfaction")
+    suspend fun ratePqrs(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: RatePqrsRequest
+    ): Response<CreatePqrsResponse>
+
+    @POST("api/pqrs/batch/respond")
+    suspend fun respondPqrsBatch(
+        @Header("Authorization") auth: String,
+        @Body body: BatchRespondPqrsRequest
+    ): Response<BatchRespondPqrsResponse>
+
     @GET("api/common-areas")
     suspend fun getCommonAreas(@Header("Authorization") auth: String): Response<CommonAreasListResponse>
 
