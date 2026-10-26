@@ -303,59 +303,52 @@ fun CreateUserScreen(navController: NavController) {
     }
 
     pendingUserUpdate?.let { (userId, update) ->
-        AlertDialog(
-            onDismissRequest = { pendingUserUpdate = null },
-            title = { Text("Confirmar cambios del usuario") },
-            text = { Text("Se guardarán los cambios realizados en este perfil. ¿Deseas continuar?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingUserUpdate = null
-                    scope.launch {
-                        try {
-                            val response = RetrofitClient.api.updateUser(Session.bearer(), userId, update)
-                            message = if (response.isSuccessful) "Usuario actualizado."
-                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                            if (response.isSuccessful) {
-                                editUser = null
-                                loadUsers()
-                            }
-                        } catch (exception: Exception) {
-                            message = "No se pudo actualizar: ${exception.message}"
+        DomuxConfirmDialog(
+            title = "Confirmar cambios del usuario",
+            message = "Se guardarán los cambios realizados en este perfil. ¿Deseas continuar?",
+            confirmLabel = "Confirmar y guardar",
+            onConfirm = {
+                pendingUserUpdate = null
+                scope.launch {
+                    try {
+                        val response = RetrofitClient.api.updateUser(Session.bearer(), userId, update)
+                        message = if (response.isSuccessful) "Usuario actualizado."
+                        else mensajeDeError(response.code(), response.errorBody()?.string())
+                        if (response.isSuccessful) {
+                            editUser = null
+                            loadUsers()
                         }
+                    } catch (exception: Exception) {
+                        message = "No se pudo actualizar: ${exception.message}"
                     }
-                }) { Text("Confirmar y guardar") }
+                }
             },
-            dismissButton = {
-                TextButton(onClick = { pendingUserUpdate = null }) { Text("Volver a editar") }
-            }
+            onDismiss = { pendingUserUpdate = null }
         )
     }
 
     pendingPasswordReset?.let { (userId, newPassword) ->
-        AlertDialog(
-            onDismissRequest = { pendingPasswordReset = null },
-            title = { Text("Confirmar restablecimiento") },
-            text = { Text("La contraseña de este usuario será reemplazada. Esta acción no se puede deshacer.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingPasswordReset = null
-                    scope.launch {
-                        try {
-                            val response = RetrofitClient.api.resetUserPassword(
-                                Session.bearer(), userId, ResetPasswordRequest(newPassword)
-                            )
-                            message = if (response.isSuccessful) "Contraseña restablecida."
-                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                            if (response.isSuccessful) resetUser = null
-                        } catch (exception: Exception) {
-                            message = "No se pudo restablecer la contraseña: ${exception.message}"
-                        }
+        DomuxConfirmDialog(
+            title = "Confirmar restablecimiento",
+            message = "La contraseña de este usuario será reemplazada. Esta acción no se puede deshacer.",
+            confirmLabel = "Restablecer",
+            danger = true,
+            onConfirm = {
+                pendingPasswordReset = null
+                scope.launch {
+                    try {
+                        val response = RetrofitClient.api.resetUserPassword(
+                            Session.bearer(), userId, ResetPasswordRequest(newPassword)
+                        )
+                        message = if (response.isSuccessful) "Contraseña restablecida."
+                        else mensajeDeError(response.code(), response.errorBody()?.string())
+                        if (response.isSuccessful) resetUser = null
+                    } catch (exception: Exception) {
+                        message = "No se pudo restablecer la contraseña: ${exception.message}"
                     }
-                }) { Text("Confirmar restablecimiento") }
+                }
             },
-            dismissButton = {
-                TextButton(onClick = { pendingPasswordReset = null }) { Text("Cancelar") }
-            }
+            onDismiss = { pendingPasswordReset = null }
         )
     }
 }

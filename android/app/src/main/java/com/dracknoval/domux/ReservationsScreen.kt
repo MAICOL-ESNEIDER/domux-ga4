@@ -194,7 +194,14 @@ fun ReservationsScreen(navController: NavController) {
                         Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
                         Text("${reservation.date} · ${reservation.timeSlot}")
                         Text("Residente: ${reservation.residentName.orEmpty()} · ${reservation.apartment.orEmpty()}")
-                        Text("Estado: ${reservation.status}")
+                        DomuxStatusBadge(
+                            reservation.status.replaceFirstChar(Char::uppercase).replace('_', ' '),
+                            when (reservation.status) {
+                                "aprobada", "activa" -> DomuxBadgeTone.SUCCESS
+                                "rechazada", "cancelada" -> DomuxBadgeTone.ALERT
+                                else -> DomuxBadgeTone.PROGRESS
+                            }
+                        )
                         if (Session.isAdmin && reservation.status in listOf("pendiente", "activa")) {
                             Row {
                                 TextButton(onClick = {
@@ -257,14 +264,14 @@ fun ReservationsScreen(navController: NavController) {
     }
 
     confirmation?.let { (prompt, action) ->
-        AlertDialog(
-            onDismissRequest = { confirmation = null },
-            title = { Text("Confirmar acción") },
-            text = { Text(prompt) },
-            confirmButton = {
-                TextButton(onClick = { confirmation = null; action() }) { Text("Confirmar") }
-            },
-            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancelar") } }
+        DomuxConfirmDialog(
+            title = "¿Estás seguro de confirmar esta acción?",
+            message = prompt,
+            confirmLabel = "Confirmar",
+            danger = prompt.contains("rechazar", ignoreCase = true) ||
+                prompt.contains("cancelar", ignoreCase = true),
+            onConfirm = { confirmation = null; action() },
+            onDismiss = { confirmation = null }
         )
     }
 }

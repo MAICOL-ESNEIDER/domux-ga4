@@ -3,9 +3,17 @@ package com.dracknoval.domux
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -126,7 +134,7 @@ fun AnnouncementsScreen(navController: NavController) {
                             style = MaterialTheme.typography.bodySmall
                         )
                         if (Session.isAdmin) {
-                            TextButton(onClick = { confirmation = announcement }) { Text("Eliminar anuncio") }
+                            DeleteAnnouncementButton(onClick = { confirmation = announcement })
                         }
                     }
                 }
@@ -136,26 +144,73 @@ fun AnnouncementsScreen(navController: NavController) {
     }
 
     confirmation?.let { item ->
-        AlertDialog(
-            onDismissRequest = { confirmation = null },
-            title = { Text("Eliminar anuncio") },
-            text = { Text("¿Estás seguro de eliminar “${item.title}”?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmation = null
-                    scope.launch {
-                        try {
-                            val response = RetrofitClient.api.deleteAnnouncement(Session.bearer(), item.id)
-                            message = if (response.isSuccessful) "Anuncio eliminado."
-                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                            if (response.isSuccessful) load()
-                        } catch (exception: Exception) {
-                            message = "No se pudo eliminar el anuncio: ${exception.message}"
-                        }
+        DomuxConfirmDialog(
+            title = "Eliminar anuncio",
+            message = "¿Estás seguro de eliminar “${item.title}”?",
+            confirmLabel = "Eliminar",
+            danger = true,
+            onConfirm = {
+                confirmation = null
+                scope.launch {
+                    try {
+                        val response = RetrofitClient.api.deleteAnnouncement(Session.bearer(), item.id)
+                        message = if (response.isSuccessful) "Anuncio eliminado."
+                        else mensajeDeError(response.code(), response.errorBody()?.string())
+                        if (response.isSuccessful) load()
+                    } catch (exception: Exception) {
+                        message = "No se pudo eliminar el anuncio: ${exception.message}"
                     }
-                }) { Text("Eliminar") }
+                }
             },
-            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancelar") } }
+            onDismiss = { confirmation = null }
         )
+    }
+}
+
+@Composable
+private fun DeleteAnnouncementButton(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .semantics { contentDescription = "Eliminar anuncio" },
+        onClick = onClick,
+        color = Color(0xFF450A0A),
+        contentColor = Color(0xFFF87171),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF7F1D1D))
+    ) {
+        Canvas(Modifier.padding(10.dp).size(20.dp)) {
+            val strokeWidth = 1.8.dp.toPx()
+            drawRoundRect(
+                color = Color(0xFFF87171),
+                topLeft = Offset(size.width * 0.25f, size.height * 0.3f),
+                size = Size(size.width * 0.5f, size.height * 0.58f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
+                style = Stroke(strokeWidth)
+            )
+            drawLine(
+                color = Color(0xFFF87171),
+                start = Offset(size.width * 0.17f, size.height * 0.22f),
+                end = Offset(size.width * 0.83f, size.height * 0.22f),
+                strokeWidth = strokeWidth
+            )
+            drawLine(
+                color = Color(0xFFF87171),
+                start = Offset(size.width * 0.38f, size.height * 0.12f),
+                end = Offset(size.width * 0.62f, size.height * 0.12f),
+                strokeWidth = strokeWidth
+            )
+            drawLine(
+                color = Color(0xFFF87171),
+                start = Offset(size.width * 0.43f, size.height * 0.43f),
+                end = Offset(size.width * 0.43f, size.height * 0.72f),
+                strokeWidth = strokeWidth
+            )
+            drawLine(
+                color = Color(0xFFF87171),
+                start = Offset(size.width * 0.57f, size.height * 0.43f),
+                end = Offset(size.width * 0.57f, size.height * 0.72f),
+                strokeWidth = strokeWidth
+            )
+        }
     }
 }

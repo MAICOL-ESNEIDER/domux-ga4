@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -88,7 +87,10 @@ fun PqrsScreen(navController: NavController) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             pqrsStates.forEach { (label, value) ->
                 FilterChip(
                     selected = statusFilter == value,
@@ -96,17 +98,17 @@ fun PqrsScreen(navController: NavController) {
                     label = { Text(label) }
                 )
             }
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                listOf("Todas" to null).plus(pqrsCategories.map { it to it }).forEach { (label, value) ->
-                    FilterChip(
-                        selected = categoryFilter == value,
-                        onClick = { categoryFilter = value },
-                        label = { Text(label) }
-                    )
-                }
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf("Todas" to null).plus(pqrsCategories.map { it to it }).forEach { (label, value) ->
+                FilterChip(
+                    selected = categoryFilter == value,
+                    onClick = { categoryFilter = value },
+                    label = { Text(label) }
+                )
             }
         }
 
@@ -194,10 +196,10 @@ fun PqrsScreen(navController: NavController) {
         else LazyColumn(Modifier.weight(1f)) {
             items(items, key = { it.id }) { pqrs ->
                 val expanded = expandedId == pqrs.id
-                val badgeColor = when (pqrs.status) {
-                    "resuelta" -> Color(0xFF22C55E)
-                    "en_proceso" -> Color(0xFFF59E0B)
-                    else -> Color(0xFFEF4444)
+                val badgeTone = when (pqrs.status) {
+                    "resuelta" -> DomuxBadgeTone.SUCCESS
+                    "en_proceso" -> DomuxBadgeTone.PROGRESS
+                    else -> DomuxBadgeTone.ALERT
                 }
                 DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column(
@@ -207,13 +209,7 @@ fun PqrsScreen(navController: NavController) {
                     ) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(pqrs.category ?: "Petición", color = MaterialTheme.colorScheme.secondary)
-                            Surface(color = badgeColor.copy(alpha = 0.18f), shape = MaterialTheme.shapes.small) {
-                                Text(
-                                    pqrs.status.replace('_', ' '),
-                                    color = badgeColor,
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                                )
-                            }
+                            DomuxStatusBadge(pqrs.status.replace('_', ' '), badgeTone)
                         }
                         Text(pqrs.subject, style = MaterialTheme.typography.titleMedium)
                         Text(

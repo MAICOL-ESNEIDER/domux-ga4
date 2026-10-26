@@ -123,8 +123,8 @@ fun MediaAttachmentPicker(
 fun DomuxCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E33)),
+        border = BorderStroke(1.dp, Color(0xFF1E334D)),
         content = content
     )
 }

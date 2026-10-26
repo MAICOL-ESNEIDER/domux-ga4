@@ -5,11 +5,20 @@
 package com.dracknoval.domux
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -31,13 +40,50 @@ fun LoginScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Domux", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
-        Text("Gestión de la unidad residencial", fontSize = 14.sp)
-        Spacer(Modifier.height(32.dp))
+        DomuxBrandMark(size = 64.dp)
+        Spacer(Modifier.height(14.dp))
+        Text("DOMUX", fontSize = 27.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+        Text("Residential Security OS", color = Color(0xFF94A3B8), fontSize = 13.sp)
+        Spacer(Modifier.height(22.dp))
+        Surface(
+            color = Color(0xFF152C4A),
+            shape = RoundedCornerShape(50),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E334D))
+        ) {
+            Text(
+                "SISTEMA INTELIGENTE DE OPERACIÓN RESIDENCIAL",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                color = Color(0xFF38BDF8),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.7.sp
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            buildAnnotatedString {
+                append("Tu comunidad, en modo\n")
+                withStyle(
+                    SpanStyle(
+                        brush = Brush.linearGradient(
+                            listOf(Color(0xFF22D3EE), Color(0xFF818CF8), Color(0xFFA855F7))
+                        ),
+                        fontWeight = FontWeight.Bold
+                    )
+                ) {
+                    append("premium.")
+                }
+            },
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = 34.sp,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
 
         OutlinedTextField(
             value = email,

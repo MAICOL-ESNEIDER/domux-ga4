@@ -240,11 +240,23 @@ fun RegistryScreen(navController: NavController) {
                     Column(Modifier.padding(12.dp)) {
                         Text(item.description.orEmpty(), style = MaterialTheme.typography.titleMedium)
                         Text("Para: ${item.residentName.orEmpty()} · ${item.apartment.orEmpty()}")
-                        Text("Estado: ${when (item.status) {
+                        val statusLabel = when (item.status) {
                             "por_llegar" -> "Por llegar"
                             "pendiente" -> "En portería"
                             else -> "Entregado"
-                        }} · ${item.createdAt.orEmpty()}")
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text(item.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                            DomuxStatusBadge(
+                                statusLabel,
+                                if (item.status == "entregado") DomuxBadgeTone.SUCCESS
+                                else DomuxBadgeTone.PROGRESS
+                            )
+                        }
                         if (item.eventDate != null || item.eventTime != null) {
                             Text("Registro: ${item.eventDate.orEmpty()} ${item.eventTime.orEmpty()}")
                         }
@@ -284,14 +296,13 @@ fun RegistryScreen(navController: NavController) {
     }
 
     confirmation?.let { (prompt, action) ->
-        AlertDialog(
-            onDismissRequest = { confirmation = null },
-            title = { Text("Confirmar acción") },
-            text = { Text(prompt) },
-            confirmButton = {
-                TextButton(onClick = { confirmation = null; action() }) { Text("Confirmar") }
-            },
-            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancelar") } }
+        DomuxConfirmDialog(
+            title = "¿Estás seguro de confirmar esta acción?",
+            message = prompt,
+            confirmLabel = "Confirmar",
+            danger = prompt.contains("entregado", ignoreCase = true),
+            onConfirm = { confirmation = null; action() },
+            onDismiss = { confirmation = null }
         )
     }
 }
