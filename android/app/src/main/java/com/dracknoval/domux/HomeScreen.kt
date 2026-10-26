@@ -141,6 +141,7 @@ fun HomeScreen(navController: NavController) {
             add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry"))
             add(HomeModule("Usuarios", "Administración", "♙", "createUser"))
         } else if (Session.isResident) {
+            add(HomeModule("Mi perfil", "Mis datos y hogar", "♙", "profile"))
             add(HomeModule("Mis PQRS", "Solicitudes y respuestas", "◎", "pqrs"))
             add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations"))
             add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry"))

@@ -25,7 +25,11 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)
     apartment = db.Column(db.String(60), nullable=True)
+    apartment_number = db.Column(db.Integer, nullable=True, index=True)
     occupancy_type = db.Column(db.String(30), nullable=True, default="propietario")
+    social_networks = db.Column(db.String(500), nullable=True, default="")
+    data_processing_consent = db.Column(db.Boolean, nullable=False, default=False)
+    data_processing_consent_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -46,7 +50,11 @@ class User(db.Model):
             "documentId": self.document_id or "",
             "role": self.role or "",
             "apartment": self.apartment,
+            "apartmentNumber": self.apartment_number,
             "occupancyType": self.occupancy_type or "propietario",
+            "socialNetworks": self.social_networks or "",
+            "dataProcessingConsent": bool(self.data_processing_consent),
+            "dataProcessingConsentAt": _fmt(self.data_processing_consent_at),
             "isActive": self.is_active if self.is_active is not None else True,
             "createdAt": _fmt(self.created_at),
         }
@@ -58,7 +66,133 @@ class User(db.Model):
             "email": self.email or "",
             "phone": self.phone or "",
             "apartment": self.apartment,
+            "apartmentNumber": self.apartment_number,
             "occupancyType": self.occupancy_type or "propietario",
+        }
+
+
+class ResidentialUnit(db.Model):
+    __tablename__ = "residential_units"
+
+    id = db.Column(db.Integer, primary_key=True)
+    apartment = db.Column(db.String(60), nullable=False, unique=True, index=True)
+    parking_identifier = db.Column(db.String(80), nullable=True)
+    storage_identifier = db.Column(db.String(80), nullable=True)
+    pet_insurance = db.Column(db.Boolean, nullable=False, default=False)
+    pet_insurer = db.Column(db.String(120), nullable=True)
+    funeral_plan = db.Column(db.Boolean, nullable=False, default=False)
+    funeral_provider = db.Column(db.String(120), nullable=True)
+
+    members = db.relationship(
+        "HouseholdMember", back_populates="unit", cascade="all, delete-orphan",
+        order_by="HouseholdMember.id",
+    )
+    pets = db.relationship(
+        "Pet", back_populates="unit", cascade="all, delete-orphan", order_by="Pet.id"
+    )
+    vehicles = db.relationship(
+        "Vehicle", back_populates="unit", cascade="all, delete-orphan", order_by="Vehicle.id"
+    )
+
+    def to_dict(self):
+        residents = User.query.filter_by(apartment=self.apartment, role="RESIDENT").order_by(
+            User.occupancy_type, User.name, User.id
+        ).all()
+        return {
+            "id": self.id,
+            "apartment": self.apartment,
+            "residents": [
+                {
+                    "name": resident.full_name,
+                    "occupancyType": resident.occupancy_type,
+                }
+                for resident in residents
+            ],
+            "parkingIdentifier": self.parking_identifier,
+            "storageIdentifier": self.storage_identifier,
+            "petInsurance": self.pet_insurance,
+            "petInsurer": self.pet_insurer,
+            "funeralPlan": self.funeral_plan,
+            "funeralProvider": self.funeral_provider,
+            "members": [member.to_dict() for member in self.members],
+            "pets": [pet.to_dict() for pet in self.pets],
+            "vehicles": [vehicle.to_dict() for vehicle in self.vehicles],
+        }
+
+
+class HouseholdMember(db.Model):
+    __tablename__ = "household_members"
+
+    id = db.Column(db.Integer, primary_key=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey("residential_units.id"), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    last_name = db.Column(db.String(120), nullable=False, default="")
+    document_id = db.Column(db.String(40), nullable=False)
+    birth_date = db.Column(db.String(10), nullable=False)
+    phone = db.Column(db.String(30), nullable=True)
+    relationship = db.Column(db.String(30), nullable=False)
+    other_relationship = db.Column(db.String(80), nullable=True)
+
+    unit = db.relationship("ResidentialUnit", back_populates="members")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "lastName": self.last_name,
+            "documentId": self.document_id,
+            "birthDate": self.birth_date,
+            "phone": self.phone,
+            "relationship": self.relationship,
+            "otherRelationship": self.other_relationship,
+        }
+
+
+class Pet(db.Model):
+    __tablename__ = "pets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey("residential_units.id"), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    species = db.Column(db.String(60), nullable=False)
+    breed = db.Column(db.String(100), nullable=False)
+    age_years = db.Column(db.Integer, nullable=False)
+
+    unit = db.relationship("ResidentialUnit", back_populates="pets")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "species": self.species,
+            "breed": self.breed,
+            "ageYears": self.age_years,
+        }
+
+
+class Vehicle(db.Model):
+    __tablename__ = "vehicles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey("residential_units.id"), nullable=False, index=True)
+    plate = db.Column(db.String(10), nullable=False, unique=True, index=True)
+    vehicle_type = db.Column(db.String(10), nullable=False)
+    make_model = db.Column(db.String(120), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    registered_owner = db.Column(db.String(120), nullable=False)
+    color = db.Column(db.String(60), nullable=True)
+
+    unit = db.relationship("ResidentialUnit", back_populates="vehicles")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "plate": self.plate,
+            "type": self.vehicle_type,
+            "makeModel": self.make_model,
+            "year": self.year,
+            "registeredOwner": self.registered_owner,
+            "color": self.color,
         }
 
 

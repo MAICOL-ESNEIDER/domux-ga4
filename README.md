@@ -102,6 +102,9 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Login                            | `POST /api/auth/login`              | No      | —                                        | 401                |
 | Listar usuarios                  | `GET /api/users`                    | Sí      | ADMIN                                    | 401, 403           |
 | Crear usuario                    | `POST /api/users`                   | Sí      | ADMIN                                    | 400, 401, 403, 409 |
+| Consultar/editar ficha de unidad | `GET, PUT /api/admin/units`         | Sí      | ADMIN                                    | 400, 401, 403, 404, 409 |
+| Ver/editar perfil propio         | `GET, PUT /api/profile`             | Sí      | RESIDENT                                 | 400, 401, 403, 409 |
+| Ver hogar propio                 | `GET /api/profile/unit`             | Sí      | RESIDENT                                 | 401, 403, 404      |
 | Listar residentes (para asignar) | `GET /api/residents`                | Sí      | ADMIN, GUARD                             | 401, 403           |
 | Ver anuncios                     | `GET /api/announcements`            | Sí      | cualquiera                               | 401                |
 | Publicar anuncio                 | `POST /api/announcements`           | Sí      | ADMIN                                    | 400, 401, 403      |
@@ -157,7 +160,34 @@ Los adjuntos continúan viajando como Base64 en JSON; la app limita el archivo o
 a 5 MB y el backend admite solicitudes de hasta 12 MB. No se implementó almacenamiento
 de objetos ni carga multipart en esta fase.
 
-## 5. Mapeo con la arquitectura de GA1-GA3
+### Fase 2 — Gestión de usuarios y perfiles
+
+- `GET /api/users` devuelve una página (25 registros por defecto; `pageSize`
+  admite de 1 a 100), con total y cantidad de páginas. Permite combinar `search`,
+  `role`, `occupancyType`, `apartmentFrom`, `apartmentTo`, `hasPets`,
+  `hasVehicles`, `hasParking`, `hasStorage`, `minAge`, `maxAge` e `isActive`.
+- Los tipos de tenencia aceptados son `propietario`, `arrendatario` y
+  `residente`. El administrador registra el consentimiento expreso al crear
+  residentes mediante `dataProcessingConsent: true`; la fecha queda guardada.
+  No se presume consentimiento si el campo falta.
+- La ficha de unidad (`ResidentialUnit`) agrupa integrantes del hogar con
+  parentesco, documento y fecha de nacimiento, mascotas, vehículos, parqueadero,
+  cuarto útil, seguro de mascotas y plan funerario. El administrador la consulta
+  o reemplaza desde `/api/admin/units`; las listas se guardan de forma atómica.
+  Las placas se normalizan a mayúsculas y se valida formato colombiano y
+  unicidad entre apartamentos.
+- El residente consulta los datos de su perfil y vivienda con `/api/profile` y
+  `/api/profile/unit`. Solo puede editar teléfono, correo y redes sociales;
+  el backend rechaza cualquier otro campo. Los cambios de apartamento,
+  parentesco, documento, mascotas o vehículos se solicitan mediante PQRS o en
+  administración.
+- Se agregaron las tablas `residential_units`, `household_members`, `pets` y
+  `vehicles`, además de campos de apartamento, redes sociales y consentimiento
+  en `users`. Al iniciar, la migración idempotente crea fichas de unidad para
+  residentes existentes y deriva el número del apartamento cuando es posible,
+  conservando los datos previos.
+
+## 6. Mapeo con la arquitectura de GA1-GA3
 
 | Archivo/patrón enseñado en GA1-GA3             | Dónde está en este proyecto                                                                |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -169,7 +199,7 @@ de objetos ni carga multipart en esta fase.
 | `if (Session.isAdmin)` para ocultar opciones   | Igual, extendido a `isAdmin` / `isResident` / `isGuard` en `HomeScreen.kt` y cada pantalla |
 | Backend Flask consumido por la app             | `backend/app.py` (en vez del backend de e-commerce del curso)                              |
 
-## 6. Alcance y "versión 2" (lo que queda fuera a propósito)
+## 7. Alcance y mejoras pendientes
 
 Para cumplir la regla de la GA4 ("una app pequeña y terminada vale más que una
 ambiciosa sin terminar"), quedan **fuera de esta entrega**:
@@ -178,11 +208,14 @@ ambiciosa sin terminar"), quedan **fuera de esta entrega**:
   de Registros/Notificaciones, que se actualiza al entrar o refrescar (polling
   por GET), no una alerta del sistema operativo.
 - Subida de fotos (paquetes, visitantes).
-- Recuperación de contraseña / edición de perfil.
-- Búsqueda y filtros avanzados en las listas.
+- La app de administración ya usa búsqueda, filtros combinables y paginación
+  del servidor para usuarios; no hay todavía exportación de resultados.
+- El perfil del residente es editable solo para los campos permitidos; no hay
+  un flujo automatizado para que el residente registre cambios del hogar: debe
+  solicitarlos mediante PQRS o a administración.
 - Multi-unidad (multi-tenant): esta versión asume una sola unidad residencial.
 
-## 7. Poner el repo en GitHub
+## 8. Poner el repo en GitHub
 
 El repositorio ya viene inicializado con Git y con los commits hechos. Solo
 falta crear el repo vacío en GitHub y apuntarlo:

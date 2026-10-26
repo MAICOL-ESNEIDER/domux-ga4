@@ -8,16 +8,20 @@ data class UserData(
     val email: String,
     val role: String,
     val apartment: String?,
+    val apartmentNumber: Int? = null,
     val lastName: String? = "",
     val fullName: String? = null,
     val phone: String? = "",
     val documentId: String? = "",
     val occupancyType: String? = "propietario",
     val isActive: Boolean = true,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val socialNetworks: String? = "",
+    val dataProcessingConsent: Boolean = false
 )
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
+data class UserDataResponse(val message: String? = null, val user: UserData?)
 data class CreateUserRequest(
     val name: String,
     val email: String,
@@ -27,7 +31,8 @@ data class CreateUserRequest(
     val lastName: String = "",
     val phone: String = "",
     val documentId: String = "",
-    val occupancyType: String = "propietario"
+    val occupancyType: String = "propietario",
+    val dataProcessingConsent: Boolean = false
 )
 data class UpdateUserRequest(
     val name: String? = null,
@@ -38,11 +43,84 @@ data class UpdateUserRequest(
     val role: String? = null,
     val apartment: String? = null,
     val occupancyType: String? = null,
-    val isActive: Boolean? = null
+    val isActive: Boolean? = null,
+    val dataProcessingConsent: Boolean? = null
 )
 data class ResetPasswordRequest(val password: String)
 data class CreateUserResponse(val message: String?, val user: UserData?)
-data class UsersListResponse(val users: List<UserData>?)
+data class UsersListResponse(
+    val users: List<UserData>?,
+    val page: Int = 1,
+    val pageSize: Int = 25,
+    val total: Int = 0,
+    val totalPages: Int = 0
+)
+
+data class ResidentProfileUpdateRequest(
+    val phone: String? = null,
+    val email: String? = null,
+    val socialNetworks: String? = null
+)
+
+data class HouseholdMemberData(
+    val id: Int? = null,
+    val name: String,
+    val lastName: String? = null,
+    val documentId: String,
+    val birthDate: String,
+    val phone: String? = null,
+    val relationship: String,
+    val otherRelationship: String? = null
+)
+
+data class PetData(
+    val id: Int? = null,
+    val name: String,
+    val species: String,
+    val breed: String,
+    val ageYears: Int
+)
+
+data class VehicleData(
+    val id: Int? = null,
+    val plate: String,
+    val type: String,
+    val makeModel: String,
+    val year: Int,
+    val registeredOwner: String,
+    val color: String? = null
+)
+
+data class UnitResidentData(val name: String, val occupancyType: String?)
+
+data class ResidentialUnitData(
+    val id: Int? = null,
+    val apartment: String,
+    val residents: List<UnitResidentData> = emptyList(),
+    val parkingIdentifier: String? = null,
+    val storageIdentifier: String? = null,
+    val petInsurance: Boolean = false,
+    val petInsurer: String? = null,
+    val funeralPlan: Boolean = false,
+    val funeralProvider: String? = null,
+    val members: List<HouseholdMemberData> = emptyList(),
+    val pets: List<PetData> = emptyList(),
+    val vehicles: List<VehicleData> = emptyList()
+)
+
+data class ResidentialUnitResponse(val unit: ResidentialUnitData?)
+data class SaveResidentialUnitRequest(
+    val apartment: String,
+    val parkingIdentifier: String? = null,
+    val storageIdentifier: String? = null,
+    val petInsurance: Boolean = false,
+    val petInsurer: String? = null,
+    val funeralPlan: Boolean = false,
+    val funeralProvider: String? = null,
+    val members: List<HouseholdMemberData> = emptyList(),
+    val pets: List<PetData> = emptyList(),
+    val vehicles: List<VehicleData> = emptyList()
+)
 data class ResidentSummary(
     val id: Int,
     val name: String,

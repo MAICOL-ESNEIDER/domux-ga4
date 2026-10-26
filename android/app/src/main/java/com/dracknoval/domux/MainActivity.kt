@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.dracknoval.domux.ui.theme.DomuxAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -34,6 +36,16 @@ class MainActivity : ComponentActivity() {
                         composable("reservations") { ReservationsScreen(navController) }
                         composable("registry") { RegistryScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
+                        composable("profile") { ResidentProfileScreen(navController) }
+                        composable(
+                            "unitProfile/{apartment}",
+                            arguments = listOf(navArgument("apartment") { type = NavType.StringType })
+                        ) { entry ->
+                            UnitProfileScreen(
+                                navController,
+                                entry.arguments?.getString("apartment").orEmpty()
+                            )
+                        }
                         composable("notifications") { NotificationsScreen(navController) }
                     }
                 }

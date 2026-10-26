@@ -9,13 +9,13 @@ from sqlalchemy import inspect
 from errors import error_response, register_error_handlers
 from extensions import db
 from logging_config import configure_logging
-from models import Pqrs, PqrsMessage, User
+from models import Pqrs, PqrsMessage, ResidentialUnit, User
 from routes.admin import bp as admin_bp
 from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
 from routes.security import bp as security_bp
 from seed import seed_if_empty
-from validators import validate_no_empty_strings
+from validators import apartment_number_from_label, validate_no_empty_strings
 
 load_dotenv()
 
@@ -25,6 +25,10 @@ SQLITE_ADDITIONS = {
         "phone": "VARCHAR(30)",
         "document_id": "VARCHAR(40)",
         "occupancy_type": "VARCHAR(30)",
+        "apartment_number": "INTEGER",
+        "social_networks": "VARCHAR(500)",
+        "data_processing_consent": "BOOLEAN NOT NULL DEFAULT 0",
+        "data_processing_consent_at": "DATETIME",
         "is_active": "BOOLEAN NOT NULL DEFAULT 1",
     },
     "announcements": {
@@ -93,6 +97,49 @@ def migrate_sqlite_schema():
             )
 
 
+def migrate_profile_columns():
+    """Add profile columns on existing SQLite or PostgreSQL databases."""
+    inspector = inspect(db.engine)
+    if "users" not in inspector.get_table_names():
+        return
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    dialect = db.engine.dialect.name
+    column_types = {
+        "apartment_number": "INTEGER",
+        "social_networks": "VARCHAR(500)",
+        "data_processing_consent": (
+            "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+            else "BOOLEAN NOT NULL DEFAULT 0"
+        ),
+        "data_processing_consent_at": (
+            "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
+        ),
+    }
+    with db.engine.begin() as connection:
+        for name, column_type in column_types.items():
+            if name not in existing_columns:
+                connection.exec_driver_sql(
+                    f'ALTER TABLE "users" ADD COLUMN "{name}" {column_type}'
+                )
+
+
+def migrate_resident_profiles():
+    """Backfill apartment numbers and create unit records without deleting data."""
+    residents = User.query.filter(
+        User.role == "RESIDENT",
+        User.apartment.isnot(None),
+    ).all()
+    for resident in residents:
+        if resident.occupancy_type not in ("propietario", "arrendatario", "residente"):
+            resident.occupancy_type = "residente"
+        if resident.apartment_number is None:
+            resident.apartment_number = apartment_number_from_label(resident.apartment)
+        unit = ResidentialUnit.query.filter_by(apartment=resident.apartment).first()
+        if unit is None:
+            db.session.add(ResidentialUnit(apartment=resident.apartment))
+    db.session.commit()
+
+
 def migrate_pqrs_conversations():
     """Preserve the legacy PQRS description and response as conversation messages."""
     admin_id = db.session.query(User.id).filter_by(role="ADMIN").first()
@@ -141,6 +188,8 @@ def create_app():
     def reject_empty_write_fields():
         if request.method not in ("POST", "PUT", "PATCH"):
             return None
+        if request.path == "/api/profile" and request.method == "PUT":
+            return None
         body = request.get_data(cache=True)
         if not body:
             return None
@@ -155,6 +204,8 @@ def create_app():
     with app.app_context():
         db.create_all()
         migrate_sqlite_schema()
+        migrate_profile_columns()
+        migrate_resident_profiles()
         migrate_pqrs_conversations()
         seed_if_empty()
 

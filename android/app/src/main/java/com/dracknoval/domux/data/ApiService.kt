@@ -15,7 +15,47 @@ interface ApiService {
     suspend fun login(@Body body: LoginRequest): Response<LoginResponse>
 
     @GET("api/users")
-    suspend fun getUsers(@Header("Authorization") auth: String): Response<UsersListResponse>
+    suspend fun getUsers(
+        @Header("Authorization") auth: String,
+        @Query("page") page: Int = 1,
+        @Query("pageSize") pageSize: Int = 25,
+        @Query("search") search: String? = null,
+        @Query("role") role: String? = null,
+        @Query("occupancyType") occupancyType: String? = null,
+        @Query("apartmentFrom") apartmentFrom: String? = null,
+        @Query("apartmentTo") apartmentTo: String? = null,
+        @Query("hasPets") hasPets: String? = null,
+        @Query("hasVehicles") hasVehicles: String? = null,
+        @Query("hasParking") hasParking: String? = null,
+        @Query("hasStorage") hasStorage: String? = null,
+        @Query("minAge") minAge: String? = null,
+        @Query("maxAge") maxAge: String? = null,
+        @Query("isActive") isActive: String? = null
+    ): Response<UsersListResponse>
+
+    @GET("api/admin/units")
+    suspend fun getUnit(
+        @Header("Authorization") auth: String,
+        @Query("apartment") apartment: String
+    ): Response<ResidentialUnitResponse>
+
+    @PUT("api/admin/units")
+    suspend fun saveUnit(
+        @Header("Authorization") auth: String,
+        @Body body: SaveResidentialUnitRequest
+    ): Response<ResidentialUnitResponse>
+
+    @GET("api/profile")
+    suspend fun getProfile(@Header("Authorization") auth: String): Response<UserDataResponse>
+
+    @PUT("api/profile")
+    suspend fun updateProfile(
+        @Header("Authorization") auth: String,
+        @Body body: ResidentProfileUpdateRequest
+    ): Response<UserDataResponse>
+
+    @GET("api/profile/unit")
+    suspend fun getMyUnit(@Header("Authorization") auth: String): Response<ResidentialUnitResponse>
 
     @POST("api/users")
     suspend fun createUser(
