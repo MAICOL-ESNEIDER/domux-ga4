@@ -150,6 +150,14 @@ interface ApiService {
         @Query("date") date: String
     ): Response<ReservationAvailabilityResponse>
 
+    @GET("api/reservations/calendar")
+    suspend fun getReservationCalendar(
+        @Header("Authorization") auth: String,
+        @Query("commonAreaId") commonAreaId: Int,
+        @Query("year") year: Int,
+        @Query("month") month: Int
+    ): Response<ReservationCalendarResponse>
+
     @POST("api/reservations")
     suspend fun createReservation(
         @Header("Authorization") auth: String,
@@ -161,6 +169,13 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Path("id") id: Int,
         @Body body: UpdateReservationStatusRequest
+    ): Response<CreateReservationResponse>
+
+    @POST("api/reservations/{id}/messages")
+    suspend fun addReservationMessage(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: AddReservationMessageRequest
     ): Response<CreateReservationResponse>
 
     @PUT("api/reservations/{id}/cancel")

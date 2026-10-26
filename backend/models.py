@@ -365,11 +365,17 @@ class Reservation(db.Model):
     common_area_id = db.Column(db.Integer, db.ForeignKey("common_areas.id"), nullable=False)
     date = db.Column(db.String(20), nullable=False)
     time_slot = db.Column(db.String(40), nullable=False)
-    status = db.Column(db.String(20), default="activa")
+    status = db.Column(db.String(20), default="pendiente")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     common_area = db.relationship("CommonArea")
+    messages = db.relationship(
+        "ReservationMessage",
+        back_populates="reservation",
+        cascade="all, delete-orphan",
+        order_by="ReservationMessage.created_at, ReservationMessage.id",
+    )
 
     def to_dict(self):
         return {
@@ -385,6 +391,38 @@ class Reservation(db.Model):
             "createdAt": _fmt(self.created_at),
             "residentName": self.resident.full_name if self.resident else None,
             "apartment": self.resident.apartment if self.resident else None,
+            "messages": [message.to_dict() for message in self.messages],
+        }
+
+
+class ReservationMessage(db.Model):
+    __tablename__ = "reservation_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    reservation_id = db.Column(
+        db.Integer, db.ForeignKey("reservations.id"), nullable=False, index=True
+    )
+    author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    author_role = db.Column(db.String(20), nullable=False)
+    message = db.Column(db.Text, nullable=True)
+    media_url = db.Column(db.Text, nullable=True)
+    media_type = db.Column(db.String(20), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    reservation = db.relationship("Reservation", back_populates="messages")
+    author = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "reservationId": self.reservation_id,
+            "authorId": self.author_id,
+            "authorName": self.author.full_name if self.author else None,
+            "authorRole": self.author_role,
+            "message": self.message,
+            "mediaUrl": self.media_url,
+            "mediaType": self.media_type,
+            "createdAt": _fmt(self.created_at),
         }
 
 

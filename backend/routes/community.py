@@ -13,6 +13,7 @@ from models import (
     PqrsMessage,
     PqrsSatisfaction,
     Reservation,
+    ReservationMessage,
     User,
 )
 from services.notification_service import notify_residents, notify_user
@@ -23,6 +24,7 @@ from services.reservation_service import (
 )
 from validators import (
     VALID_PQRS_STATUSES,
+    VALID_TIME_SLOTS,
     require_non_empty_fields,
     validate_future_or_today_date,
     validate_iso_date,
@@ -33,7 +35,6 @@ from validators import (
 )
 
 bp = Blueprint("community", __name__, url_prefix="/api")
-RESERVATION_STATUSES = ("pendiente", "activa", "aprobada", "rechazada", "cancelada")
 
 
 def _json_body():
@@ -462,6 +463,37 @@ def get_reservation_availability():
     })
 
 
+@bp.get("/reservations/calendar")
+@token_required
+def get_reservation_calendar():
+    common_area_id = request.args.get("commonAreaId", type=int)
+    year = request.args.get("year", type=int)
+    month = request.args.get("month", type=int)
+    if common_area_id is None or year is None or month is None:
+        return error_response(400, "commonAreaId, year y month son obligatorios.")
+    if not 1 <= month <= 12 or not 2000 <= year <= 2100:
+        return error_response(400, "El mes o año del calendario no es válido.")
+    if db.session.get(CommonArea, common_area_id) is None:
+        return error_response(404, "Zona común no encontrada.")
+    prefix = f"{year:04d}-{month:02d}-"
+    rows = db.session.query(
+        Reservation.date,
+        db.func.count(db.func.distinct(Reservation.time_slot)),
+    ).filter(
+        Reservation.common_area_id == common_area_id,
+        Reservation.date.like(f"{prefix}%"),
+        Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
+    ).group_by(Reservation.date).having(
+        db.func.count(db.func.distinct(Reservation.time_slot)) >= len(VALID_TIME_SLOTS)
+    ).all()
+    return jsonify({
+        "commonAreaId": common_area_id,
+        "year": year,
+        "month": month,
+        "blockedDates": [reservation_date for reservation_date, _ in rows],
+    })
+
+
 @bp.post("/reservations")
 @token_required
 @role_required("RESIDENT")
@@ -487,6 +519,11 @@ def create_reservation():
         return error_response(400, error)
     if error := validate_time_slot(data["timeSlot"]):
         return error_response(400, error)
+    message = data.get("message")
+    if message is not None and not isinstance(message, str):
+        return error_response(400, "El mensaje debe ser texto.")
+    if error := validate_media_fields(data):
+        return error_response(400, error)
     resident = _resident_for_write(data)
     if resident is None:
         return error_response(400, "Selecciona un residente válido")
@@ -499,8 +536,17 @@ def create_reservation():
         common_area_id=area.id,
         date=data["date"],
         time_slot=data["timeSlot"],
+        status="pendiente",
     )
     db.session.add(reservation)
+    if (message and message.strip()) or data.get("mediaUrl"):
+        reservation.messages.append(ReservationMessage(
+            author_id=g.current_user.id,
+            author_role=g.current_user.role,
+            message=message.strip() if message and message.strip() else None,
+            media_url=data.get("mediaUrl"),
+            media_type=data.get("mediaType"),
+        ))
     if g.current_user.role == "ADMIN":
         notify_user(
             resident.id,
@@ -509,6 +555,15 @@ def create_reservation():
             f"de {reservation.time_slot}.",
             "reservation",
         )
+    else:
+        for admin in User.query.filter_by(role="ADMIN", is_active=True).all():
+            notify_user(
+                admin.id,
+                "Nueva solicitud de reserva",
+                f"{resident.full_name} solicitó {area.name} el {reservation.date} "
+                f"de {reservation.time_slot}.",
+                "reservation",
+            )
     try:
         db.session.commit()
     except IntegrityError:
@@ -527,11 +582,13 @@ def update_reservation_status(res_id):
     if failure:
         return failure
     status = data.get("status")
-    if status not in RESERVATION_STATUSES:
-        return error_response(400, "Estado de reserva inválido")
+    if status not in ("aprobada", "rechazada"):
+        return error_response(400, "El estado debe ser 'aprobada' o 'rechazada'.")
     reservation = db.session.get(Reservation, res_id)
     if reservation is None:
         return error_response(404, "Reserva no encontrada")
+    if reservation.status not in ("pendiente", "activa"):
+        return error_response(400, "Solo puedes aprobar o rechazar reservas pendientes.")
     if status in ACTIVE_RESERVATION_STATUSES and reservation_conflicts(
         reservation.common_area_id,
         reservation.date,
@@ -564,6 +621,60 @@ def update_reservation_status(res_id):
     return jsonify({"message": "Reserva actualizada", "reservation": reservation.to_dict()})
 
 
+@bp.post("/reservations/<int:res_id>/messages")
+@token_required
+@role_required("RESIDENT")
+def add_reservation_message(res_id):
+    data, failure = _json_body()
+    if failure:
+        return failure
+    if error := validate_media_fields(data):
+        return error_response(400, error)
+    message = data.get("message")
+    if message is not None and not isinstance(message, str):
+        return error_response(400, "El mensaje debe ser texto.")
+    if not (message and message.strip()) and not data.get("mediaUrl"):
+        return error_response(400, "Escribe un mensaje o adjunta un archivo.")
+
+    reservation = db.session.get(Reservation, res_id)
+    if reservation is None:
+        return error_response(404, "Reserva no encontrada.")
+    if g.current_user.role == "RESIDENT" and reservation.resident_id != g.current_user.id:
+        return error_response(403, "Solo puedes escribir en tus propias reservas.")
+    if reservation.status in ("rechazada", "cancelada"):
+        return error_response(400, "No se puede continuar una conversación de una reserva finalizada.")
+
+    reservation.messages.append(ReservationMessage(
+        author_id=g.current_user.id,
+        author_role=g.current_user.role,
+        message=message.strip() if message and message.strip() else None,
+        media_url=data.get("mediaUrl"),
+        media_type=data.get("mediaType"),
+    ))
+    if g.current_user.role == "ADMIN":
+        notify_user(
+            reservation.resident_id,
+            "Respuesta sobre tu reserva",
+            f"Administración respondió sobre la reserva de "
+            f"{reservation.common_area.name if reservation.common_area else 'la zona común'}.",
+            "reservation",
+        )
+    else:
+        for admin in User.query.filter_by(role="ADMIN", is_active=True).all():
+            notify_user(
+                admin.id,
+                "Nuevo mensaje de reserva",
+                f"{g.current_user.full_name} envió un mensaje sobre una reserva "
+                f"de {reservation.common_area.name if reservation.common_area else 'una zona común'}.",
+                "reservation",
+            )
+    db.session.commit()
+    return jsonify({
+        "message": "Mensaje agregado a la reserva.",
+        "reservation": reservation.to_dict(),
+    }), 201
+
+
 @bp.put("/reservations/<int:res_id>/cancel")
 @token_required
 @role_required("RESIDENT", "ADMIN")
@@ -573,6 +684,27 @@ def cancel_reservation(res_id):
         return error_response(404, "Reserva no encontrada")
     if g.current_user.role == "RESIDENT" and reservation.resident_id != g.current_user.id:
         return error_response(403, "Esa reserva no es tuya")
+    if reservation.status not in ("pendiente", "activa", "aprobada"):
+        return error_response(400, "Solo se pueden cancelar reservas pendientes o aprobadas.")
+    if g.current_user.role == "RESIDENT" and reservation.date <= datetime.utcnow().date().isoformat():
+        return error_response(400, "Solo puedes cancelar la reserva antes del día reservado.")
     reservation.status = "cancelada"
+    if g.current_user.role == "RESIDENT":
+        for admin in User.query.filter_by(role="ADMIN", is_active=True).all():
+            notify_user(
+                admin.id,
+                "Reserva cancelada por residente",
+                f"{g.current_user.full_name} canceló la reserva de "
+                f"{reservation.common_area.name if reservation.common_area else 'la zona común'} "
+                f"del {reservation.date}.",
+                "reservation",
+            )
+    else:
+        notify_user(
+            reservation.resident_id,
+            "Reserva cancelada",
+            "Administración canceló tu reserva.",
+            "reservation",
+        )
     db.session.commit()
     return jsonify({"message": "Reserva cancelada", "reservation": reservation.to_dict()})

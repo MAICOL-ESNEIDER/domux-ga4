@@ -117,7 +117,10 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Ver zonas comunes                | `GET /api/common-areas`             | Sí      | cualquiera                               | 401                |
 | Ver reservas                     | `GET /api/reservations`             | Sí      | ADMIN (todas), RESIDENT (propias)        | 401, 403           |
 | Crear reserva                    | `POST /api/reservations`            | Sí      | RESIDENT; ADMIN con `residentId`         | 400, 401, 403, 409 |
-| Cancelar reserva                 | `PUT /api/reservations/{id}/cancel` | Sí      | RESIDENT (propia), ADMIN                 | 401, 403, 404      |
+| Consultar fechas bloqueadas      | `GET /api/reservations/calendar`    | Sí      | autenticado                             | 400, 401, 404      |
+| Conversar sobre reserva          | `POST /api/reservations/{id}/messages` | Sí   | RESIDENT (propia), ADMIN                | 400, 401, 403, 404 |
+| Aprobar o rechazar reserva       | `PUT /api/reservations/{id}/status` | Sí      | ADMIN                                   | 400, 401, 403, 404, 409 |
+| Cancelar reserva                 | `PUT /api/reservations/{id}/cancel` | Sí      | RESIDENT (propia), ADMIN                 | 400, 401, 403, 404 |
 | Ver paquetes                     | `GET /api/packages`                 | Sí      | ADMIN, GUARD (todos), RESIDENT (propios) | 401                |
 | Registrar paquete                | `POST /api/packages`                | Sí      | GUARD                                    | 400, 401, 403      |
 | Marcar paquete entregado         | `PUT /api/packages/{id}/deliver`    | Sí      | GUARD                                    | 401, 403, 404      |
@@ -203,6 +206,31 @@ de objetos ni carga multipart en esta fase.
 - Crear una reserva a nombre de un residente genera una notificación. El guardia
   no puede usar estos flujos, y un residente no puede asignar solicitudes a otra
   persona enviando otro `residentId`.
+
+### Fase 4 — Reservas de zonas comunes
+
+- El calendario consulta `/api/reservations/calendar` por zona y mes. Los días
+  pasados y los días donde ya están ocupadas todas las franjas de la zona no se
+  pueden seleccionar. Si todavía hay horarios libres ese día, el residente puede
+  escoger entre esas franjas.
+- Una solicitud nueva queda en estado `pendiente`; no ocupa una franja hasta que
+  administración la aprueba. La aprobación valida otra vez el cruce y devuelve
+  `409` si otra reserva tomó el horario mientras la solicitud esperaba. Una
+  reserva `aprobada` o `activa` sí ocupa la franja.
+- Al solicitarla se puede enviar texto y/o un adjunto de imagen, video o audio.
+  Los mensajes posteriores forman una conversación con autor, rol, texto,
+  adjuntos y fecha. El residente puede escribir en sus reservas no finalizadas;
+  administración puede responder. Cada nuevo mensaje notifica a la otra parte.
+- Administración recibe aviso de solicitud nueva y de cancelación hecha por el
+  residente. El residente recibe avisos cuando administración registra la reserva,
+  la aprueba, la rechaza, la cancela o responde en la conversación.
+- El residente puede cancelar sus reservas `pendiente`, `aprobada` o las
+  `activa` heredadas, pero únicamente antes del día reservado. No se permite
+  cancelar el mismo día ni después, ni cancelar solicitudes rechazadas o ya
+  canceladas. Administración puede cancelar reservas pendientes o aprobadas.
+- La API de disponibilidad y la aprobación aplican las mismas reglas de
+  ocupación; los mensajes y adjuntos se conservan en la tabla nueva
+  `reservation_messages`, sin modificar o eliminar los datos anteriores.
 
 ## 6. Mapeo con la arquitectura de GA1-GA3
 

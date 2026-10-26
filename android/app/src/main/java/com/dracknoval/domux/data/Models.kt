@@ -240,14 +240,40 @@ data class Reservation(
     val residentId: Int? = null,
     val apartment: String? = null,
     val createdByAdminId: Int? = null,
-    val createdByAdministration: Boolean = false
+    val createdByAdministration: Boolean = false,
+    val messages: List<ReservationMessageItem>? = null
+)
+data class ReservationMessageItem(
+    val id: Int,
+    val reservationId: Int,
+    val authorId: Int?,
+    val authorName: String?,
+    val authorRole: String,
+    val message: String?,
+    val mediaUrl: String?,
+    val mediaType: String?,
+    val createdAt: String?
 )
 data class ReservationsListResponse(val reservations: List<Reservation>?)
 data class CreateReservationRequest(
     val commonAreaId: Int,
     val date: String,
     val timeSlot: String,
-    val residentId: Int? = null
+    val residentId: Int? = null,
+    val message: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null
+)
+data class AddReservationMessageRequest(
+    val message: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null
+)
+data class ReservationCalendarResponse(
+    val commonAreaId: Int,
+    val year: Int,
+    val month: Int,
+    val blockedDates: List<String>?
 )
 data class CreateReservationResponse(val message: String?, val reservation: Reservation?)
 data class ReservationAvailabilityResponse(
