@@ -103,6 +103,7 @@ class ResidentialUnit(db.Model):
             "apartment": self.apartment,
             "residents": [
                 {
+                    "id": resident.id,
                     "name": resident.full_name,
                     "occupancyType": resident.occupancy_type,
                 }
@@ -230,6 +231,7 @@ class Pqrs(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_by_admin_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     category = db.Column(db.String(40), default="Petición")
     subject = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
@@ -242,7 +244,7 @@ class Pqrs(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    resident = db.relationship("User")
+    resident = db.relationship("User", foreign_keys=[resident_id])
     conversation = db.relationship(
         "PqrsMessage",
         back_populates="pqrs",
@@ -261,6 +263,8 @@ class Pqrs(db.Model):
         return {
             "id": self.id,
             "residentId": self.resident_id,
+            "createdByAdminId": self.created_by_admin_id,
+            "createdByAdministration": self.created_by_admin_id is not None,
             "category": self.category or "Petición",
             "subject": self.subject or "",
             "message": self.message or "",
@@ -357,19 +361,22 @@ class Reservation(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_by_admin_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     common_area_id = db.Column(db.Integer, db.ForeignKey("common_areas.id"), nullable=False)
     date = db.Column(db.String(20), nullable=False)
     time_slot = db.Column(db.String(40), nullable=False)
     status = db.Column(db.String(20), default="activa")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    resident = db.relationship("User")
+    resident = db.relationship("User", foreign_keys=[resident_id])
     common_area = db.relationship("CommonArea")
 
     def to_dict(self):
         return {
             "id": self.id,
             "residentId": self.resident_id,
+            "createdByAdminId": self.created_by_admin_id,
+            "createdByAdministration": self.created_by_admin_id is not None,
             "commonAreaId": self.common_area_id,
             "commonAreaName": self.common_area.name if self.common_area else None,
             "date": self.date,

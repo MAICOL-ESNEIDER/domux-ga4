@@ -32,8 +32,30 @@ class MainActivity : ComponentActivity() {
                         composable("login") { LoginScreen(navController) }
                         composable("home") { HomeScreen(navController) }
                         composable("announcements") { AnnouncementsScreen(navController) }
-                        composable("pqrs") { PqrsScreen(navController) }
-                        composable("reservations") { ReservationsScreen(navController) }
+                        composable(
+                            "pqrs?residentId={residentId}",
+                            arguments = listOf(navArgument("residentId") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            })
+                        ) { entry ->
+                            PqrsScreen(
+                                navController,
+                                entry.arguments?.getInt("residentId")?.takeIf { it > 0 }
+                            )
+                        }
+                        composable(
+                            "reservations?residentId={residentId}",
+                            arguments = listOf(navArgument("residentId") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            })
+                        ) { entry ->
+                            ReservationsScreen(
+                                navController,
+                                entry.arguments?.getInt("residentId")?.takeIf { it > 0 }
+                            )
+                        }
                         composable("registry") { RegistryScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
                         composable("profile") { ResidentProfileScreen(navController) }

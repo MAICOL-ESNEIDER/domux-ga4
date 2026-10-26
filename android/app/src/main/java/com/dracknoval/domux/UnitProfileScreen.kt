@@ -102,7 +102,17 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
         if (admin) {
             unit?.residents?.forEach { resident ->
-                Text("Residente: ${resident.name} · ${resident.occupancyType ?: "residente"}")
+                Column {
+                    Text("Residente: ${resident.name} · ${resident.occupancyType ?: "residente"}")
+                    Row {
+                        TextButton(onClick = {
+                            navController.navigate("pqrs?residentId=${resident.id}")
+                        }) { Text("Crear PQRS a su nombre") }
+                        TextButton(onClick = {
+                            navController.navigate("reservations?residentId=${resident.id}")
+                        }) { Text("Crear reserva a su nombre") }
+                    }
+                }
             }
             OutlinedTextField(parking, { parking = it }, label = { Text("Parqueadero (identificador)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(storage, { storage = it }, label = { Text("Cuarto útil (identificador)") }, modifier = Modifier.fillMaxWidth())

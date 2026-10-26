@@ -139,6 +139,14 @@ def get_pqrs():
         if status not in VALID_PQRS_STATUSES:
             return error_response(400, "Estado de PQRS inválido")
         query = query.filter(Pqrs.status == status)
+    resident_id = request.args.get("residentId", type=int)
+    if resident_id is not None:
+        if user.role != "ADMIN":
+            return error_response(403, "Solo administración puede consultar PQRS por residente.")
+        resident = db.session.get(User, resident_id)
+        if resident_id <= 0 or resident is None or resident.role != "RESIDENT":
+            return error_response(404, "Residente no encontrado.")
+        query = query.filter(Pqrs.resident_id == resident_id)
     if category:
         query = query.filter(Pqrs.category == category.strip())
     if search:
@@ -180,6 +188,7 @@ def create_pqrs():
 
     pqrs = Pqrs(
         resident_id=resident.id,
+        created_by_admin_id=g.current_user.id if g.current_user.role == "ADMIN" else None,
         category=category.strip(),
         subject=data["subject"].strip(),
         message=data["message"].strip(),
@@ -460,6 +469,8 @@ def create_reservation():
     data, failure = _json_body()
     if failure:
         return failure
+    if g.current_user.role not in ("RESIDENT", "ADMIN"):
+        return error_response(403, "No tienes permiso para crear reservas")
     validation_error = require_non_empty_fields(
         data,
         (("date", "fecha"), ("timeSlot", "horario")),
@@ -484,11 +495,20 @@ def create_reservation():
 
     reservation = Reservation(
         resident_id=resident.id,
+        created_by_admin_id=g.current_user.id if g.current_user.role == "ADMIN" else None,
         common_area_id=area.id,
         date=data["date"],
         time_slot=data["timeSlot"],
     )
     db.session.add(reservation)
+    if g.current_user.role == "ADMIN":
+        notify_user(
+            resident.id,
+            "Reserva registrada por administración",
+            f"Administración creó una reserva para {area.name} el {reservation.date} "
+            f"de {reservation.time_slot}.",
+            "reservation",
+        )
     try:
         db.session.commit()
     except IntegrityError:

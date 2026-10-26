@@ -28,7 +28,7 @@ private val reservationSlots = listOf(
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-fun ReservationsScreen(navController: NavController) {
+fun ReservationsScreen(navController: NavController, targetResidentId: Int? = null) {
     var reservations by remember { mutableStateOf<List<Reservation>>(emptyList()) }
     var areas by remember { mutableStateOf<List<CommonArea>>(emptyList()) }
     var residents by remember { mutableStateOf<List<ResidentSummary>>(emptyList()) }
@@ -59,7 +59,11 @@ fun ReservationsScreen(navController: NavController) {
                 val residentResponse = RetrofitClient.api.getResidents(Session.bearer())
                 if (residentResponse.isSuccessful) {
                     residents = residentResponse.body()?.residents.orEmpty()
-                    if (selectedResident == null) selectedResident = residents.firstOrNull()
+                    selectedResident = residents.firstOrNull { it.id == targetResidentId }
+                        ?: selectedResident?.takeIf { current ->
+                            residents.any { it.id == current.id }
+                        }
+                        ?: residents.firstOrNull()
                 }
             }
         } catch (exception: Exception) {
@@ -194,6 +198,9 @@ fun ReservationsScreen(navController: NavController) {
                         Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
                         Text("${reservation.date} · ${reservation.timeSlot}")
                         Text("Residente: ${reservation.residentName.orEmpty()} · ${reservation.apartment.orEmpty()}")
+                        if (reservation.createdByAdministration) {
+                            Text("Creada por administración", style = MaterialTheme.typography.labelSmall)
+                        }
                         DomuxStatusBadge(
                             reservation.status.replaceFirstChar(Char::uppercase).replace('_', ' '),
                             when (reservation.status) {

@@ -44,6 +44,10 @@ SQLITE_ADDITIONS = {
         "media_url": "TEXT",
         "media_type": "VARCHAR(20)",
         "updated_at": "DATETIME",
+        "created_by_admin_id": "INTEGER REFERENCES users(id)",
+    },
+    "reservations": {
+        "created_by_admin_id": "INTEGER REFERENCES users(id)",
     },
     "packages": {
         "media_url": "TEXT",
@@ -121,6 +125,24 @@ def migrate_profile_columns():
                 connection.exec_driver_sql(
                     f'ALTER TABLE "users" ADD COLUMN "{name}" {column_type}'
                 )
+
+
+def migrate_admin_action_columns():
+    """Add nullable audit references for admin-created resident requests."""
+    inspector = inspect(db.engine)
+    for table_name in ("pqrs", "reservations"):
+        if table_name not in inspector.get_table_names():
+            continue
+        existing_columns = {
+            column["name"] for column in inspector.get_columns(table_name)
+        }
+        if "created_by_admin_id" in existing_columns:
+            continue
+        with db.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f'ALTER TABLE "{table_name}" ADD COLUMN "created_by_admin_id" '
+                'INTEGER REFERENCES users(id)'
+            )
 
 
 def migrate_resident_profiles():
@@ -205,6 +227,7 @@ def create_app():
         db.create_all()
         migrate_sqlite_schema()
         migrate_profile_columns()
+        migrate_admin_action_columns()
         migrate_resident_profiles()
         migrate_pqrs_conversations()
         seed_if_empty()

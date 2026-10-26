@@ -100,7 +100,8 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Query("status") status: String? = null,
         @Query("category") category: String? = null,
-        @Query("search") search: String? = null
+        @Query("search") search: String? = null,
+        @Query("residentId") residentId: Int? = null
     ): Response<PqrsListResponse>
 
     @POST("api/pqrs")

@@ -34,7 +34,7 @@ private val pqrsStates = listOf(
 )
 
 @Composable
-fun PqrsScreen(navController: NavController) {
+fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var allItems by remember { mutableStateOf<List<Pqrs>>(emptyList()) }
     var residents by remember { mutableStateOf<List<ResidentSummary>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -68,7 +68,8 @@ fun PqrsScreen(navController: NavController) {
         loading = true
         try {
             val response = RetrofitClient.api.getPqrs(
-                Session.bearer(), null, null, search.trim().ifEmpty { null }
+                Session.bearer(), null, null, search.trim().ifEmpty { null },
+                targetResidentId.takeIf { Session.isAdmin }
             )
             if (response.isSuccessful) {
                 allItems = response.body()?.pqrs.orEmpty()
@@ -81,7 +82,11 @@ fun PqrsScreen(navController: NavController) {
                 val residentResponse = RetrofitClient.api.getResidents(Session.bearer())
                 if (residentResponse.isSuccessful) {
                     residents = residentResponse.body()?.residents.orEmpty()
-                    if (selectedResident == null) selectedResident = residents.firstOrNull()
+                    selectedResident = residents.firstOrNull { it.id == targetResidentId }
+                        ?: selectedResident?.takeIf { current ->
+                            residents.any { it.id == current.id }
+                        }
+                        ?: residents.firstOrNull()
                 }
             }
         } catch (exception: Exception) {
@@ -445,6 +450,9 @@ private fun PqrsCard(
                 DomuxStatusBadge(pqrs.status.replace('_', ' '), tone)
             }
             Text("${pqrs.residentName ?: "Residente"} · ${pqrs.apartment.orEmpty()}", style = MaterialTheme.typography.bodySmall)
+            if (pqrs.createdByAdministration) {
+                Text("Creada por administración", style = MaterialTheme.typography.labelSmall)
+            }
             Text(pqrs.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
             if (expanded) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

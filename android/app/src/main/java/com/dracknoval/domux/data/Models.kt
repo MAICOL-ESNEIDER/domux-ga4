@@ -91,7 +91,11 @@ data class VehicleData(
     val color: String? = null
 )
 
-data class UnitResidentData(val name: String, val occupancyType: String?)
+data class UnitResidentData(
+    val id: Int,
+    val name: String,
+    val occupancyType: String?
+)
 
 data class ResidentialUnitData(
     val id: Int? = null,
@@ -168,6 +172,8 @@ data class Pqrs(
     val mediaUrl: String? = null,
     val mediaType: String? = null,
     val apartment: String? = null,
+    val createdByAdminId: Int? = null,
+    val createdByAdministration: Boolean = false,
     val messages: List<PqrsMessageItem>? = null,
     val satisfactionRating: Int? = null,
     val satisfactionComment: String? = null,
@@ -232,7 +238,9 @@ data class Reservation(
     val status: String,
     val residentName: String?,
     val residentId: Int? = null,
-    val apartment: String? = null
+    val apartment: String? = null,
+    val createdByAdminId: Int? = null,
+    val createdByAdministration: Boolean = false
 )
 data class ReservationsListResponse(val reservations: List<Reservation>?)
 data class CreateReservationRequest(

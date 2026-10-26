@@ -108,7 +108,7 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Listar residentes (para asignar) | `GET /api/residents`                | Sí      | ADMIN, GUARD                             | 401, 403           |
 | Ver anuncios                     | `GET /api/announcements`            | Sí      | cualquiera                               | 401                |
 | Publicar anuncio                 | `POST /api/announcements`           | Sí      | ADMIN                                    | 400, 401, 403      |
-| Ver PQRS                         | `GET /api/pqrs`                     | Sí      | ADMIN (todas), RESIDENT (propias)        | 401, 403           |
+| Ver PQRS                         | `GET /api/pqrs`                     | Sí      | ADMIN (todas o por `residentId`), RESIDENT (propias) | 401, 403 |
 | Crear PQRS                       | `POST /api/pqrs`                   | Sí      | RESIDENT; ADMIN con `residentId`         | 400, 401, 403      |
 | Agregar mensaje a PQRS           | `POST /api/pqrs/{id}/messages`     | Sí      | RESIDENT (propia)                        | 400, 401, 403, 404 |
 | Responder/actualizar PQRS        | `PUT /api/pqrs/{id}/respond`       | Sí      | ADMIN                                    | 400, 401, 403, 404 |
@@ -116,7 +116,7 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Calificar una PQRS resuelta      | `PUT /api/pqrs/{id}/satisfaction`  | Sí      | RESIDENT (propia)                        | 400, 401, 403, 404 |
 | Ver zonas comunes                | `GET /api/common-areas`             | Sí      | cualquiera                               | 401                |
 | Ver reservas                     | `GET /api/reservations`             | Sí      | ADMIN (todas), RESIDENT (propias)        | 401, 403           |
-| Crear reserva                    | `POST /api/reservations`            | Sí      | RESIDENT                                 | 400, 401, 403      |
+| Crear reserva                    | `POST /api/reservations`            | Sí      | RESIDENT; ADMIN con `residentId`         | 400, 401, 403, 409 |
 | Cancelar reserva                 | `PUT /api/reservations/{id}/cancel` | Sí      | RESIDENT (propia), ADMIN                 | 401, 403, 404      |
 | Ver paquetes                     | `GET /api/packages`                 | Sí      | ADMIN, GUARD (todos), RESIDENT (propios) | 401                |
 | Registrar paquete                | `POST /api/packages`                | Sí      | GUARD                                    | 400, 401, 403      |
@@ -186,6 +186,23 @@ de objetos ni carga multipart en esta fase.
   en `users`. Al iniciar, la migración idempotente crea fichas de unidad para
   residentes existentes y deriva el número del apartamento cuando es posible,
   conservando los datos previos.
+
+### Fase 3 — Acciones administrativas en nombre del residente
+
+- Desde la ficha de un apartamento, administración puede iniciar la creación de
+  una PQRS o reserva preseleccionando al residente. PQRS abre además el historial
+  de esa persona para continuar la conversación y responder sus solicitudes.
+- No hay una operación administrativa para editar o borrar la solicitud original;
+  administración puede responderla desde su conversación.
+- Las solicitudes conservan al residente como dueño e incluyen una referencia
+  opcional al administrador que las creó. Los registros anteriores mantienen
+  `created_by_admin_id` vacío; no se atribuyen acciones pasadas sin evidencia.
+- Las referencias de auditoría son columnas anulables agregadas de forma
+  compatible con SQLite y PostgreSQL, y aparecen en el historial como
+  **Creada por administración**.
+- Crear una reserva a nombre de un residente genera una notificación. El guardia
+  no puede usar estos flujos, y un residente no puede asignar solicitudes a otra
+  persona enviando otro `residentId`.
 
 ## 6. Mapeo con la arquitectura de GA1-GA3
 
