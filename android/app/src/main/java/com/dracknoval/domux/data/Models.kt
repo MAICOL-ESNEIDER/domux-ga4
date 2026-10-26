@@ -1,229 +1,203 @@
-// Models.kt — clases de datos (data class) que representan lo que la app ENVÍA y
-// RECIBE del backend. Mismo patrón enseñado en GA1: una data class por estructura
-// de JSON, con nombres de propiedad que coinciden EXACTAMENTE con las llaves del JSON.
-
 package com.dracknoval.domux.data
 
-// ======================= LOGIN =======================
+data class LoginRequest(val email: String, val password: String)
 
-// Lo que enviamos al iniciar sesión.
-data class LoginRequest(
-    val email: String,
-    val password: String
-)
-
-// Datos del usuario autenticado (vienen dentro de LoginResponse y se usan en toda la app).
-// role puede ser "ADMIN", "RESIDENT" o "GUARD".
-// apartment solo aplica a residentes; en los demás roles llega null.
 data class UserData(
     val id: Int,
     val name: String,
     val email: String,
     val role: String,
-    val apartment: String?
+    val apartment: String?,
+    val lastName: String? = "",
+    val fullName: String? = null,
+    val phone: String? = "",
+    val documentId: String? = "",
+    val occupancyType: String? = "propietario",
+    val isActive: Boolean = true,
+    val createdAt: String? = null
 )
 
-// Lo que responde el backend si el login es correcto.
-data class LoginResponse(
-    val message: String?,
-    val token: String?,
-    val user: UserData?
-)
-
-// ======================= USUARIOS (solo Admin) =======================
-
-// Lo que el admin envía para crear un residente o un guardia nuevo.
+data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
 data class CreateUserRequest(
     val name: String,
     val email: String,
     val password: String,
-    val role: String,           // "RESIDENT" o "GUARD"
-    val apartment: String?      // obligatorio si role = "RESIDENT", si no, null
+    val role: String,
+    val apartment: String?,
+    val lastName: String = "",
+    val phone: String = "",
+    val documentId: String = "",
+    val occupancyType: String = "propietario"
 )
-
-data class CreateUserResponse(
-    val message: String?,
-    val user: UserData?
+data class UpdateUserRequest(
+    val name: String? = null,
+    val lastName: String? = null,
+    val email: String? = null,
+    val phone: String? = null,
+    val documentId: String? = null,
+    val role: String? = null,
+    val apartment: String? = null,
+    val occupancyType: String? = null,
+    val isActive: Boolean? = null
 )
-
-data class UsersListResponse(
-    val users: List<UserData>?
-)
-
-// Lista liviana de residentes (id + nombre + apto), usada por el guardia para elegir
-// a quién le llegó un paquete o a quién visita alguien, y por el admin.
+data class ResetPasswordRequest(val password: String)
+data class CreateUserResponse(val message: String?, val user: UserData?)
+data class UsersListResponse(val users: List<UserData>?)
 data class ResidentSummary(
     val id: Int,
     val name: String,
-    val apartment: String?
+    val apartment: String?,
+    val email: String? = "",
+    val phone: String? = "",
+    val occupancyType: String? = "propietario"
 )
-
-data class ResidentsListResponse(
-    val residents: List<ResidentSummary>?
-)
-
-// ======================= ANUNCIOS / AVISOS =======================
+data class ResidentsListResponse(val residents: List<ResidentSummary>?)
 
 data class Announcement(
     val id: Int,
     val title: String,
     val message: String,
     val createdAt: String?,
-    val authorName: String?
+    val authorName: String?,
+    val eventDate: String? = null,
+    val eventTime: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null
 )
-
-data class AnnouncementsListResponse(
-    val announcements: List<Announcement>?
-)
-
-// Lo que el admin envía para publicar un anuncio nuevo.
+data class AnnouncementsListResponse(val announcements: List<Announcement>?)
 data class CreateAnnouncementRequest(
     val title: String,
-    val message: String
+    val message: String,
+    val eventDate: String? = null,
+    val eventTime: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null
 )
-
-data class CreateAnnouncementResponse(
-    val message: String?,
-    val announcement: Announcement?
-)
-
-// ======================= PQRS =======================
+data class CreateAnnouncementResponse(val message: String?, val announcement: Announcement?)
 
 data class Pqrs(
     val id: Int,
     val subject: String,
     val message: String,
-    val status: String,          // "abierta" | "en_proceso" | "resuelta"
+    val status: String,
     val adminResponse: String?,
     val createdAt: String?,
-    val residentName: String?
+    val residentName: String?,
+    val residentId: Int? = null,
+    val category: String? = "Petición",
+    val incidentDate: String? = null,
+    val incidentTime: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null,
+    val apartment: String? = null
 )
-
-data class PqrsListResponse(
-    val pqrs: List<Pqrs>?
-)
-
-// Lo que el residente envía para crear una PQRS.
+data class PqrsListResponse(val pqrs: List<Pqrs>?)
 data class CreatePqrsRequest(
     val subject: String,
-    val message: String
+    val message: String,
+    val category: String = "Petición",
+    val incidentDate: String? = null,
+    val incidentTime: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null,
+    val residentId: Int? = null
 )
+data class CreatePqrsResponse(val message: String?, val pqrs: Pqrs?)
+data class RespondPqrsRequest(val status: String, val adminResponse: String)
 
-data class CreatePqrsResponse(
-    val message: String?,
-    val pqrs: Pqrs?
-)
-
-// Lo que el admin envía para responder/actualizar el estado de una PQRS.
-data class RespondPqrsRequest(
-    val status: String,
-    val adminResponse: String
-)
-
-// ======================= ZONAS COMUNES Y RESERVAS =======================
-
-data class CommonArea(
-    val id: Int,
-    val name: String
-)
-
-data class CommonAreasListResponse(
-    val areas: List<CommonArea>?
-)
-
+data class CommonArea(val id: Int, val name: String)
+data class CommonAreasListResponse(val areas: List<CommonArea>?)
 data class Reservation(
     val id: Int,
     val commonAreaId: Int,
     val commonAreaName: String?,
     val date: String,
     val timeSlot: String,
-    val status: String,          // "activa" | "cancelada"
-    val residentName: String?
+    val status: String,
+    val residentName: String?,
+    val residentId: Int? = null,
+    val apartment: String? = null
 )
-
-data class ReservationsListResponse(
-    val reservations: List<Reservation>?
-)
-
+data class ReservationsListResponse(val reservations: List<Reservation>?)
 data class CreateReservationRequest(
     val commonAreaId: Int,
     val date: String,
-    val timeSlot: String
+    val timeSlot: String,
+    val residentId: Int? = null
 )
-
-data class CreateReservationResponse(
-    val message: String?,
-    val reservation: Reservation?
+data class CreateReservationResponse(val message: String?, val reservation: Reservation?)
+data class ReservationAvailabilityResponse(
+    val commonAreaId: Int,
+    val date: String,
+    val availableSlots: List<String>?,
+    val occupiedSlots: List<String>?
 )
-
-// ======================= PAQUETES =======================
+data class UpdateReservationStatusRequest(val status: String)
 
 data class PackageItem(
     val id: Int,
     val description: String?,
-    val status: String,          // "pendiente" | "entregado"
+    val status: String,
     val createdAt: String?,
     val deliveredAt: String?,
     val residentName: String?,
-    val registeredByName: String?
+    val registeredByName: String?,
+    val residentId: Int? = null,
+    val apartment: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null,
+    val eventDate: String? = null,
+    val eventTime: String? = null
 )
-
-data class PackagesListResponse(
-    val packages: List<PackageItem>?
-)
-
-// Lo que el guardia envía al registrar un paquete nuevo.
+data class PackagesListResponse(val packages: List<PackageItem>?)
 data class RegisterPackageRequest(
     val residentId: Int,
-    val description: String?
+    val description: String?,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null,
+    val eventDate: String? = null,
+    val eventTime: String? = null
 )
-
-data class RegisterPackageResponse(
-    val message: String?,
-    val packageItem: PackageItem?
-)
-
-// ======================= VISITANTES / DOMICILIARIOS =======================
+data class RegisterPackageResponse(val message: String?, val packageItem: PackageItem?)
 
 data class Visit(
     val id: Int,
     val visitorName: String,
-    val type: String,            // "visitante" | "domiciliario"
+    val type: String,
     val createdAt: String?,
     val residentName: String?,
-    val registeredByName: String?
+    val registeredByName: String?,
+    val residentId: Int? = null,
+    val apartment: String? = null,
+    val visitorDocument: String? = ""
 )
-
-data class VisitsListResponse(
-    val visits: List<Visit>?
-)
-
-// Lo que el guardia envía al registrar un ingreso.
+data class VisitsListResponse(val visits: List<Visit>?)
 data class RegisterVisitRequest(
     val residentId: Int,
     val visitorName: String,
-    val type: String
+    val type: String,
+    val visitorDocument: String? = null
 )
+data class RegisterVisitResponse(val message: String?, val visit: Visit?)
 
-data class RegisterVisitResponse(
-    val message: String?,
-    val visit: Visit?
+data class NotificationItem(
+    val id: Int,
+    val userId: Int,
+    val title: String,
+    val message: String,
+    val type: String,
+    val isRead: Boolean,
+    val createdAt: String?
 )
+data class NotificationsListResponse(val notifications: List<NotificationItem>?)
+data class NotificationResponse(val message: String?, val notification: NotificationItem?)
 
-// ======================= RESPUESTA GENÉRICA DE ERROR =======================
+data class ErrorResponse(val error: String?)
 
-// El backend responde { "error": "..." } cuando algo sale mal (401, 403, 404, 400...).
-// La usamos para leer response.errorBody() y mostrar un mensaje humano en pantalla.
-data class ErrorResponse(
-    val error: String?
-)
-
-// Convierte cualquier respuesta NO exitosa de Retrofit en un mensaje legible,
-// interpretando además los códigos que enseñamos en GA2/GA3 (401, 403, 404).
 fun mensajeDeError(codigo: Int, cuerpoError: String?): String {
     val detalle = try {
         com.google.gson.Gson().fromJson(cuerpoError, ErrorResponse::class.java)?.error
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
     return when (codigo) {

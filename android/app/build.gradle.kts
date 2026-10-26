@@ -1,7 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+val devBaseUrl = localProperties.getProperty("domux.dev.baseUrl")
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "http://10.0.2.2:5000/"
+val escapedDevBaseUrl = devBaseUrl
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 android {
     namespace = "com.dracknoval.domux"
@@ -39,8 +52,8 @@ android {
     productFlavors {
         create("dev") {
             dimension = "environment"
-            // Usa el backend local cuando corres en emulador
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:5000/\"")
+            // Para un teléfono físico, define domux.dev.baseUrl=http://<IP-LAN>:5000/ en local.properties.
+            buildConfigField("String", "BASE_URL", "\"$escapedDevBaseUrl\"")
         }
         create("prod") {
             dimension = "environment"
@@ -86,7 +99,6 @@ dependencies {
     // Retrofit + Gson: consumo de la API REST del backend Flask.
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
     // Corrutinas: para las funciones "suspend" de las llamadas de red.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     debugImplementation("androidx.compose.ui:ui-tooling")

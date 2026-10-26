@@ -18,6 +18,7 @@ import com.dracknoval.domux.ui.theme.DomuxAppTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DomuxLocalNotifications.createChannel(this)
         setContent {
             DomuxAppTheme {
                 Surface(
@@ -33,6 +34,7 @@ class MainActivity : ComponentActivity() {
                         composable("reservations") { ReservationsScreen(navController) }
                         composable("registry") { RegistryScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
+                        composable("notifications") { NotificationsScreen(navController) }
                     }
                 }
             }

@@ -1,24 +1,19 @@
-// ApiService.kt — la "lista de servicios" que ofrece el backend de Domux.
-// Mismo patrón de GA1-GA3: una interfaz con las anotaciones de Retrofit, funciones
-// "suspend" y Response<T> como envoltura (para poder revisar isSuccessful/code()).
-
 package com.dracknoval.domux.data
 
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
-
-    // --------- Autenticación (no requiere token) ---------
     @POST("api/auth/login")
     suspend fun login(@Body body: LoginRequest): Response<LoginResponse>
 
-    // --------- Usuarios (solo Admin) ---------
     @GET("api/users")
     suspend fun getUsers(@Header("Authorization") auth: String): Response<UsersListResponse>
 
@@ -28,12 +23,23 @@ interface ApiService {
         @Body body: CreateUserRequest
     ): Response<CreateUserResponse>
 
-    // Lista liviana de residentes: la usan Admin y Guardia (para elegir a quién
-    // asignar un paquete o una visita).
+    @PUT("api/users/{id}")
+    suspend fun updateUser(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: UpdateUserRequest
+    ): Response<CreateUserResponse>
+
+    @PUT("api/users/{id}/password")
+    suspend fun resetUserPassword(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: ResetPasswordRequest
+    ): Response<GenericMessageResponse>
+
     @GET("api/residents")
     suspend fun getResidents(@Header("Authorization") auth: String): Response<ResidentsListResponse>
 
-    // --------- Anuncios (todos los roles autenticados) ---------
     @GET("api/announcements")
     suspend fun getAnnouncements(@Header("Authorization") auth: String): Response<AnnouncementsListResponse>
 
@@ -43,10 +49,19 @@ interface ApiService {
         @Body body: CreateAnnouncementRequest
     ): Response<CreateAnnouncementResponse>
 
-    // --------- PQRS ---------
-    // Admin ve todas, Residente ve solo las suyas (el backend decide según el token).
+    @DELETE("api/announcements/{id}")
+    suspend fun deleteAnnouncement(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<GenericMessageResponse>
+
     @GET("api/pqrs")
-    suspend fun getPqrs(@Header("Authorization") auth: String): Response<PqrsListResponse>
+    suspend fun getPqrs(
+        @Header("Authorization") auth: String,
+        @Query("status") status: String? = null,
+        @Query("category") category: String? = null,
+        @Query("search") search: String? = null
+    ): Response<PqrsListResponse>
 
     @POST("api/pqrs")
     suspend fun createPqrs(
@@ -61,17 +76,30 @@ interface ApiService {
         @Body body: RespondPqrsRequest
     ): Response<CreatePqrsResponse>
 
-    // --------- Zonas comunes y reservas ---------
     @GET("api/common-areas")
     suspend fun getCommonAreas(@Header("Authorization") auth: String): Response<CommonAreasListResponse>
 
     @GET("api/reservations")
     suspend fun getReservations(@Header("Authorization") auth: String): Response<ReservationsListResponse>
 
+    @GET("api/reservations/availability")
+    suspend fun getReservationAvailability(
+        @Header("Authorization") auth: String,
+        @Query("commonAreaId") commonAreaId: Int,
+        @Query("date") date: String
+    ): Response<ReservationAvailabilityResponse>
+
     @POST("api/reservations")
     suspend fun createReservation(
         @Header("Authorization") auth: String,
         @Body body: CreateReservationRequest
+    ): Response<CreateReservationResponse>
+
+    @PUT("api/reservations/{id}/status")
+    suspend fun updateReservationStatus(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: UpdateReservationStatusRequest
     ): Response<CreateReservationResponse>
 
     @PUT("api/reservations/{id}/cancel")
@@ -80,9 +108,13 @@ interface ApiService {
         @Path("id") id: Int
     ): Response<CreateReservationResponse>
 
-    // --------- Paquetes ---------
     @GET("api/packages")
-    suspend fun getPackages(@Header("Authorization") auth: String): Response<PackagesListResponse>
+    suspend fun getPackages(
+        @Header("Authorization") auth: String,
+        @Query("status") status: String? = null,
+        @Query("search") search: String? = null,
+        @Query("residentId") residentId: Int? = null
+    ): Response<PackagesListResponse>
 
     @POST("api/packages")
     suspend fun registerPackage(
@@ -96,7 +128,6 @@ interface ApiService {
         @Path("id") id: Int
     ): Response<RegisterPackageResponse>
 
-    // --------- Visitantes / domiciliarios ---------
     @GET("api/visits")
     suspend fun getVisits(@Header("Authorization") auth: String): Response<VisitsListResponse>
 
@@ -105,4 +136,15 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Body body: RegisterVisitRequest
     ): Response<RegisterVisitResponse>
+
+    @GET("api/notifications")
+    suspend fun getNotifications(@Header("Authorization") auth: String): Response<NotificationsListResponse>
+
+    @PUT("api/notifications/{id}/read")
+    suspend fun markNotificationRead(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<NotificationResponse>
 }
+
+data class GenericMessageResponse(val message: String?)
