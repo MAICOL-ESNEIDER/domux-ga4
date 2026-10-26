@@ -104,6 +104,8 @@ del código; si no está definida, el MVP usa una clave estable de respaldo.
 | Crear usuario                    | `POST /api/users`                   | Sí      | ADMIN                                    | 400, 401, 403, 409 |
 | Consultar/editar ficha de unidad | `GET, PUT /api/admin/units`         | Sí      | ADMIN                                    | 400, 401, 403, 404, 409 |
 | Ver/editar perfil propio         | `GET, PUT /api/profile`             | Sí      | RESIDENT                                 | 400, 401, 403, 409 |
+| Validar sesión actual            | `GET /api/auth/session`             | Sí      | cualquier usuario autenticado            | 401                |
+| Registrar/desregistrar dispositivo push | `POST, DELETE /api/push-tokens` | Sí   | cualquier usuario autenticado            | 400, 401           |
 | Ver hogar propio                 | `GET /api/profile/unit`             | Sí      | RESIDENT                                 | 401, 403, 404      |
 | Listar residentes (para asignar) | `GET /api/residents`                | Sí      | ADMIN, GUARD                             | 401, 403           |
 | Ver anuncios                     | `GET /api/announcements`            | Sí      | cualquiera                               | 401                |
@@ -267,6 +269,50 @@ de objetos ni carga multipart en esta fase.
 - Android genera el QR y lo escanea con ZXing; el permiso de cámara se pide al
   momento de escanear por el componente de lectura.
 
+### Fase 6 — Notificaciones push, sesión e infraestructura
+
+- Android registra el token FCM del dispositivo al iniciar sesión y lo actualiza
+  cuando Firebase rota el token. Al cerrar sesión, elimina la asociación del
+  backend e invalida el token local de Firebase. Cada token queda asociado al
+  usuario que inició sesión y a un identificador de instalación.
+- El backend guarda los tokens en `device_push_tokens` y conserva la notificación
+  normal en la base de datos. Tras confirmar la transacción, envía push por FCM;
+  un fallo de FCM se registra en el log y no convierte en fallida la acción ya
+  persistida. Las visitas pendientes usan prioridad alta; la consulta de
+  notificaciones cada 30 segundos permanece como respaldo. Las notificaciones
+  no se duplican entre FCM y la consulta local.
+- Al tocar un push, DOMUX abre la sección correspondiente (PQRS, reservas,
+  portería, anuncios o notificaciones). Android 13+ solicita `POST_NOTIFICATIONS`
+  y usa canales separados para avisos normales y urgentes.
+- La sesión se guarda cifrada con AES-GCM y una clave del Android Keystore.
+  Al iniciar la app se valida con `GET /api/auth/session`; un token vencido vuelve
+  al login. Si el servidor no responde, la sesión se conserva y se puede reintentar.
+- Los cambios de autorización, entrada, salida y método de acceso de visitas se
+  guardan como eventos con actor y fecha; también se conserva quién registró la
+  entrega de cada paquete y la fecha de revocación del QR. Los tokens push están
+  protegidos por autenticación y solo se pueden borrar para la cuenta actual.
+- Las nuevas tablas se crean sin borrar registros y las columnas adicionales se
+  migran de forma compatible con SQLite y PostgreSQL.
+
+#### Configuración obligatoria de Firebase para activar push
+
+1. En Firebase Console, crea o selecciona un proyecto y agrega una aplicación
+   Android con el identificador exacto `com.dracknoval.domux`.
+2. Descarga el archivo `google-services.json` y colócalo en
+   `android/app/google-services.json`. El archivo está ignorado por Git y no se
+   debe subir al repositorio. Gradle solo activa el plugin de Google Services
+   cuando ese archivo existe.
+3. En la configuración del proyecto Firebase, habilita Firebase Cloud Messaging.
+   En Render, agrega la variable secreta `FIREBASE_SERVICE_ACCOUNT_JSON` con el
+   contenido JSON completo de una clave de cuenta de servicio del Firebase Admin
+   SDK. Se obtiene desde **Project settings → Service accounts → Generate new
+   private key**. No pongas esa clave en el repositorio ni en Android.
+4. Despliega nuevamente el backend y recompila/reinstala la app. El backend
+   registra el token de cada dispositivo al iniciar sesión; no es necesario
+   copiar tokens manualmente. Como alternativa al JSON en una variable de entorno,
+   el backend admite `GOOGLE_APPLICATION_CREDENTIALS` apuntando a un archivo de
+   credenciales disponible solo en el servidor.
+
 ## 6. Mapeo con la arquitectura de GA1-GA3
 
 | Archivo/patrón enseñado en GA1-GA3             | Dónde está en este proyecto                                                                |
@@ -274,7 +320,7 @@ de objetos ni carga multipart en esta fase.
 | `data/Models.kt`                               | `android/.../data/Models.kt`                                                               |
 | `data/ApiService.kt` (Retrofit, `Response<T>`) | `android/.../data/ApiService.kt`                                                           |
 | `data/RetrofitClient.kt`                       | `android/.../data/RetrofitClient.kt`                                                       |
-| `data/Session.kt` (objeto en memoria)          | `android/.../data/Session.kt` (con 3 roles en vez de 1 booleano `isAdmin`)                 |
+| `data/Session.kt` (sesión persistente)         | `android/.../data/Session.kt` (AES-GCM con Android Keystore y 3 roles)                      |
 | `MainActivity.kt` con `NavHost` inline         | `android/.../MainActivity.kt`                                                              |
 | `if (Session.isAdmin)` para ocultar opciones   | Igual, extendido a `isAdmin` / `isResident` / `isGuard` en `HomeScreen.kt` y cada pantalla |
 | Backend Flask consumido por la app             | `backend/app.py` (en vez del backend de e-commerce del curso)                              |
@@ -284,11 +330,13 @@ de objetos ni carga multipart en esta fase.
 Para cumplir la regla de la GA4 ("una app pequeña y terminada vale más que una
 ambiciosa sin terminar"), quedan **fuera de esta entrega**:
 
-- Notificaciones push reales (Firebase). Las "notificaciones" son la pestaña
-  de Registros/Notificaciones, que se actualiza al entrar o refrescar (polling
-  por GET), no una alerta del sistema operativo.
-- Almacenamiento separado de adjuntos: paquetes y visitantes aún usan Base64
-  en JSON (máximo 5 MB), no un servicio de archivos u objetos.
+- Push requiere completar la configuración de Firebase descrita arriba; sin las
+  credenciales y `google-services.json`, las notificaciones en la base de datos y
+  el respaldo de consulta siguen funcionando, pero FCM no envía alertas push.
+- Almacenamiento separado de adjuntos queda pendiente: PQRS, reservas, paquetes y
+  visitantes mantienen Base64 en JSON (máximo 5 MB por archivo en Android y 12 MB
+  por petición en el backend); no se incorporó un servicio de archivos u objetos
+  para evitar un cambio de infraestructura grande.
 - La app de administración ya usa búsqueda, filtros combinables y paginación
   del servidor para usuarios; no hay todavía exportación de resultados.
 - El perfil del residente es editable solo para los campos permitidos; no hay
@@ -296,15 +344,15 @@ ambiciosa sin terminar"), quedan **fuera de esta entrega**:
   solicitarlos mediante PQRS o a administración.
 - Multi-unidad (multi-tenant): esta versión asume una sola unidad residencial.
 
-## 8. Poner el repo en GitHub
+## 8. Publicar cambios y abrir un Pull Request
 
-El repositorio ya viene inicializado con Git y con los commits hechos. Solo
-falta crear el repo vacío en GitHub y apuntarlo:
+Publica la rama de trabajo y abre un Pull Request hacia `develop`. No renombres
+la rama de funcionalidad a `main` ni hagas merge directamente:
 
 ```bash
-git remote add origin https://github.com/MAICOL-ESNEIDER/domux-ga4.git
-git branch -M main
-git push -u origin main
+git push -u origin feature/pqrs-chat-usuarios-reservas-porteria
 ```
 
-(Cambia la URL si le pones otro nombre al repositorio en GitHub.)
+En GitHub, crea el Pull Request seleccionando `develop` como rama base y
+`feature/pqrs-chat-usuarios-reservas-porteria` como rama de comparación. Si el
+remoto `origin` todavía no está configurado, agrégalo antes con la URL del repo.

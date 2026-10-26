@@ -1,6 +1,9 @@
 import os
 import unittest
 from datetime import date, timedelta
+from unittest.mock import patch
+
+from google.auth.exceptions import DefaultCredentialsError
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
@@ -8,7 +11,8 @@ os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 from app import create_app
 from auth import generate_token
 from extensions import db
-from models import Notification, PackageItem, User, Visit, VisitQrPass
+from models import DevicePushToken, Notification, PackageItem, User, Visit, VisitQrPass
+from services import notification_service
 from werkzeug.security import generate_password_hash
 
 
@@ -223,6 +227,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             headers=self.auth(self.resident),
         )
         self.assertEqual(revoke.status_code, 200)
+        self.assertIsNotNone(VisitQrPass.query.one().revoked_at)
         revoked_entry = self.client.post(
             f"/api/visits/qr/{token}/entry",
             headers=self.auth(self.guard),
@@ -281,6 +286,134 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(VisitQrPass.query.count(), 0)
 
+    def test_push_tokens_are_scoped_to_authenticated_user(self):
+        current = self.client.get("/api/auth/session", headers=self.auth(self.resident))
+        self.assertEqual(current.status_code, 200)
+        self.assertEqual(current.get_json()["user"]["id"], self.resident.id)
+        expired_session = self.client.get("/api/auth/session")
+        self.assertEqual(expired_session.status_code, 401)
+
+        unauthenticated = self.client.post(
+            "/api/push-tokens",
+            json={"token": "fcm-token"},
+        )
+        self.assertEqual(unauthenticated.status_code, 401)
+        registered = self.client.post(
+            "/api/push-tokens",
+            headers=self.auth(self.resident),
+            json={"token": "fcm-token", "deviceId": "device-1"},
+        )
+        self.assertEqual(registered.status_code, 201)
+        token = DevicePushToken.query.one()
+        self.assertEqual(token.user_id, self.resident.id)
+
+        rotated = self.client.post(
+            "/api/push-tokens",
+            headers=self.auth(self.resident),
+            json={"token": "fcm-token-rotated", "deviceId": "device-1"},
+        )
+        self.assertEqual(rotated.status_code, 201)
+        self.assertEqual(DevicePushToken.query.count(), 1)
+        self.assertEqual(DevicePushToken.query.one().token, "fcm-token-rotated")
+
+        removed_foreign = self.client.delete(
+            "/api/push-tokens",
+            headers=self.auth(self.other_resident),
+            json={"token": "fcm-token-rotated"},
+        )
+        self.assertEqual(removed_foreign.status_code, 200)
+        self.assertEqual(DevicePushToken.query.count(), 1)
+
+        removed = self.client.delete(
+            "/api/push-tokens",
+            headers=self.auth(self.resident),
+            json={"token": "fcm-token-rotated"},
+        )
+        self.assertEqual(removed.status_code, 200)
+        self.assertEqual(DevicePushToken.query.count(), 0)
+
+    def test_push_is_sent_after_commit_with_route_and_high_priority_for_visitors(self):
+        self.client.post(
+            "/api/push-tokens",
+            headers=self.auth(self.resident),
+            json={"token": "fcm-token", "deviceId": "device-1"},
+        )
+        with (
+            patch.object(notification_service, "_get_firebase_app", return_value=object()),
+            patch.object(notification_service.messaging, "send_each_for_multicast") as send,
+        ):
+            send.return_value.failure_count = 0
+            notification_service.notify_user(
+                self.resident.id,
+                "Visitante esperando",
+                "Autoriza su ingreso.",
+                "visit",
+            )
+            db.session.commit()
+
+        self.assertEqual(send.call_count, 1)
+        fcm_message = send.call_args.args[0]
+        self.assertEqual(
+            {key: fcm_message.data[key] for key in ("type", "route")},
+            {"type": "visit", "route": "registry"},
+        )
+        self.assertEqual(fcm_message.data["notificationId"], str(Notification.query.one().id))
+        self.assertEqual(fcm_message.android.priority, "high")
+        self.assertEqual(Notification.query.count(), 1)
+
+    def test_push_from_rolled_back_notification_is_not_sent_later(self):
+        self.client.post(
+            "/api/push-tokens",
+            headers=self.auth(self.resident),
+            json={"token": "fcm-token", "deviceId": "device-1"},
+        )
+        with (
+            patch.object(notification_service, "_get_firebase_app", return_value=object()),
+            patch.object(notification_service.messaging, "send_each_for_multicast") as send,
+        ):
+            notification_service.notify_user(
+                self.resident.id, "No committed", "This must not send.", "pqrs"
+            )
+            db.session.flush()
+            db.session.rollback()
+            self.assertEqual(send.call_count, 0)
+            notification_service.notify_user(
+                self.resident.id, "Committed", "This can send.", "pqrs"
+            )
+            db.session.commit()
+        self.assertEqual(send.call_count, 1)
+
+    def test_invalid_default_firebase_credentials_do_not_fail_committed_notification(self):
+        self.client.post(
+            "/api/push-tokens",
+            headers=self.auth(self.resident),
+            json={"token": "fcm-token", "deviceId": "device-1"},
+        )
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "FIREBASE_SERVICE_ACCOUNT_JSON": "",
+                    "GOOGLE_APPLICATION_CREDENTIALS": "missing-service-account.json",
+                },
+            ),
+            patch.object(
+                notification_service,
+                "initialize_app",
+                side_effect=DefaultCredentialsError("Invalid application credentials."),
+            ),
+        ):
+            notification_service._firebase_app = None
+            notification_service.notify_user(
+                self.resident.id,
+                "Visitante esperando",
+                "Autoriza su ingreso.",
+                "visit",
+            )
+            db.session.commit()
+
+        self.assertEqual(Notification.query.count(), 1)
+
     def test_package_delivery_requires_receiver_and_notifies_resident(self):
         package = PackageItem(
             resident_id=self.resident.id,
@@ -302,6 +435,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["packageItem"]["deliveredTo"], "María Pérez")
+        self.assertEqual(response.get_json()["packageItem"]["deliveredByName"], "Guard")
         self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 1)
 
 

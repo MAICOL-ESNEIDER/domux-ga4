@@ -1,7 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from werkzeug.security import check_password_hash
 
-from auth import generate_token
+from auth import generate_token, token_required
 from errors import error_response
 from extensions import db
 from models import User
@@ -43,3 +43,9 @@ def login():
         "token": generate_token(user),
         "user": user.to_dict(),
     })
+
+
+@bp.get("/auth/session")
+@token_required
+def current_session():
+    return jsonify({"user": g.current_user.to_dict()})

@@ -4,6 +4,7 @@ android/app/build/
 android/.gradle/
 android/.idea/
 android/local.properties
+android/app/google-services.json
 android/*.iml
 android/app/*.iml
 android/.cxx/

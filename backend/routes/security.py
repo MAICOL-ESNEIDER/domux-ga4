@@ -8,6 +8,7 @@ from errors import error_response
 from extensions import db
 from models import (
     Notification,
+    DevicePushToken,
     PackageItem,
     User,
     Visit,
@@ -48,6 +49,60 @@ def _package_metadata_error(data):
     if event_time is not None and (error := validate_time(event_time)):
         return error
     return None
+
+
+@bp.post("/push-tokens")
+@token_required
+def register_push_token():
+    data, failure = _json_body()
+    if failure:
+        return failure
+    token = data.get("token")
+    device_id = data.get("deviceId")
+    if not isinstance(token, str) or not token.strip() or len(token) > 255:
+        return error_response(400, "El token FCM no es válido.")
+    if device_id is not None and (
+        not isinstance(device_id, str) or not device_id.strip() or len(device_id) > 120
+    ):
+        return error_response(400, "El identificador del dispositivo no es válido.")
+    normalized_token = token.strip()
+    normalized_device_id = device_id.strip() if device_id else None
+    if normalized_device_id:
+        DevicePushToken.query.filter(
+            DevicePushToken.user_id == g.current_user.id,
+            DevicePushToken.device_id == normalized_device_id,
+            DevicePushToken.token != normalized_token,
+        ).delete(synchronize_session=False)
+    record = DevicePushToken.query.filter_by(token=normalized_token).first()
+    if record is None:
+        record = DevicePushToken(
+            user_id=g.current_user.id,
+            token=normalized_token,
+            device_id=normalized_device_id,
+        )
+        db.session.add(record)
+    else:
+        record.user_id = g.current_user.id
+        record.device_id = normalized_device_id or record.device_id
+    db.session.commit()
+    return jsonify({"message": "Dispositivo registrado para notificaciones push."}), 201
+
+
+@bp.delete("/push-tokens")
+@token_required
+def delete_push_token():
+    data, failure = _json_body()
+    if failure:
+        return failure
+    token = data.get("token")
+    if not isinstance(token, str) or not token.strip():
+        return error_response(400, "El token FCM es obligatorio.")
+    DevicePushToken.query.filter_by(
+        user_id=g.current_user.id,
+        token=token.strip(),
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({"message": "Dispositivo eliminado de notificaciones push."})
 
 
 @bp.get("/packages")
@@ -145,6 +200,7 @@ def deliver_package(pkg_id):
         package.status = "entregado"
         package.delivered_at = datetime.utcnow()
         package.delivered_to = receiver.strip()
+        package.delivered_by_id = g.current_user.id
         notify_user(
             package.resident_id,
             "Paquete entregado",
@@ -441,6 +497,7 @@ def revoke_visit_qr_pass(pass_id):
     if qr_pass.resident_id != g.current_user.id:
         return error_response(403, "Solo puedes revocar tus propios códigos QR.")
     qr_pass.revoked = True
+    qr_pass.revoked_at = datetime.utcnow()
     db.session.commit()
     return jsonify({"message": "Código QR revocado."})
 

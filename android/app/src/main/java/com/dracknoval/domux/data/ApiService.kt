@@ -3,6 +3,7 @@ package com.dracknoval.domux.data
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
+import retrofit2.http.HTTP
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -13,6 +14,21 @@ import retrofit2.http.Query
 interface ApiService {
     @POST("api/auth/login")
     suspend fun login(@Body body: LoginRequest): Response<LoginResponse>
+
+    @GET("api/auth/session")
+    suspend fun currentSession(@Header("Authorization") auth: String): Response<UserDataResponse>
+
+    @POST("api/push-tokens")
+    suspend fun registerPushToken(
+        @Header("Authorization") auth: String,
+        @Body body: PushTokenRequest
+    ): Response<GenericMessageResponse>
+
+    @HTTP(method = "DELETE", path = "api/push-tokens", hasBody = true)
+    suspend fun deletePushToken(
+        @Header("Authorization") auth: String,
+        @Body body: PushTokenRequest
+    ): Response<GenericMessageResponse>
 
     @GET("api/users")
     suspend fun getUsers(

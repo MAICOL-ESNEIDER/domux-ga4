@@ -55,6 +55,7 @@ SQLITE_ADDITIONS = {
         "event_date": "VARCHAR(20)",
         "event_time": "VARCHAR(20)",
         "delivered_to": "VARCHAR(120)",
+        "delivered_by_id": "INTEGER REFERENCES users(id)",
     },
     "visits": {
         "visitor_document": "VARCHAR(40)",
@@ -162,7 +163,10 @@ def migrate_security_columns():
     tables = set(inspector.get_table_names())
     dialect = db.engine.dialect.name
     additions = {
-        "packages": {"delivered_to": "VARCHAR(120)"},
+        "packages": {
+            "delivered_to": "VARCHAR(120)",
+            "delivered_by_id": "INTEGER REFERENCES users(id)",
+        },
         "visits": {
             "visitor_photo_url": "TEXT",
             "visitor_photo_type": "VARCHAR(20)",
@@ -180,6 +184,9 @@ def migrate_security_columns():
                 else "BOOLEAN NOT NULL DEFAULT 0"
             ),
             "qr_pass_id": "INTEGER REFERENCES visit_qr_passes(id)",
+        },
+        "visit_qr_passes": {
+            "revoked_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
         },
     }
     with db.engine.begin() as connection:

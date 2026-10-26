@@ -1,5 +1,6 @@
 package com.dracknoval.domux
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.dracknoval.domux.data.NotificationItem
 import com.dracknoval.domux.data.RetrofitClient
+import com.dracknoval.domux.data.PushRegistration
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.delay
@@ -255,8 +257,19 @@ fun HomeScreen(navController: NavController) {
         }
         Button(
             onClick = {
-                Session.clear()
-                navController.navigate("login") { popUpTo(0) }
+                scope.launch {
+                    try {
+                        PushRegistration.removeCurrentDevice(context)
+                    } catch (exception: Exception) {
+                        Log.e("DomuxPush", "Could not unregister FCM token during logout.", exception)
+                    }
+                    try {
+                        Session.clear(context)
+                        navController.navigate("login") { popUpTo(0) }
+                    } catch (exception: Exception) {
+                        notificationError = "No se pudo borrar la sesión segura: ${exception.message}"
+                    }
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {

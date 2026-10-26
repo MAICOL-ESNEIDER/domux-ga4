@@ -22,6 +22,7 @@ data class UserData(
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
 data class UserDataResponse(val message: String? = null, val user: UserData?)
+data class PushTokenRequest(val token: String, val deviceId: String)
 data class CreateUserRequest(
     val name: String,
     val email: String,
