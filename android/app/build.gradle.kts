@@ -1,7 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+val devBaseUrl = localProperties.getProperty("domux.dev.baseUrl")
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "http://10.0.2.2:5000/"
+val escapedDevBaseUrl = devBaseUrl
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 android {
     namespace = "com.dracknoval.domux"
@@ -39,8 +52,8 @@ android {
     productFlavors {
         create("dev") {
             dimension = "environment"
-            // Usa el backend local del PC; celular y PC deben estar en la misma red Wi-Fi.
-            buildConfigField("String", "BASE_URL", "\"http://192.168.1.5:5000/\"")
+            // Para un teléfono físico, define domux.dev.baseUrl=http://<IP-LAN>:5000/ en local.properties.
+            buildConfigField("String", "BASE_URL", "\"$escapedDevBaseUrl\"")
         }
         create("prod") {
             dimension = "environment"
