@@ -43,6 +43,7 @@ class User(db.Model):
         return {
             "id": self.id,
             "name": self.full_name,
+            "firstName": (self.name or "").strip(),
             "lastName": self.last_name or "",
             "fullName": self.full_name,
             "email": self.email or "",
@@ -454,6 +455,9 @@ class PackageItem(db.Model):
     delivered_at = db.Column(db.DateTime, nullable=True)
     delivered_to = db.Column(db.String(120), nullable=True)
     delivered_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
@@ -471,6 +475,8 @@ class PackageItem(db.Model):
             "eventTime": self.event_time,
             "createdAt": _fmt(self.created_at),
             "deliveredAt": _fmt(self.delivered_at),
+            "isDeleted": bool(self.is_deleted),
+            "deletedAt": _fmt(self.deleted_at),
             "deliveredTo": self.delivered_to,
             "deliveredByName": self.delivered_by.full_name if self.delivered_by else None,
             "residentName": self.resident.full_name if self.resident else None,

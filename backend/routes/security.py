@@ -1,5 +1,5 @@
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, g, jsonify, request
 
@@ -49,6 +49,26 @@ def _package_metadata_error(data):
     if event_time is not None and (error := validate_time(event_time)):
         return error
     return None
+
+
+def _cleanup_expired_packages():
+    now = datetime.utcnow()
+    expired_packages = PackageItem.query.filter(
+        PackageItem.status == "entregado",
+        PackageItem.is_deleted.is_(False),
+        PackageItem.delivered_at < now - timedelta(days=7),
+    ).all()
+    expired_trash = PackageItem.query.filter(
+        PackageItem.is_deleted.is_(True),
+        PackageItem.deleted_at < now - timedelta(days=30),
+    ).all()
+    for package in expired_packages:
+        package.is_deleted = True
+        package.deleted_at = now
+    for package in expired_trash:
+        db.session.delete(package)
+    if expired_packages or expired_trash:
+        db.session.commit()
 
 
 @bp.post("/push-tokens")
@@ -108,6 +128,7 @@ def delete_push_token():
 @bp.get("/packages")
 @token_required
 def get_packages():
+    _cleanup_expired_packages()
     user = g.current_user
     query = PackageItem.query.join(User, PackageItem.resident_id == User.id)
     if user.role == "RESIDENT":
@@ -119,10 +140,14 @@ def get_packages():
         return error_response(403, "No tienes permiso para ver los paquetes")
 
     status = request.args.get("status")
-    if status:
-        if status not in VALID_PACKAGE_STATUSES:
-            return error_response(400, "Estado de paquete inválido")
-        query = query.filter(PackageItem.status == status)
+    if status == "papelera":
+        query = query.filter(PackageItem.is_deleted.is_(True))
+    elif status is None or status in VALID_PACKAGE_STATUSES:
+        query = query.filter(PackageItem.is_deleted.is_(False))
+        if status is not None:
+            query = query.filter(PackageItem.status == status)
+    else:
+        return error_response(400, "Estado de paquete inválido")
     resident_id = request.args.get("residentId", type=int)
     if resident_id is not None and user.role != "RESIDENT":
         query = query.filter(PackageItem.resident_id == resident_id)
@@ -130,7 +155,9 @@ def get_packages():
     if search:
         pattern = f"%{search}%"
         query = query.filter(db.or_(
+            (User.name + " " + User.last_name).ilike(pattern),
             PackageItem.description.ilike(pattern),
+            PackageItem.delivered_to.ilike(pattern),
             User.name.ilike(pattern),
             User.last_name.ilike(pattern),
             User.apartment.ilike(pattern),
@@ -141,11 +168,14 @@ def get_packages():
 
 @bp.post("/packages")
 @token_required
-@role_required("GUARD")
+@role_required("GUARD", "ADMIN")
 def register_package():
     data, failure = _json_body()
     if failure:
         return failure
+    status = data.get("status", "pendiente")
+    if status not in ("pendiente", "por_llegar"):
+        return error_response(400, "Estado de paquete inválido")
     validation_error = require_non_empty_fields(
         data,
         (("description", "descripción"),),
@@ -165,6 +195,7 @@ def register_package():
         resident_id=resident.id,
         registered_by=g.current_user.id,
         description=data["description"].strip(),
+        status=status,
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
         event_date=data.get("eventDate"),
@@ -179,6 +210,68 @@ def register_package():
     )
     db.session.commit()
     return jsonify({"message": "Paquete registrado", "packageItem": package.to_dict()}), 201
+
+
+@bp.put("/packages/<int:pkg_id>/status")
+@token_required
+@role_required("GUARD", "ADMIN")
+def update_package_status(pkg_id):
+    data, failure = _json_body()
+    if failure:
+        return failure
+    status = data.get("status")
+    if status not in ("por_llegar", "pendiente"):
+        return error_response(400, "Estado de paquete inválido")
+    package = db.session.get(PackageItem, pkg_id)
+    if package is None:
+        return error_response(404, "Paquete no encontrado")
+    if package.status != status:
+        package.status = status
+        if status == "pendiente":
+            notify_user(
+                package.resident_id,
+                "Paquete disponible",
+                "Tu paquete ya se encuentra en portería",
+                "package",
+            )
+        db.session.commit()
+    return jsonify({"message": "Estado del paquete actualizado.", "packageItem": package.to_dict()})
+
+
+@bp.delete("/packages/<int:pkg_id>")
+@token_required
+@role_required("GUARD", "ADMIN")
+def delete_package(pkg_id):
+    package = db.session.get(PackageItem, pkg_id)
+    if package is None:
+        return error_response(404, "Paquete no encontrado")
+    force = (request.args.get("force") or "").lower() == "true"
+    if package.is_deleted or force:
+        db.session.delete(package)
+        db.session.commit()
+        return jsonify({"message": "Paquete eliminado permanentemente."})
+    package.is_deleted = True
+    package.deleted_at = datetime.utcnow()
+    package.deleted_by_id = g.current_user.id
+    db.session.commit()
+    return jsonify({
+        "message": "Paquete movido a la papelera.",
+        "packageItem": package.to_dict(),
+    })
+
+
+@bp.put("/packages/<int:pkg_id>/restore")
+@token_required
+@role_required("GUARD", "ADMIN")
+def restore_package(pkg_id):
+    package = db.session.get(PackageItem, pkg_id)
+    if package is None:
+        return error_response(404, "Paquete no encontrado")
+    package.is_deleted = False
+    package.deleted_at = None
+    package.deleted_by_id = None
+    db.session.commit()
+    return jsonify({"message": "Paquete restaurado.", "packageItem": package.to_dict()})
 
 
 @bp.put("/packages/<int:pkg_id>/deliver")

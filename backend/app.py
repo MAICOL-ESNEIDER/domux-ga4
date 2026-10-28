@@ -56,6 +56,9 @@ SQLITE_ADDITIONS = {
         "event_time": "VARCHAR(20)",
         "delivered_to": "VARCHAR(120)",
         "delivered_by_id": "INTEGER REFERENCES users(id)",
+        "is_deleted": "BOOLEAN NOT NULL DEFAULT 0",
+        "deleted_at": "DATETIME",
+        "deleted_by_id": "INTEGER REFERENCES users(id)",
     },
     "visits": {
         "visitor_document": "VARCHAR(40)",
@@ -166,6 +169,12 @@ def migrate_security_columns():
         "packages": {
             "delivered_to": "VARCHAR(120)",
             "delivered_by_id": "INTEGER REFERENCES users(id)",
+            "is_deleted": (
+                "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+                else "BOOLEAN NOT NULL DEFAULT 0"
+            ),
+            "deleted_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+            "deleted_by_id": "INTEGER REFERENCES users(id)",
         },
         "visits": {
             "visitor_photo_url": "TEXT",

@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 from google.auth.exceptions import DefaultCredentialsError
@@ -187,10 +187,107 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(search.status_code, 200)
         self.assertEqual([item["id"] for item in search.get_json()["residents"]], [self.resident.id])
         missing_search = self.client.get("/api/residents", headers=self.auth(self.guard))
-        self.assertEqual(missing_search.status_code, 400)
+        self.assertEqual(missing_search.status_code, 200)
+        self.assertEqual(len(missing_search.get_json()["residents"]), 2)
         admin_list = self.client.get("/api/residents", headers=self.auth(self.admin))
         self.assertEqual(admin_list.status_code, 200)
         self.assertEqual(len(admin_list.get_json()["residents"]), 2)
+
+    def test_package_registration_status_trash_restore_and_purge(self):
+        registration = self.client.post(
+            "/api/packages",
+            headers=self.auth(self.admin),
+            json={
+                "residentId": self.resident.id,
+                "description": "Caja especial",
+                "status": "por_llegar",
+            },
+        )
+        self.assertEqual(registration.status_code, 201)
+        package_id = registration.get_json()["packageItem"]["id"]
+
+        invalid_registration = self.client.post(
+            "/api/packages",
+            headers=self.auth(self.guard),
+            json={
+                "residentId": self.resident.id,
+                "description": "Estado inválido",
+                "status": "entregado",
+            },
+        )
+        self.assertEqual(invalid_registration.status_code, 400)
+
+        status_response = self.client.put(
+            f"/api/packages/{package_id}/status",
+            headers=self.auth(self.guard),
+            json={"status": "pendiente"},
+        )
+        self.assertEqual(status_response.status_code, 200)
+        self.assertEqual(status_response.get_json()["packageItem"]["status"], "pendiente")
+        self.assertEqual(
+            Notification.query.filter_by(user_id=self.resident.id).count(),
+            2,
+        )
+
+        deleted = self.client.delete(
+            f"/api/packages/{package_id}",
+            headers=self.auth(self.guard),
+        )
+        self.assertEqual(deleted.status_code, 200)
+        self.assertTrue(deleted.get_json()["packageItem"]["isDeleted"])
+        trash = self.client.get(
+            "/api/packages?status=papelera",
+            headers=self.auth(self.guard),
+        )
+        self.assertEqual([item["id"] for item in trash.get_json()["packages"]], [package_id])
+
+        restored = self.client.put(
+            f"/api/packages/{package_id}/restore",
+            headers=self.auth(self.admin),
+        )
+        self.assertEqual(restored.status_code, 200)
+        self.assertFalse(restored.get_json()["packageItem"]["isDeleted"])
+
+        forced_delete = self.client.delete(
+            f"/api/packages/{package_id}?force=true",
+            headers=self.auth(self.admin),
+        )
+        self.assertEqual(forced_delete.status_code, 200)
+        self.assertIsNone(db.session.get(PackageItem, package_id))
+
+    def test_package_listing_automatically_trashes_and_purges_expired_items(self):
+        expired_delivery = PackageItem(
+            resident_id=self.resident.id,
+            registered_by=self.guard.id,
+            description="Entrega antigua",
+            status="entregado",
+            delivered_at=datetime.utcnow() - timedelta(days=8),
+        )
+        expired_trash = PackageItem(
+            resident_id=self.other_resident.id,
+            registered_by=self.guard.id,
+            description="Papelera antigua",
+            is_deleted=True,
+            deleted_at=datetime.utcnow() - timedelta(days=31),
+        )
+        db.session.add_all([expired_delivery, expired_trash])
+        db.session.commit()
+        expired_delivery_id = expired_delivery.id
+        expired_trash_id = expired_trash.id
+
+        response = self.client.get(
+            "/api/packages?status=papelera",
+            headers=self.auth(self.guard),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.get_json()["packages"]],
+            [expired_delivery_id],
+        )
+        self.assertTrue(db.session.get(PackageItem, expired_delivery_id).is_deleted)
+        self.assertIsNone(db.session.get(PackageItem, expired_trash_id))
+
 
     def test_qr_limits_new_people_allows_same_day_reentry_and_revokes(self):
         qr = self.make_qr()

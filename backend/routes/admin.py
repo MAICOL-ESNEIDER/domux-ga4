@@ -70,6 +70,7 @@ def get_users():
         ).exists()
         query = query.filter(db.or_(
             User.name.ilike(pattern),
+            (User.name + " " + User.last_name).ilike(pattern),
             User.last_name.ilike(pattern),
             User.email.ilike(pattern),
             User.phone.ilike(pattern),
@@ -361,24 +362,21 @@ def reset_user_password(user_id):
 @token_required
 @role_required("ADMIN", "GUARD")
 def get_residents():
-    query = User.query.filter_by(role="RESIDENT")
+    query = User.query.filter_by(role="RESIDENT").filter(User.is_active.is_(True))
     search = (request.args.get("search") or "").strip()
-    if g.current_user.role == "GUARD" and not search:
-        return error_response(400, "Escribe nombre, documento o apartamento para buscar.")
     if search:
         pattern = f"%{search}%"
         query = query.filter(
-            User.is_active.is_(True),
             db.or_(
+                (User.name + " " + User.last_name).ilike(pattern),
                 User.name.ilike(pattern),
                 User.last_name.ilike(pattern),
                 User.document_id.ilike(pattern),
                 User.apartment.ilike(pattern),
+                User.email.ilike(pattern),
             ),
         )
-        residents = query.order_by(User.name).limit(50).all()
-    else:
-        residents = query.order_by(User.name).all()
+    residents = query.order_by(User.name, User.last_name).limit(30).all()
     return jsonify({"residents": [resident.to_resident_summary() for resident in residents]})
 
 
