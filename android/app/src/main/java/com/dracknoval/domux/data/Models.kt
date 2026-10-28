@@ -17,7 +17,8 @@ data class UserData(
     val isActive: Boolean = true,
     val createdAt: String? = null,
     val socialNetworks: String? = "",
-    val dataProcessingConsent: Boolean = false
+    val dataProcessingConsent: Boolean = false,
+    val firstName: String? = null
 )
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
@@ -299,7 +300,9 @@ data class PackageItem(
     val mediaType: String? = null,
     val eventDate: String? = null,
     val eventTime: String? = null,
-    val deliveredTo: String? = null
+    val deliveredTo: String? = null,
+    val isDeleted: Boolean = false,
+    val deletedAt: String? = null
 )
 data class PackagesListResponse(val packages: List<PackageItem>?)
 data class RegisterPackageRequest(
@@ -308,10 +311,12 @@ data class RegisterPackageRequest(
     val mediaUrl: String? = null,
     val mediaType: String? = null,
     val eventDate: String? = null,
-    val eventTime: String? = null
+    val eventTime: String? = null,
+    val status: String = "pendiente"
 )
 data class RegisterPackageResponse(val message: String?, val packageItem: PackageItem?)
 data class DeliverPackageRequest(val receivedBy: String)
+data class UpdatePackageStatusRequest(val status: String)
 
 data class Visit(
     val id: Int,

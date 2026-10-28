@@ -224,6 +224,26 @@ interface ApiService {
         @Body body: DeliverPackageRequest
     ): Response<RegisterPackageResponse>
 
+    @PUT("api/packages/{id}/status")
+    suspend fun updatePackageStatus(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: UpdatePackageStatusRequest
+    ): Response<RegisterPackageResponse>
+
+    @DELETE("api/packages/{id}")
+    suspend fun deletePackage(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Query("force") force: Boolean = false
+    ): Response<GenericMessageResponse>
+
+    @PUT("api/packages/{id}/restore")
+    suspend fun restorePackage(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<RegisterPackageResponse>
+
     @GET("api/visits")
     suspend fun getVisits(
         @Header("Authorization") auth: String,
