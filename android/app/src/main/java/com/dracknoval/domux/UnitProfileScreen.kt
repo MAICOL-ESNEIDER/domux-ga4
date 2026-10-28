@@ -38,6 +38,7 @@ import com.dracknoval.domux.data.SaveResidentialUnitRequest
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.VehicleData
 import com.dracknoval.domux.data.mensajeDeError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val householdRelationships = listOf(
@@ -86,6 +87,7 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             pets.clear(); pets.addAll(result.pets)
             vehicles.clear(); vehicles.addAll(result.vehicles)
         } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
             message = "No se pudo cargar la ficha: ${exception.message}"
         } finally {
             loading = false
@@ -93,13 +95,13 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
     }
     LaunchedEffect(apartment) { load() }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("Ficha del apartamento $apartment", fontSize = 22.sp, color = MaterialTheme.colorScheme.primary)
+    DomuxScreenScaffold(title = "Ficha del apartamento $apartment", navController = navController) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+        DomuxFeedbackBanner(message) { message = "" }
         if (loading) androidx.compose.material3.CircularProgressIndicator()
-        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
         if (admin) {
             unit?.residents?.forEach { resident ->
                 Column {
@@ -267,6 +269,7 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                                 response.body()?.unit?.let { unit = it }
                             } else message = mensajeDeError(response.code(), response.errorBody()?.string())
                         } catch (exception: Exception) {
+                            if (exception is CancellationException) throw exception
                             message = "No se pudo guardar la ficha: ${exception.message}"
                         } finally {
                             busy = false
@@ -288,6 +291,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             }
         }
         Spacer(Modifier.height(4.dp))
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        }
     }
 }

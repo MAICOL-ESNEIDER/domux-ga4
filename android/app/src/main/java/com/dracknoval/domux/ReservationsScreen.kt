@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.SelectableDates
@@ -25,6 +27,7 @@ import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.UpdateReservationStatusRequest
 import com.dracknoval.domux.data.mensajeDeError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -135,6 +138,9 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var message by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var attemptedCreate by remember { mutableStateOf(false) }
+    var selectedTab by remember {
+        mutableIntStateOf(if (targetResidentId != null) 1 else 0)
+    }
     val scope = rememberCoroutineScope()
 
     suspend fun load() {
@@ -160,6 +166,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                 }
             }
         } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
             message = "No se pudieron cargar las reservas: ${exception.message}"
         } finally {
             loading = false
@@ -178,6 +185,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                 if (response.isSuccessful) availability = response.body()
                 else message = mensajeDeError(response.code(), response.errorBody()?.string())
             } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
                 message = "No se pudo consultar la disponibilidad: ${exception.message}"
             }
         } else availability = null
@@ -194,15 +202,21 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                 if (response.isSuccessful) blockedDates = response.body()?.blockedDates.orEmpty().toSet()
                 else message = mensajeDeError(response.code(), response.errorBody()?.string())
             } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
                 message = "No se pudo consultar el calendario: ${exception.message}"
             }
         } else blockedDates = emptySet()
     }
 
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text("Reservas de zonas comunes", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
-        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
-        if (Session.isAdmin || Session.isResident) {
+    DomuxScreenScaffold(title = "Reservas de zonas comunes", navController = navController) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding).padding(20.dp)) {
+        DomuxSectionTabs(
+            listOf("Reservas registradas", "Nueva reserva"),
+            selectedTab
+        ) { selectedTab = it }
+        DomuxFeedbackBanner(message) { message = "" }
+        if ((Session.isAdmin || Session.isResident) && selectedTab == 1) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(14.dp)) {
                     Text(if (Session.isAdmin) "Crear reserva para un residente" else "Nueva reserva", style = MaterialTheme.typography.titleMedium)
@@ -218,15 +232,10 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                         }
                     }
                     if (Session.isAdmin) {
-                        Text("Residente")
-                        residents.forEach { resident ->
-                            FilterChip(
-                                selected = selectedResident?.id == resident.id,
-                                onClick = { selectedResident = resident },
-                                label = { Text("${resident.name} · ${resident.apartment.orEmpty()}") },
-                                modifier = Modifier.padding(end = 5.dp)
-                            )
-                        }
+                        DomuxResidentSearchField(
+                            selectedResident = selectedResident,
+                            onSelectResident = { selectedResident = it }
+                        )
                     }
                     ReservationCalendarPicker(
                         date,
@@ -293,17 +302,21 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                                 requestMediaType
                                             )
                                         )
-                                        message = if (response.isSuccessful) {
+                                        if (response.isSuccessful) {
                                             date = ""; slot = ""
                                             requestMessage = ""
                                             requestMediaUrl = null
                                             requestMediaType = null
                                             requestMediaName = null
                                             attemptedCreate = false
+                                            message = "Reserva creada exitosamente."
+                                            selectedTab = 0
                                             load()
-                                            "Reserva creada."
-                                        } else mensajeDeError(response.code(), response.errorBody()?.string())
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        }
                                     } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
                                         message = "No se pudo crear la reserva: ${exception.message}"
                                     } finally {
                                         submitting = false
@@ -315,11 +328,12 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                     ) { Text(if (submitting) "Guardando..." else "Reservar") }
                 }
             }
+            }
         }
 
-        Text("Reservas registradas", style = MaterialTheme.typography.titleLarge)
-        if (loading) CircularProgressIndicator()
-        else LazyColumn(Modifier.weight(1f)) {
+        if (selectedTab == 0) {
+        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        LazyColumn(Modifier.weight(1f)) {
             items(reservations, key = { it.id }) { reservation ->
                 DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column(Modifier.padding(14.dp)) {
@@ -359,6 +373,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                                 else mensajeDeError(response.code(), response.errorBody()?.string())
                                                 load()
                                             } catch (exception: Exception) {
+                                                if (exception is CancellationException) throw exception
                                                 message = "No se pudo aprobar: ${exception.message}"
                                             }
                                         }
@@ -376,6 +391,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                                 else mensajeDeError(response.code(), response.errorBody()?.string())
                                                 load()
                                             } catch (exception: Exception) {
+                                                if (exception is CancellationException) throw exception
                                                 message = "No se pudo rechazar: ${exception.message}"
                                             }
                                         }
@@ -398,6 +414,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                             else mensajeDeError(response.code(), response.errorBody()?.string())
                                             load()
                                         } catch (exception: Exception) {
+                                            if (exception is CancellationException) throw exception
                                             message = "No se pudo cancelar la reserva: ${exception.message}"
                                         }
                                     }
@@ -443,6 +460,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                         else mensajeDeError(response.code(), response.errorBody()?.string())
                                         if (response.isSuccessful) load()
                                     } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
                                         message = "No se pudo enviar el mensaje: ${exception.message}"
                                     }
                                 }
@@ -462,6 +480,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                             else mensajeDeError(response.code(), response.errorBody()?.string())
                                             load()
                                         } catch (exception: Exception) {
+                                            if (exception is CancellationException) throw exception
                                             message = "No se pudo cancelar: ${exception.message}"
                                         }
                                     }
@@ -472,7 +491,8 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                 }
             }
         }
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        }
+    }
     }
 
     confirmation?.let { (prompt, action) ->

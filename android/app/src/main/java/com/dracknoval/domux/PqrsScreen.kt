@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import com.dracknoval.domux.data.ResidentSummary
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.mensajeDeError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val pqrsCategories = listOf("Petición", "Queja", "Reclamo", "Sugerencia", "Daño")
@@ -62,6 +64,9 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var mediaName by remember { mutableStateOf<String?>(null) }
     var selectedResident by remember { mutableStateOf<ResidentSummary?>(null) }
     var attemptedSubmit by remember { mutableStateOf(false) }
+    var selectedTab by remember {
+        mutableIntStateOf(if (targetResidentId != null) 1 else 0)
+    }
     val scope = rememberCoroutineScope()
 
     suspend fun load() {
@@ -90,6 +95,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                 }
             }
         } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
             message = "No se pudieron cargar las PQRS: ${exception.message}"
         } finally {
             loading = false
@@ -109,9 +115,14 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     val groupedItems = visibleItems.groupBy { it.category ?: "Petición" }.toSortedMap()
     val selectedVisibleCount = visibleItems.count { it.id in selectedIds }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
-        Text("Peticiones, quejas y reclamos", fontSize = 23.sp, color = MaterialTheme.colorScheme.primary)
-        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+    DomuxScreenScaffold(title = "PQRS", navController = navController) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 12.dp)) {
+        DomuxSectionTabs(
+            listOf("Solicitudes PQRS", "Nueva PQRS"),
+            selectedTab
+        ) { selectedTab = it }
+        DomuxFeedbackBanner(message) { message = "" }
+        if (selectedTab == 0) {
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
@@ -147,8 +158,10 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                 )
             }
         }
+        }
 
-        if (Session.isAdmin || Session.isResident) {
+        if ((Session.isAdmin || Session.isResident) && selectedTab == 1) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(12.dp)) {
                     Text(
@@ -156,13 +169,10 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                         style = MaterialTheme.typography.titleMedium
                     )
                     if (Session.isAdmin) {
-                        residents.forEach { resident ->
-                            FilterChip(
-                                selected = selectedResident?.id == resident.id,
-                                onClick = { selectedResident = resident },
-                                label = { Text("${resident.name} · ${resident.apartment.orEmpty()}") }
-                            )
-                        }
+                        DomuxResidentSearchField(
+                            selectedResident = selectedResident,
+                            onSelectResident = { selectedResident = it }
+                        )
                     }
                     OutlinedTextField(
                         subject, { subject = it }, label = { Text("Asunto *") },
@@ -229,12 +239,14 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                                         mediaType = null
                                         mediaName = null
                                         attemptedSubmit = false
-                                        message = "PQRS enviada."
+                                        message = "PQRS enviada exitosamente."
+                                        selectedTab = 0
                                         load()
                                     } else {
                                         message = mensajeDeError(response.code(), response.errorBody()?.string())
                                     }
                                 } catch (exception: Exception) {
+                                    if (exception is CancellationException) throw exception
                                     message = "No se pudo enviar la PQRS: ${exception.message}"
                                 } finally {
                                     sending = false
@@ -245,8 +257,10 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                     ) { Text(if (sending) "Enviando..." else "Enviar PQRS") }
                 }
             }
+            }
         }
 
+        if (selectedTab == 0) {
         if (Session.isAdmin && selectedVisibleCount > 0) {
             Button(
                 onClick = { batchDialog = true },
@@ -254,9 +268,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
             ) { Text("Responder seleccionadas ($selectedVisibleCount)") }
         }
 
-        if (loading) {
-            CircularProgressIndicator()
-        } else {
+        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             LazyColumn(Modifier.weight(1f)) {
                 groupedItems.forEach { (groupCategory, group) ->
                     item(key = "category-$groupCategory") {
@@ -322,9 +334,9 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                 if (visibleItems.isEmpty()) {
                     item { Text("No hay PQRS que coincidan con esos filtros.", Modifier.padding(16.dp)) }
                 }
-            }
         }
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        }
+    }
     }
 
     if (batchDialog) {
@@ -388,6 +400,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                                     message = mensajeDeError(response.code(), response.errorBody()?.string())
                                 }
                             } catch (exception: Exception) {
+                                if (exception is CancellationException) throw exception
                                 message = "No se pudieron responder las PQRS: ${exception.message}"
                             } finally {
                                 sending = false
@@ -530,6 +543,7 @@ private fun PqrsCard(
                                     )
                                     if (result.isSuccessful) onRefresh()
                                 } catch (exception: Exception) {
+                                    if (exception is CancellationException) throw exception
                                     onMessage("No se pudo actualizar la PQRS: ${exception.message}")
                                 } finally {
                                     busy = false
@@ -570,6 +584,7 @@ private fun PqrsCard(
                                     )
                                     if (result.isSuccessful) onRefresh()
                                 } catch (exception: Exception) {
+                                    if (exception is CancellationException) throw exception
                                     onMessage("No se pudo enviar el mensaje: ${exception.message}")
                                 } finally {
                                     busy = false
@@ -613,6 +628,7 @@ private fun PqrsCard(
                                         )
                                         if (result.isSuccessful) onRefresh()
                                     } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
                                         onMessage("No se pudo guardar la calificación: ${exception.message}")
                                     } finally {
                                         busy = false

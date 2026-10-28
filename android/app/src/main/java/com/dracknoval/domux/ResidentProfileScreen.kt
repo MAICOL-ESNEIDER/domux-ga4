@@ -33,6 +33,7 @@ import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.data.mensajeDeError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -63,6 +64,7 @@ fun ResidentProfileScreen(navController: NavController) {
             if (unitResponse.isSuccessful) unit = unitResponse.body()?.unit
             else message = mensajeDeError(unitResponse.code(), unitResponse.errorBody()?.string())
         } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
             message = "No se pudo cargar el perfil: ${exception.message}"
         } finally {
             loading = false
@@ -70,13 +72,14 @@ fun ResidentProfileScreen(navController: NavController) {
     }
     LaunchedEffect(Unit) { loadProfile() }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text("Mi perfil", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
-        if (loading) CircularProgressIndicator()
-        user?.let { profile ->
+    DomuxScreenScaffold(title = "Mi perfil", navController = navController) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            DomuxFeedbackBanner(message) { message = "" }
+            if (loading) CircularProgressIndicator()
+            user?.let { profile ->
             DomuxCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(profile.fullName ?: profile.name, style = MaterialTheme.typography.titleMedium)
@@ -113,6 +116,7 @@ fun ResidentProfileScreen(navController: NavController) {
                                 message = "Perfil actualizado."
                             } else message = mensajeDeError(response.code(), response.errorBody()?.string())
                         } catch (exception: Exception) {
+                            if (exception is CancellationException) throw exception
                             message = "No se pudo guardar el perfil: ${exception.message}"
                         } finally {
                             busy = false
@@ -131,8 +135,7 @@ fun ResidentProfileScreen(navController: NavController) {
                 Text("Crear PQRS para solicitar un cambio")
             }
         }
-        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
-        unit?.let { profile ->
+            unit?.let { profile ->
             Text("Información del hogar", style = MaterialTheme.typography.titleLarge)
             profile.residents.forEach { resident ->
                 Text("${resident.name} · ${resident.occupancyType ?: "residente"}")
@@ -157,7 +160,7 @@ fun ResidentProfileScreen(navController: NavController) {
                 Text("Vehículo: ${vehicle.type} ${vehicle.plate} · ${vehicle.makeModel} · ${vehicle.year}")
             }
         }
-        Spacer(Modifier.height(6.dp))
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+            Spacer(Modifier.height(6.dp))
+        }
     }
 }
