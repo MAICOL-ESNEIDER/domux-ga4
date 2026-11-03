@@ -14,8 +14,8 @@ Este documento reúne todas las decisiones del proyecto DOMUX con su motivo, su 
 | Programa | Tecnología en Análisis y Desarrollo de Software (ADSO), ficha 3223873 |
 | Equipo | Maicol Esneider Posada Callejas · Sebastián Lein Castro Grajales · Nicolás Muñoz Hernández |
 | Elaboró | Maicol Esneider Posada Callejas |
-| Revisó y aprobó | Sebastián Lein Castro Grajales y Nicolás Muñoz Hernández: aprobación de DEC-001 a DEC-070, informada el 3 de noviembre de 2026. Maicol Esneider Posada Callejas: DEC-071 a DEC-087. |
-| Versión | 1.4 · DEC-001 a DEC-070 aprobadas por el equipo; DEC-071 a DEC-087, por Maicol |
+| Revisó y aprobó | Sebastián Lein Castro Grajales y Nicolás Muñoz Hernández: aprobación de DEC-001 a DEC-070, informada el 3 de noviembre de 2026. Maicol Esneider Posada Callejas: DEC-071 a DEC-088. |
+| Versión | 1.5 · DEC-001 a DEC-070 aprobadas por el equipo; DEC-071 a DEC-088, por Maicol |
 | Fecha | 3 de noviembre de 2026 |
 | Código y tarea en Jira | ART-03 · [SCRUM-140](https://sebastiancastro4848.atlassian.net/browse/SCRUM-140) |
 | Archivo en el repositorio | `docs/adr/registro-decisiones.md`, con un archivo por cada ADR en `docs/adr/`, en [MAICOL-ESNEIDER/domux-ga4](https://github.com/MAICOL-ESNEIDER/domux-ga4) |
@@ -31,12 +31,13 @@ Este documento reúne todas las decisiones del proyecto DOMUX con su motivo, su 
 | 1.2 | 3 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-075 (el proyecto se identifica solo como DOMUX) y R-13. |
 | 1.3 | 3 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-076 a DEC-085 por los formatos oficiales del profesor y R-14. DEC-064 pasa a Reemplazada; DEC-078 y DEC-085 quedan como propuestas. Las tareas de documentación cambian de código (DEC-082). Cierra P-07 y abre P-11. |
 | 1.4 | 3 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-086 (más tareas para Nicolás) y DEC-087 (los documentos del profesor no se copian). DEC-078 y DEC-085 pasan a Aprobada. Cierra P-11. |
+| 1.5 | 3 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-088 (tareas para Sebastián). Corrige el código del Índice Maestro en DEC-065, DEC-082, DEC-083 y DEC-087: no tiene código propio, porque en el Índice Maestro oficial GOB-01 es la Arquitectura Documental del profesor. |
 
-Cada cambio posterior suma una fila (1.4, 1.5…).
+Cada cambio posterior suma una fila (1.5, 1.6…).
 
 ## 1. Introducción y propósito
 
-Este registro es la fuente única de las decisiones de DOMUX: qué se decidió, por qué, cuándo y qué cambia en el proyecto. Reúne 87 decisiones tomadas entre el 21 de octubre y el 3 de noviembre de 2026, más el historial de lo que se reemplazó.
+Este registro es la fuente única de las decisiones de DOMUX: qué se decidió, por qué, cuándo y qué cambia en el proyecto. Reúne 88 decisiones tomadas entre el 21 de octubre y el 3 de noviembre de 2026, más el historial de lo que se reemplazó.
 
 Sirve para cuatro cosas:
 
@@ -97,7 +98,7 @@ Cada decisión es una fila con siete campos. Los campos combinan lo que pide un 
 
 ## 4. Resumen
 
-Hay 87 decisiones: 86 aprobadas y 1 reemplazada (DEC-064).
+Hay 88 decisiones: 87 aprobadas y 1 reemplazada (DEC-064).
 
 | Categoría | Decisiones | Cuántas | Lo más importante |
 | --- | --- | --- | --- |
@@ -108,7 +109,7 @@ Hay 87 decisiones: 86 aprobadas y 1 reemplazada (DEC-064).
 | Tecnología y arquitectura | DEC-036 a DEC-045 | 10 | Flask, Kotlin y PostgreSQL con Flask-Migrate; pocas tecnologías; código limpio |
 | Seguridad y datos personales | DEC-046 a DEC-049 y DEC-074 | 5 | Leyes 1581 y 675, autorización de datos, seguridad básica y datos de visitantes por 12 meses |
 | Diseño de la interfaz | DEC-050 a DEC-053 | 4 | Se mantiene la paleta; pantallas claras y accesibles |
-| Gestión, Jira y GitHub | DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084 y DEC-086 | 15 | Sprint VR-1, reparto del trabajo, commits en español con la clave de Jira, roles del equipo y códigos oficiales en Jira |
+| Gestión, Jira y GitHub | DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086 y DEC-088 | 16 | Sprint VR-1, reparto del trabajo, commits en español con la clave de Jira, roles del equipo y códigos oficiales en Jira |
 | Documentación | DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DEC-083, DEC-085 y DEC-087 | 16 | Formatos del profesor como guía oficial, registro en docs/adr, declaración formal de IA, y portadas con DOMUX y la fila del instructor en blanco |
 
 ## 5. Decisiones de alcance y versiones
@@ -218,7 +219,7 @@ Estas 4 decisiones (DEC-050 a DEC-053) guían el rediseño de las pantallas.
 
 ## 12. Decisiones de gestión del proyecto, Jira y GitHub
 
-Estas 15 decisiones (DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084 y DEC-086) ordenan el trabajo del equipo en Jira y GitHub.
+Estas 16 decisiones (DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086 y DEC-088) ordenan el trabajo del equipo en Jira y GitHub.
 
 | ID | Decisión | Por qué | Efecto | Fecha (2026) | Estado | En Jira o fuente |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -233,10 +234,11 @@ Estas 15 decisiones (DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084 y DEC-086) ord
 | DEC-062 | No se reescribe el historial de commits. Desde ahora, los mensajes de commit van en español y con la clave de Jira, por ejemplo `feat(SCRUM-151): registrar cuartos útiles`. | Reescribir el historial borra evidencia; la clave conecta cada commit con su tarea. | Una tabla en la documentación explicará los commits viejos. | 2 nov | Aprobada | TT-015 (SCRUM-139) |
 | DEC-063 | Se unen las ramas: feature/pqrs-chat-usuarios-reservas-porteria y fix/session-bearer pasan a develop y luego a main. | develop está 12 commits atrás de la rama más avanzada y hay trabajo sin unir. | Tarea en el Sprint VR-1. | 2 nov | Aprobada | TT-011 (SCRUM-204) |
 | DEC-064 | El uso de herramientas de IA se menciona de pasada en la documentación, como apoyo para agilizar el trabajo. | Es parte de cómo trabaja el equipo, pero no es el tema del proyecto. | Iba a nombrarse en Gestión del proyecto. Reemplazada por DEC-079: declaración formal de uso de IA. | 30 oct | Reemplazada | GES-01 (SCRUM-214) |
-| DEC-078 | Roles del equipo, según el trabajo de cada uno: **Maicol**, líder del proyecto, Scrum Master y líder técnico; **Sebastián**, Product Owner, analista y responsable de UX/UI; **Nicolás**, responsable de calidad y apoyo en UX/UI. Los tres son desarrolladores. Como no hay un cliente real, el Product Owner lo representa. | Maicol creó el repositorio y su estructura, tiene más commits (32), hizo el despliegue en Render y las 45 pruebas del servidor, reorganizó Jira y lleva la documentación. Sebastián fue Product Owner en los documentos de octubre, escribió el alcance y el backlog, administra Jira y creó el sistema de diseño de la app. Nicolás hizo los primeros diagramas (que después Sebastián actualizó) y los wireframes, y tiene a cargo el plan de pruebas, las pruebas del APK y los manuales. | Los roles van en las portadas, en las tablas de aprobación y en la matriz de responsables de Gestión (GES-01). Maicol los aprobó el 3 de noviembre y pidió más tareas para Nicolás (DEC-086). | 3 nov | Aprobada | Maicol pidió asignarlos según el trabajo de cada uno |
-| DEC-082 | Los títulos de las tareas de documentación en Jira usan el código oficial: el del Índice Maestro para los documentos y el del catálogo de la Arquitectura Documental para los artefactos del repositorio. Las tareas de documentos anteriores, ya terminadas, pasan de DOC-01 a DOC-06 a **HIS-01 a HIS-06**. El código DOC deja de usarse. | "DOC-07" significaba cosas distintas en Jira, en la Arquitectura Documental y en el Estándar técnico. | Ajusta DEC-058. Equivalencias: DOC-07 → ART-03, DOC-08 → INI-01, DOC-09 → GES-01, DOC-10 → REQ-01, DOC-11 → REQ-02, DOC-12 → TRZ-01, DOC-13 → ARQ-01, DOC-14 → DSN-01, DOC-15 → GOB-01, DOC-16 → CAL-01, DOC-17 → MAN-02, DOC-18 → MAN-01, DOC-19 → CIE-01, DOC-20 → EVA-02 y DOC-21 → REP-01. | 3 nov | Aprobada | Decisión de Maicol |
+| DEC-078 | Roles del equipo, según el trabajo de cada uno: **Maicol**, líder del proyecto, Scrum Master y líder técnico; **Sebastián**, Product Owner, analista y responsable de UX/UI; **Nicolás**, responsable de calidad y apoyo en UX/UI. Los tres son desarrolladores. Como no hay un cliente real, el Product Owner lo representa. | Maicol creó el repositorio y su estructura, tiene más commits (32), hizo el despliegue en Render y las 45 pruebas del servidor, reorganizó Jira y lleva la documentación. Sebastián fue Product Owner en los documentos de octubre, escribió el alcance y el backlog, administra Jira y creó el sistema de diseño de la app. Nicolás hizo los primeros diagramas (que después Sebastián actualizó) y los wireframes, y tiene a cargo el plan de pruebas, las pruebas del APK y los manuales. | Los roles van en las portadas, en las tablas de aprobación y en la matriz de responsables de Gestión (GES-01). Maicol los aprobó el 3 de noviembre y pidió más tareas para Nicolás (DEC-086) y para Sebastián (DEC-088). | 3 nov | Aprobada | Maicol pidió asignarlos según el trabajo de cada uno |
+| DEC-082 | Los títulos de las tareas de documentación en Jira usan el código oficial: el del Índice Maestro para los documentos y el del catálogo de la Arquitectura Documental para los artefactos del repositorio. Las tareas de documentos anteriores, ya terminadas, pasan de DOC-01 a DOC-06 a **HIS-01 a HIS-06**. El código DOC deja de usarse. | "DOC-07" significaba cosas distintas en Jira, en la Arquitectura Documental y en el Estándar técnico. | Ajusta DEC-058. Equivalencias: DOC-07 → ART-03, DOC-08 → INI-01, DOC-09 → GES-01, DOC-10 → REQ-01, DOC-11 → REQ-02, DOC-12 → TRZ-01, DOC-13 → ARQ-01, DOC-14 → DSN-01, DOC-15 → Índice Maestro (sin código propio), DOC-16 → CAL-01, DOC-17 → MAN-02, DOC-18 → MAN-01, DOC-19 → CIE-01, DOC-20 → EVA-02 y DOC-21 → REP-01. | 3 nov | Aprobada | Decisión de Maicol |
 | DEC-084 | Orden de trabajo: primero se termina la documentación; después se completa el desarrollo de la app, la web y el servidor para que coincidan con las decisiones y los documentos; y al final se prepara un plan de estudio para sustentar el proyecto y el código. La excepción es la seguridad urgente: las contraseñas de prueba publicadas en el README se cambian ya. | Lo pidió Maicol. El Estándar exige que cada integrante explique y modifique el código en vivo (SUS-05), y las contraseñas publicadas son causal de suspensión de la evaluación (CRT-02). | Al terminar el desarrollo se revisa que cada documento coincida con el producto (causal CRT-08). Nuevas tareas en Jira para lo que falta del Estándar y para el plan de estudio. | 3 nov | Aprobada | Decisión de Maicol |
 | DEC-086 | Nicolás suma tareas para que su aporte sea mayor y se vea en GitHub: la matriz de trazabilidad (TRZ-01), los diagramas de arquitectura y de secuencia de ARQ-01, las pruebas automáticas de lo nuevo (TT-012) y el pipeline de integración continua (TT-021). Conserva el plan de pruebas, los manuales, el informe de cierre, la lista de chequeo, la guía del repositorio y el APK. | Maicol pidió que Nicolás no siga con lo mínimo. El Índice Maestro pone la matriz de trazabilidad a cargo del responsable de calidad, Nicolás hizo los primeros diagramas del proyecto, y el Estándar exige que cada integrante demuestre su aporte con commits (GIT-05 y SUS-02). | Ajusta DEC-056. Las tareas se reasignan en Jira y se crea la tarea de diagramas de ARQ-01. | 3 nov | Aprobada | Decisión de Maicol |
+| DEC-088 | Sebastián suma tareas según su rol de Product Owner, analista y responsable de UX/UI (DEC-078): el Diseño UX/UI y Sistema de Diseño (DSN-01); el rediseño de pantallas (HU-085), la accesibilidad básica (HU-086) y la identidad visual de la página web (HU-087); el código limpio de la app Android (TT-014); y los estados y las columnas del tablero de Jira (TT-025). Como Product Owner, aprueba el Alcance (REQ-01) y el Backlog (REQ-02). | Maicol pidió asignarle tareas, como a Nicolás. En el Índice Maestro, DSN-01 está a cargo del diseñador UX/UI y el Alcance lo aprueba el usuario representante, papel que cumple el Product Owner. Sebastián hizo buena parte de la navegación, las pantallas y el tema oscuro de la app, y administra el sitio de Jira (DEC-060). El Estándar exige que cada integrante demuestre su aporte con commits (GIT-05 y SUS-02). | Ajusta DEC-056. En Jira, DSN-01, HU-085, HU-086, HU-087 y TT-014 pasan a Sebastián, y se crea TT-025 (SCRUM-236) para resolver P-05. GES-01 lo refleja en su matriz RACI y la Formulación pasa a la versión 1.1. | 3 nov | Aprobada | Pedida por Maicol; las tareas las propuso Claude según el rol |
 
 ## 13. Decisiones de documentación
 
@@ -244,7 +246,7 @@ Estas 16 decisiones (DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DE
 
 | ID | Decisión | Por qué | Efecto | Fecha (2026) | Estado | En Jira o fuente |
 | --- | --- | --- | --- | --- | --- | --- |
-| DEC-065 | Los documentos se hacen uno por uno, empezando por este registro. Cada uno se revisa y se aprueba antes de pasar al siguiente. | Todos los demás documentos citan estas decisiones. | El orden queda en el índice maestro (GOB-01) y en Jira. | 21–27 oct | Aprobada | ART-03 a GOB-01 (antes DOC-07 a DOC-15) |
+| DEC-065 | Los documentos se hacen uno por uno, empezando por este registro. Cada uno se revisa y se aprueba antes de pasar al siguiente. | Todos los demás documentos citan estas decisiones. | El orden queda en el Índice Maestro y en Jira. | 21–27 oct | Aprobada | ART-03 a DSN-01 y el Índice Maestro (antes DOC-07 a DOC-15) |
 | DEC-066 | Los documentos se escriben en Claude Docs, exportables a Word, y se ajustan a plantillas del SENA si el profesor las entrega. | Se pueden editar, comentar y exportar. | Cada documento se exporta como .docx a su carpeta del repositorio. | 27–29 oct | Aprobada | Repositorio, carpeta Documentacion\_Proyecto\_ADSO |
 | DEC-067 | No se ponen nombres de instructores en la documentación ni en el desarrollo. | No es necesario para el proyecto. | Las portadas solo llevan a los aprendices; la fila del instructor queda con el nombre en blanco (DEC-077). | 21–27 oct | Aprobada | Encuesta, pregunta A6 |
 | DEC-068 | La documentación describe la versión reducida y deja anotado lo que es de la completa. | La entrega del 1 de diciembre evalúa la reducida. | Cada documento marca lo que es de la completa. | 27–29 oct | Aprobada | — |
@@ -257,9 +259,9 @@ Estas 16 decisiones (DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DE
 | DEC-079 | El uso de IA se declara formalmente, con los campos de la Guía del repositorio: herramienta, uso realizado, partes afectadas, validación humana, limitaciones y responsables. La declaración se mantiene al día durante el proyecto, va en el Informe de cierre y la firman los tres integrantes. | El Estándar técnico la marca como requisito crítico (DOC-10 del Estándar) y la Guía la pide firmada en el paquete final. Declarar la IA no resta; lo que resta es no poder explicar el código (SUS-05). | Reemplaza DEC-064 (R-14). Nueva tarea en Jira. | 3 nov | Aprobada | Decisión de Maicol |
 | DEC-080 | La Formulación (INI-01) lleva solo lo que pide la Arquitectura Documental: el problema con sus causas, efectos y población afectada; la justificación; los objetivos medibles; los beneficios e indicadores de éxito; el alcance preliminar y los entregables; el equipo, los recursos, los hitos, las restricciones, los supuestos y los riesgos iniciales; y la aprobación del inicio. Los interesados, el plan de comunicaciones y la hoja de ruta pasan a Gestión de Interesados y del Proyecto (GES-01). | Cada información debe tener un solo documento fuente (regla de no duplicación de la Arquitectura Documental). | La Formulación pasa a la versión 0.2 y usa los códigos oficiales: PRO (problema), OBJ (objetivos), RSK (riesgos) y ENTG (entregables). | 3 nov | Aprobada | Decisión de Maicol |
 | DEC-081 | Este registro se publica en el repositorio, en `docs/adr` y en Markdown, como bitácora de decisiones (artefacto ART-03 de la Arquitectura Documental). Las 10 decisiones de tecnología se escriben además como ADR, con la plantilla de la Guía: contexto, opciones, decisión, consecuencias y trazabilidad. Las demás quedan aquí como historial y su contenido se escribe en su documento oficial: reglas, alcance, funciones y roles en Alcance y Requisitos (REQ-01); gestión en GES-01; diseño en DSN-01. | La Arquitectura Documental pone las decisiones en `docs/adr/*.md` y su índice en Arquitectura, Datos y Diseño Técnico (ARQ-01). | El registro ya no va como anexo de Gestión. En Jira, la tarea pasa a llamarse ART-03. | 3 nov | Aprobada | Decisión de Maicol |
-| DEC-083 | El equipo no escribe los documentos del profesor: la Arquitectura Documental, la Rúbrica Integral y la Guía de Sustentación. Sí llena el Índice Maestro, la Lista de Chequeo Final y la Guía de Estructura y Evidencias del Repositorio. | En el Índice Maestro, el responsable de esos tres documentos es el instructor. | Cambian las tareas GOB-01 y EVA-02. Cómo se ubican en el repositorio queda pendiente (P-11). | 3 nov | Aprobada | Decisión de Maicol |
+| DEC-083 | El equipo no escribe los documentos del profesor: la Arquitectura Documental, la Rúbrica Integral y la Guía de Sustentación. Sí llena el Índice Maestro, la Lista de Chequeo Final y la Guía de Estructura y Evidencias del Repositorio. | En el Índice Maestro, el responsable de esos tres documentos es el instructor. | Cambian las tareas del Índice Maestro y EVA-02. Cómo se ubican en el repositorio queda pendiente (P-11). | 3 nov | Aprobada | Decisión de Maicol |
 | DEC-085 | Las imágenes 2 y 3 del profesor (estructura de un proyecto en Node.js y React) no cambian la tecnología: no se usan Node.js ni React y DOMUX sigue con Flask y Kotlin (DEC-040). Solo se toma su forma de ordenar el código: separar configuración, rutas, lógica de negocio, modelos y pruebas, y no subir el archivo `.env`. La carpeta `docs` del repositorio sigue la Guía de Estructura y Evidencias (adr, architecture, api, data, security, testing, operations y evidence), y los documentos Word siguen en `Documentacion_Proyecto_ADSO`, como en la imagen 1. | DOMUX usa Flask y Kotlin, no Node.js ni React, y la Guía es el formato escrito del SENA. | El orden del código del servidor se hace en TT-013. Las carpetas de `docs` se crean a medida que se necesiten. | 3 nov | Aprobada | Propuesta de Claude, aprobada por Maicol |
-| DEC-087 | Los documentos del profesor (Arquitectura Documental, Rúbrica Integral y Guía de Sustentación) no se copian en el repositorio. El Índice Maestro dice dónde están, y se quitan de la carpeta los tres archivos vacíos que los representaban. | La Arquitectura Documental dice que el marco institucional no se copia en cada proyecto, y el PDF trae el nombre del instructor (DEC-067). | Resuelve P-11. Cambia la tarea GOB-01. | 3 nov | Aprobada | Decisión de Maicol |
+| DEC-087 | Los documentos del profesor (Arquitectura Documental, Rúbrica Integral y Guía de Sustentación) no se copian en el repositorio. El Índice Maestro dice dónde están, y se quitan de la carpeta los tres archivos vacíos que los representaban. | La Arquitectura Documental dice que el marco institucional no se copia en cada proyecto, y el PDF trae el nombre del instructor (DEC-067). | Resuelve P-11. Cambia la tarea del Índice Maestro. | 3 nov | Aprobada | Decisión de Maicol |
 
 ## 14. Decisiones reemplazadas o descartadas (historial)
 
@@ -288,12 +290,12 @@ Aquí quedan las ideas que el proyecto tuvo antes y que ya no rigen. No se borra
 
 ## 15. Decisiones pendientes y preguntas abiertas
 
-Estas preguntas siguen sin respuesta. Cuando se respondan, cada una se convierte en una decisión nueva (de DEC-088 en adelante) o completa una que ya existe.
+Estas preguntas siguen sin respuesta. Cuando se respondan, cada una se convierte en una decisión nueva (de DEC-089 en adelante) o completa una que ya existe.
 
 | # | Pendiente | Por qué importa | Quién responde | Afecta a |
 | --- | --- | --- | --- | --- |
 | P-04 | Conjunto real para el piloto, después de la entrega del 1 de diciembre. | Las pruebas de la reducida usan una unidad inventada (DEC-072); el piloto con usuarios reales sigue pendiente. | Maicol | DEC-007 y DEC-072 |
-| P-05 | Orden de las columnas del tablero de Jira. | Las tareas nuevas aparecen en "En curso" en lugar de "Tareas por hacer". | Quien administre el proyecto en Jira | Tablero del Sprint VR-1 |
+| P-05 | Orden de las columnas del tablero de Jira. | Las tareas nuevas aparecen en "En curso" en lugar de "Tareas por hacer". | Sebastián, en TT-025 (SCRUM-236) | Tablero del Sprint VR-1 |
 | P-06 | Evidencia de la tarea "Implementar Neon" (SCRUM-131). | Está finalizada en Jira, pero el repositorio no usa Neon: tiene SQLite en local y una base de datos de Render. | El equipo | DEC-039 y R-03 |
 | P-10 | Fechas exactas de las decisiones que vienen del Documento maestro y de la encuesta. | Hoy aparecen como rangos (por ejemplo, 21–27 oct). | Maicol | Columna Fecha de las secciones 5 a 13 |
 
@@ -320,7 +322,7 @@ Mientras una decisión esté en estado Propuesta, no se cambia nada en Jira, en 
 
 **Reglas**
 
-- Los números DEC no se reutilizan ni se cambian. La siguiente decisión será la **DEC-088**.
+- Los números DEC no se reutilizan ni se cambian. La siguiente decisión será la **DEC-089**.
 - Cada cambio al registro suma una fila en el control de versiones, al inicio del documento.
 - Si la decisión cambia el alcance, también se ajusta la versión de las historias en Jira (Reducida 1.0, Completa 2.0 o Futura).
 
