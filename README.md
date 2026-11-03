@@ -45,14 +45,14 @@ Cada operación está protegida en **dos niveles**:
 
 ```text
 ├── Documentacion_Proyecto_ADSO/     → Gobierno y artefactos documentales SENA ADSO
-│   ├── 00_Gobierno_Documental/      → Arquitectura documental e Índice Maestro
+│   ├── 00_Gobierno_Documental/      → Índice Maestro (la Arquitectura Documental es del profesor y no se copia)
 │   ├── 01_Inicio_y_Planeacion/      → Formulación, constitución y gestión del proyecto
 │   ├── 02_Requisitos/               → Alcance, Backlog de HU, Casos de Uso y Trazabilidad
 │   ├── 03_Diseno/                   → Diseño UX/UI, Arquitectura de Datos y Diseño Técnico
 │   ├── 04_Calidad/                  → Plan de Calidad, Pruebas y Aceptación
 │   ├── 05_Manuales/                 → Manual Técnico/Operación y Manual de Usuario
 │   ├── 06_Cierre/                   → Informe de Cierre y Entrega
-│   ├── 07_Evaluacion/               → Rúbrica Integral, Lista de Chequeo y Sustentación
+│   ├── 07_Evaluacion/               → Lista de Chequeo Final (la Rúbrica y la Guía de Sustentación son del profesor)
 │   └── 08_Repositorio/              → Guía de Estructura y Evidencias
 ├── android/                         → Proyecto nativo de Android Studio (Kotlin / Compose)
 │   └── app/src/main/java/com/dracknoval/domux/
@@ -88,14 +88,8 @@ pip install -r requirements.txt
 python app.py
 ```
 
-El servidor quedará escuchando en `http://localhost:5000/` (accesible desde el emulador Android mediante `http://10.0.2.2:5000/`). En su primer arranque crea automáticamente la base de datos `domux.db`, ejecuta las migraciones de esquema y siembra los siguientes usuarios de prueba:
+El servidor quedará escuchando en `http://localhost:5000/` (accesible desde el emulador Android mediante `http://10.0.2.2:5000/`). En su primer arranque crea automáticamente la base de datos `domux.db`, ejecuta las migraciones de esquema y crea usuarios de prueba. Sus contraseñas no se publican en el repositorio (causal CRT-02 del Estándar de Requisitos Técnicos Mínimos del SENA); pídelas al equipo.
 
-| Rol | Correo | Contraseña | Unidad Asignada |
-| :--- | :--- | :--- | :--- |
-| Administrador | `admin@domux.com` | `Admin123*` | Administración |
-| Guardia | `guardia@domux.com` | `Guardia123*` | Portería Principal |
-| Residente | `maria@domux.com` | `Residente123*` | Torre 1 Apto 101 |
-| Residente | `carlos@domux.com` | `Residente123*` | Torre 2 Apto 202 |
 
 ### Ejecutar la Suite de Pruebas del Backend
 
