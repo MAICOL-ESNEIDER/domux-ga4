@@ -15,8 +15,8 @@ Este documento reúne todas las decisiones del proyecto DOMUX con su motivo, su 
 | Instructor | Richard Alexander Betancur Sierra (DEC-095) |
 | Equipo | Maicol Esneider Posada Callejas · Sebastián Lein Castro Grajales · Nicolás Muñoz Hernández |
 | Elaboró | Maicol Esneider Posada Callejas |
-| Revisó y aprobó | Sebastián Lein Castro Grajales y Nicolás Muñoz Hernández: aprobación de DEC-001 a DEC-070, informada el 3 de noviembre de 2026. Maicol Esneider Posada Callejas: DEC-071 a DEC-096. |
-| Versión | 1.8 · DEC-001 a DEC-070 aprobadas por el equipo; DEC-071 a DEC-096, por Maicol (DEC-091 es una propuesta) |
+| Revisó y aprobó | Sebastián Lein Castro Grajales y Nicolás Muñoz Hernández: aprobación de DEC-001 a DEC-070, informada el 3 de noviembre de 2026. Maicol Esneider Posada Callejas: DEC-071 a DEC-099. |
+| Versión | 1.9 · DEC-001 a DEC-070 aprobadas por el equipo; DEC-071 a DEC-099, por Maicol (DEC-091 es una propuesta) |
 | Fecha | 4 de noviembre de 2026 |
 | Código y tarea en Jira | ART-03 · [SCRUM-140](https://sebastiancastro4848.atlassian.net/browse/SCRUM-140) |
 | Archivo en el repositorio | `docs/adr/registro-decisiones.md`, con un archivo por cada ADR en `docs/adr/`, en [MAICOL-ESNEIDER/domux-ga4](https://github.com/MAICOL-ESNEIDER/domux-ga4) |
@@ -36,12 +36,13 @@ Este documento reúne todas las decisiones del proyecto DOMUX con su motivo, su 
 | 1.6 | 4 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-089: los documentos se hacen sobre las plantillas Word del profesor, que llegaron completas el 4 de noviembre. DEC-066 pasa a Reemplazada (R-15). |
 | 1.7 | 4 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-090 a DEC-094: nada se borra y los datos viejos pasan a un archivo JSON comprimido (DEC-090), anonimización a los 10 años (DEC-091, propuesta), bloqueo de 15 minutos (DEC-092), semáforo de PQRS de 15 días hábiles (DEC-093) y Jira al final (DEC-094). DEC-074 pasa a Reemplazada (R-16). Agrega la investigación del 4 de noviembre. |
 | 1.8 | 4 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-095 (los documentos llevan el nombre del instructor actual) y DEC-096 (toda la documentación queda a nombre de Maicol). DEC-067 y DEC-077 pasan a Reemplazada (R-17 y R-18). DEC-056, DEC-086 y DEC-088 quedan ajustadas por DEC-096. |
+| 1.9 | 4 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-097 (la web de administración usa la opción A: una barra lateral fija, como el menú de la app), DEC-098 (la web incluye la consulta de paquetería y visitas) y DEC-099 (HU-085 queda finalizada a nombre de Sebastián). Agrega la investigación sobre la distribución de la web. |
 
-Cada cambio posterior suma una fila (1.9, 1.10…).
+Cada cambio posterior suma una fila (1.10, 1.11…).
 
 ## 1. Introducción y propósito
 
-Este registro es la fuente única de las decisiones de DOMUX: qué se decidió, por qué, cuándo y qué cambia en el proyecto. Reúne 96 decisiones tomadas entre el 21 de octubre y el 4 de noviembre de 2026, más el historial de lo que se reemplazó.
+Este registro es la fuente única de las decisiones de DOMUX: qué se decidió, por qué, cuándo y qué cambia en el proyecto. Reúne 99 decisiones tomadas entre el 21 de octubre y el 4 de noviembre de 2026, más el historial de lo que se reemplazó.
 
 Sirve para cuatro cosas:
 
@@ -66,7 +67,7 @@ El registro cubre las decisiones del proyecto actual (repositorio domux-ga4, ini
 | Revisión del backlog y reorganización de Jira | 30 de octubre a 2 de noviembre de 2026 | Numeración, responsables, Sprint VR-1 y código limpio |
 | Revisión del repositorio | 2 de noviembre de 2026 | Ramas, commits y estructura de la documentación |
 | Respuestas del equipo e investigación de políticas de datos de conjuntos | 3 de noviembre de 2026 | Aprobación, centro de formación, unidad de prueba, parqueo de visitantes y conservación de sus datos |
-| Indicaciones de Maicol e investigación de otros conjuntos | 4 de noviembre de 2026 | Plantillas Word, conservación y archivo de los datos, bloqueo, semáforo de PQRS, orden con Jira, instructor y responsable de la documentación |
+| Indicaciones de Maicol e investigación de otros conjuntos | 4 de noviembre de 2026 | Plantillas Word, conservación y archivo de los datos, bloqueo, semáforo de PQRS, orden con Jira, instructor, responsable de la documentación, distribución de la web y tareas de diseño de Sebastián |
 
 **Quién decide.** Maicol Esneider Posada Callejas, como responsable del desarrollo y de la documentación en esta etapa, toma las decisiones de este registro. Sebastián Lein Castro Grajales y Nicolás Muñoz Hernández aprobaron DEC-001 a DEC-070 (versión 1.0). El instructor que revisa el proyecto, Richard Alexander Betancur Sierra, da recomendaciones cada semana, y las que cambien algo entran aquí como decisiones nuevas.
 
@@ -103,18 +104,18 @@ Cada decisión es una fila con siete campos. Los campos combinan lo que pide un 
 
 ## 4. Resumen
 
-Hay 96 decisiones: 90 aprobadas, 1 propuesta (DEC-091) y 5 reemplazadas (DEC-064, DEC-066, DEC-067, DEC-074 y DEC-077).
+Hay 99 decisiones: 93 aprobadas, 1 propuesta (DEC-091) y 5 reemplazadas (DEC-064, DEC-066, DEC-067, DEC-074 y DEC-077).
 
 | Categoría | Decisiones | Cuántas | Lo más importante |
 | --- | --- | --- | --- |
 | Alcance y versiones | DEC-001 a DEC-010 y DEC-072 | 11 | Versión reducida el 1 de diciembre en local, una sola unidad, exclusiones y pruebas con una unidad inventada |
-| Funciones de la reducida | DEC-011 a DEC-017 | 7 | Portería vehicular, estructura de la unidad, finanzas a la completa |
+| Funciones de la reducida | DEC-011 a DEC-017 y DEC-098 | 8 | Portería vehicular, estructura de la unidad, finanzas a la completa y consulta de la portería en la web |
 | Roles y permisos | DEC-018 a DEC-024 | 7 | 3 roles en la reducida y 11 en la completa; web solo para administración |
 | Reglas de negocio | DEC-025 a DEC-035, DEC-073, DEC-092 y DEC-093 | 14 | Contraseñas, bloqueo de 15 minutos tras 5 intentos, residentes que se van, reglas configurables, 3 días de parqueo para visitantes y semáforo de PQRS de 15 días hábiles |
 | Tecnología y arquitectura | DEC-036 a DEC-045 | 10 | Flask, Kotlin y PostgreSQL con Flask-Migrate; pocas tecnologías; código limpio |
 | Seguridad y datos personales | DEC-046 a DEC-049, DEC-074, DEC-090 y DEC-091 | 7 | Leyes 1581 y 675, autorización de datos, seguridad básica, nada se borra y archivo JSON comprimido de los datos viejos |
-| Diseño de la interfaz | DEC-050 a DEC-053 | 4 | Se mantiene la paleta; pantallas claras y accesibles |
-| Gestión, Jira y GitHub | DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086, DEC-088, DEC-094 y DEC-096 | 18 | Sprint VR-1, reparto del trabajo, commits en español con la clave de Jira, roles del equipo, códigos oficiales en Jira, Jira al final y toda la documentación a nombre de Maicol |
+| Diseño de la interfaz | DEC-050 a DEC-053 y DEC-097 | 5 | Se mantiene la paleta; pantallas claras y accesibles; web con barra lateral, como el menú de la app |
+| Gestión, Jira y GitHub | DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086, DEC-088, DEC-094, DEC-096 y DEC-099 | 19 | Sprint VR-1, reparto del trabajo, commits en español con la clave de Jira, roles del equipo, códigos oficiales en Jira, Jira al final, toda la documentación a nombre de Maicol y el rediseño de Sebastián finalizado |
 | Documentación | DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DEC-083, DEC-085, DEC-087, DEC-089 y DEC-095 | 18 | Formatos y plantillas Word del profesor como guía oficial, registro en docs/adr, declaración formal de IA, y portadas con DOMUX y el nombre del instructor actual |
 
 ## 5. Decisiones de alcance y versiones
@@ -137,7 +138,7 @@ Estas 11 decisiones (DEC-001 a DEC-010 y DEC-072) fijan qué se entrega el 1 de 
 
 ## 6. Decisiones sobre las funciones de la versión reducida
 
-Estas 7 decisiones (DEC-011 a DEC-017) definen qué hace la versión reducida en cada módulo.
+Estas 8 decisiones (DEC-011 a DEC-017 y DEC-098) definen qué hace la versión reducida en cada módulo.
 
 | ID | Decisión | Por qué | Efecto | Fecha (2026) | Estado | En Jira o fuente |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -148,6 +149,7 @@ Estas 7 decisiones (DEC-011 a DEC-017) definen qué hace la versión reducida en
 | DEC-015 | En la ficha del hogar se conservan integrantes, mascotas, vehículos, parqueadero y cuarto útil. Se quita el plan funerario. En mascotas se registra si tienen la vacunación y la desparasitación al día, con la fecha de la última. | El plan funerario no aporta a la operación del conjunto; la vacunación sí la exigen las normas de convivencia. | Ajuste al modelo de datos de mascotas en el Sprint VR-1. | 30 oct | Aprobada | HU-020, HU-021 |
 | DEC-016 | La reducida incluye la estructura básica de la unidad: torres, apartamentos, parqueaderos de residentes y visitantes, cuartos útiles con código y la vinculación de cada residente con su apartamento y tipo de ocupación. | Sin esta estructura no se pueden asignar parqueaderos, paquetes ni visitas a un apartamento real. | Se reemplaza el campo de texto "apartamento" por registros de verdad. | 27–30 oct | Aprobada | HU-013 a HU-018, HU-076 |
 | DEC-017 | Los comunicados tienen categoría (mantenimiento, urgente, asamblea, seguridad o zonas comunes) y el residente ve cuáles no ha leído. | Permite encontrar y priorizar los comunicados. | Dos historias en el Sprint VR-1: HU-058 es nueva y HU-059 reutiliza una historia vieja de Jira. | 2 nov | Aprobada | HU-058, HU-059 |
+| DEC-098 | La página web incluye **Paquetería y visitas en modo de consulta**: el administrador busca y ve el historial de paquetes, visitas y vehículos visitantes, sin registrar ni cambiar nada desde la web. El registro sigue en la app de portería. | Sirve para atender reclamos, por ejemplo cuando alguien dice que se perdió un paquete (DEC-090), y la app ya tiene esa sección en el menú del administrador (DEC-097). | Nueva historia HU-088 en EP-10 (prioridad SHOULD); en el Alcance será RF-088, con el mismo número de su historia. La historia se crea en Jira al final (DEC-094) y entonces el Alcance pasa a la versión 3.1. | 4 nov | Aprobada | Decisión de Maicol |
 
 ## 7. Decisiones de roles y permisos
 
@@ -217,7 +219,7 @@ Estas 7 decisiones (DEC-046 a DEC-049, DEC-074, DEC-090 y DEC-091) protegen los 
 
 ## 11. Decisiones de diseño de la interfaz
 
-Estas 4 decisiones (DEC-050 a DEC-053) guían el rediseño de las pantallas.
+Estas 5 decisiones (DEC-050 a DEC-053 y DEC-097) guían el rediseño de las pantallas y la distribución de la web.
 
 | ID | Decisión | Por qué | Efecto | Fecha (2026) | Estado | En Jira o fuente |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -225,10 +227,11 @@ Estas 4 decisiones (DEC-050 a DEC-053) guían el rediseño de las pantallas.
 | DEC-051 | Hay un menú siempre visible y cambiar de módulo toma dos toques: el menú y el destino. | Facilita el uso a cualquier residente. | Ya hay menú lateral por rol. | 27 oct | Aprobada | HU-084 (SCRUM-191) |
 | DEC-052 | Accesibilidad básica: botones grandes, buen contraste y textos para el lector de pantalla. | Hay residentes mayores o con dificultades visuales. | Historia en el Sprint VR-1. | 2 nov | Aprobada | HU-086 (SCRUM-193) |
 | DEC-053 | La página web tiene la misma identidad visual que la app. | El usuario reconoce el producto en cualquier pantalla. | Historia en el Sprint VR-1. | 2 nov | Aprobada | HU-087 (SCRUM-194) |
+| DEC-097 | La página web de administración usa la **opción A**: una barra lateral fija a la izquierda, con las mismas secciones, los mismos nombres y el mismo orden del menú de la app, agrupadas en Operación diaria, Comunidad y Configuración. El inicio es el panel de pendientes (HU-081); las PQRS se atienden en una bandeja con la solicitud abierta al lado; los usuarios y la estructura se manejan en tablas con filtros; y cada módulo usa las mismas pestañas de la app (la lista y el formulario de crear). En el celular, la barra lateral se vuelve el mismo menú de la app. | Maicol la eligió entre las tres opciones analizadas: barra lateral, menú superior y tarjetas. Un menú vertical siempre visible aguanta muchas secciones y se lee fácil; usar los mismos destinos en la app y en la web hace que se sientan iguales; y la bandeja con detalle permite atender una solicitud tras otra sin devolverse (referencias 31 a 37). | Guía el diseño de la web en DSN-01 y las historias HU-074 a HU-081 y HU-087. Los diseños están en el lienzo «DOMUX · Distribución de la web de administración». | 4 nov | Aprobada | Decisión de Maicol; propuesta de Claude con investigación |
 
 ## 12. Decisiones de gestión del proyecto, Jira y GitHub
 
-Estas 18 decisiones (DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086, DEC-088, DEC-094 y DEC-096) ordenan el trabajo del equipo en Jira y GitHub.
+Estas 19 decisiones (DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086, DEC-088, DEC-094, DEC-096 y DEC-099) ordenan el trabajo del equipo en Jira y GitHub.
 
 | ID | Decisión | Por qué | Efecto | Fecha (2026) | Estado | En Jira o fuente |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -249,7 +252,8 @@ Estas 18 decisiones (DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086, DEC-
 | DEC-086 | Nicolás suma tareas para que su aporte sea mayor y se vea en GitHub: la matriz de trazabilidad (TRZ-01), los diagramas de arquitectura y de secuencia de ARQ-01, las pruebas automáticas de lo nuevo (TT-012) y el pipeline de integración continua (TT-021). Conserva el plan de pruebas, los manuales, el informe de cierre, la lista de chequeo, la guía del repositorio y el APK. | Maicol pidió que Nicolás no siga con lo mínimo. El Índice Maestro pone la matriz de trazabilidad a cargo del responsable de calidad, Nicolás hizo los primeros diagramas del proyecto, y el Estándar exige que cada integrante demuestre su aporte con commits (GIT-05 y SUS-02). | Ajusta DEC-056. Las tareas se reasignan en Jira y se crea la tarea de diagramas de ARQ-01. Desde el 4 de noviembre, las tareas de documentación vuelven a Maicol y Nicolás conserva las de desarrollo: el APK (TT-017 y TT-018), las pruebas automáticas (TT-012) y el pipeline (TT-021) (DEC-096). | 3 nov | Aprobada | Decisión de Maicol |
 | DEC-088 | Sebastián suma tareas según su rol de Product Owner, analista y responsable de UX/UI (DEC-078): el Diseño UX/UI y Sistema de Diseño (DSN-01); el rediseño de pantallas (HU-085), la accesibilidad básica (HU-086) y la identidad visual de la página web (HU-087); el código limpio de la app Android (TT-014); y los estados y las columnas del tablero de Jira (TT-025). Como Product Owner, aprueba el Alcance (REQ-01) y el Backlog (REQ-02). | Maicol pidió asignarle tareas, como a Nicolás. En el Índice Maestro, DSN-01 está a cargo del diseñador UX/UI y el Alcance lo aprueba el usuario representante, papel que cumple el Product Owner. Sebastián hizo buena parte de la navegación, las pantallas y el tema oscuro de la app, y administra el sitio de Jira (DEC-060). El Estándar exige que cada integrante demuestre su aporte con commits (GIT-05 y SUS-02). | Ajusta DEC-056. En Jira, DSN-01, HU-085, HU-086, HU-087 y TT-014 pasan a Sebastián, y se crea TT-025 (SCRUM-236) para resolver P-05. GES-01 lo refleja en su matriz RACI y la Formulación pasa a la versión 1.1. Desde el 4 de noviembre, DSN-01 y la aprobación del Alcance y del Backlog pasan a Maicol; Sebastián conserva HU-085, HU-086, HU-087, TT-014 y TT-025 (DEC-096). | 3 nov | Aprobada | Pedida por Maicol; las tareas las propuso Claude según el rol |
 | DEC-096 | **Toda la documentación queda a nombre de Maicol**, por ahora: él elabora y aprueba cada documento como líder del proyecto (DEC-078) y figura como responsable en las tablas de los documentos y en Jira. Se quitan las tareas de documentación que se habían dado a Sebastián (DEC-088) y a Nicolás (DEC-086). Los roles de DEC-078 y las tareas de desarrollo de los dos no cambian. | Lo pidió Maicol el 4 de noviembre. | Ajusta DEC-056, DEC-086 y DEC-088. En Jira pasan a Maicol las 9 tareas de documentación que eran de Sebastián o de Nicolás: TRZ-01, DSN-01, CAL-01, MAN-02, MAN-01, CIE-01, EVA-02, REP-01 y los diagramas de ARQ-01. Es el único cambio en Jira antes de terminar la documentación (DEC-094). Las historias HIS-01 a HIS-06 conservan el crédito de quien hizo cada documento anterior (DEC-057), y la declaración de uso de IA la siguen firmando los tres (DEC-079). | 4 nov | Aprobada | Indicación de Maicol del 4 de noviembre |
-| DEC-094 | Jira se actualiza al final, cuando la documentación esté completa. Mientras tanto no se cambia nada en Jira: las tareas nuevas que salen de los documentos quedan anotadas en cada documento. | Maicol pidió centrarse primero en la documentación. | Las tareas de OBS-007 y OBS-008 del Alcance y la de la conservación de datos (DEC-090) se crean en Jira al final. Ajusta el orden de trabajo de DEC-084. | 4 nov | Aprobada | Indicación de Maicol del 4 de noviembre |
+| DEC-099 | **HU-085 (rediseño de pantallas) queda finalizada a nombre de Sebastián**, con su trabajo del 26 y 27 de octubre: inicio con los módulos según el rol, pantallas en pestañas, búsqueda de residentes y mensajes cuando no hay resultados. Lo que falte se hace como ajustes después de terminar el MVP reducido, si hace falta: íconos de verdad en lugar de emojis y símbolos, los mismos nombres en el menú y en las historias, y confirmaciones que digan la acción concreta. | Maicol pidió que el trabajo de diseño que Sebastián ya hizo aparezca en Jira como terminado y a su nombre. Jira debe coincidir con GitHub (DEC-057): por eso solo se cierra lo que tiene evidencia. | En Jira, HU-085 (SCRUM-192) pasa a Finalizada con un comentario que enlaza los commits e408821, af425ab, 5a0cab9 y 1d7d7a4. HU-083, HU-084, HU-012 y HU-046 ya estaban finalizadas a su nombre. HU-082 sigue a nombre de Maicol, que creó el tema el 11 de septiembre (86a515b). HU-086 (accesibilidad), HU-087 (web con la misma identidad) y TT-014 (MVVM) siguen abiertas porque todavía no tienen evidencia. Es la segunda excepción a DEC-094. | 4 nov | Aprobada | Pedida por Maicol el 4 de noviembre |
+| DEC-094 | Jira se actualiza al final, cuando la documentación esté completa. Mientras tanto no se cambia nada en Jira: las tareas nuevas que salen de los documentos quedan anotadas en cada documento. | Maicol pidió centrarse primero en la documentación. | Las tareas de OBS-007 y OBS-008 del Alcance y la de la conservación de datos (DEC-090) se crean en Jira al final. Ajusta el orden de trabajo de DEC-084. Excepciones pedidas por Maicol: DEC-096 y DEC-099. | 4 nov | Aprobada | Indicación de Maicol del 4 de noviembre |
 
 ## 13. Decisiones de documentación
 
@@ -307,7 +311,7 @@ Aquí quedan las ideas que el proyecto tuvo antes y que ya no rigen. No se borra
 
 ## 15. Decisiones pendientes y preguntas abiertas
 
-Estas preguntas siguen sin respuesta. Cuando se respondan, cada una se convierte en una decisión nueva (de DEC-097 en adelante) o completa una que ya existe.
+Estas preguntas siguen sin respuesta. Cuando se respondan, cada una se convierte en una decisión nueva (de DEC-100 en adelante) o completa una que ya existe.
 
 | # | Pendiente | Por qué importa | Quién responde | Afecta a |
 | --- | --- | --- | --- | --- |
@@ -341,7 +345,7 @@ Mientras una decisión esté en estado Propuesta, no se cambia nada en Jira, en 
 
 **Reglas**
 
-- Los números DEC no se reutilizan ni se cambian. La siguiente decisión será la **DEC-097**.
+- Los números DEC no se reutilizan ni se cambian. La siguiente decisión será la **DEC-100**.
 - Cada cambio al registro suma una fila en el control de versiones, al inicio del documento.
 - Si la decisión cambia el alcance, también se ajusta la versión de las historias en Jira (Reducida 1.0, Completa 2.0 o Futura).
 
@@ -471,3 +475,13 @@ Términos y siglas que aparecen en este registro, en orden alfabético.
 28. Properix. [Plazos para responder un derecho de petición en propiedad horizontal](https://www.properix.com/blog/2022/07/07/plazos-para-responder-un-derecho-de-peticion/): 15 días hábiles en general, 10 para documentos y 30 para consultas (Ley 1755 de 2015, art. 14).
 29. Conjunto Residencial Sabana P.H. [Preguntas frecuentes](https://sabana1propiedadconvivencia.blogspot.com/2026/04/preguntas-frecuentes.html): responde las PQRS en 15 días hábiles.
 30. Edificio San Peter. [Derecho de petición en propiedad horizontal](https://edificiosanpeter.com/noticias/derecho-de-peticion-propiedad-horizontal.html): mismos plazos de la Ley 1755 de 2015.
+
+**Investigación sobre la distribución de la web de administración (4 de noviembre de 2026)**
+
+31. Nielsen Norman Group. [Vertical Navigation](https://www.nngroup.com/articles/vertical-nav/): el menú vertical aguanta muchas secciones y se lee fácil; en computador debe estar siempre visible y con texto.
+32. Android Developers. [Build adaptive navigation](https://developer.android.com/develop/ui/compose/layouts/adaptive/build-adaptive-navigation): los mismos destinos se muestran como barra, riel o menú lateral según el tamaño de la pantalla.
+33. BuildingLink. [Management Training Outline](https://help-staff.buildinglink.com/en/support/solutions/articles/42000106595-management-training-outline): el inicio del administrador resume las reservas por aprobar, los eventos del día y los comunicados.
+34. Condo Control. [Workspace Overview](https://support.condocontrol.com/hc/en-us/articles/5604455197083-Condo-Control-Workspace-Overview-Resident-Video-Guide): el inicio muestra comunicados, calendario y resumen de solicitudes.
+35. SaaS UI. [List-detail (master-detail) UX patterns](https://www.saasui.design/blog/saas-list-detail-master-detail-ux-patterns): la vista de lista con detalle sirve para bandejas y colas de solicitudes.
+36. SAP. [Master-detail: usage](https://www.sap.com/design-system/hcm/patterns/structure-and-layout/master-detail/usage): cuándo usar la lista con detalle y cuándo no.
+37. Nielsen Norman Group. [Dashboards: making charts and graphs easier to understand](https://www.nngroup.com/articles/dashboards-preattentive/): un panel muestra en una sola pantalla lo importante para actuar rápido.
