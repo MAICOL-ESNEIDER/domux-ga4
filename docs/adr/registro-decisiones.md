@@ -14,9 +14,9 @@ Este documento reúne todas las decisiones del proyecto DOMUX con su motivo, su 
 | Programa | Tecnología en Análisis y Desarrollo de Software (ADSO), ficha 3223873 |
 | Equipo | Maicol Esneider Posada Callejas · Sebastián Lein Castro Grajales · Nicolás Muñoz Hernández |
 | Elaboró | Maicol Esneider Posada Callejas |
-| Revisó y aprobó | Sebastián Lein Castro Grajales y Nicolás Muñoz Hernández: aprobación de DEC-001 a DEC-070, informada el 3 de noviembre de 2026. Maicol Esneider Posada Callejas: DEC-071 a DEC-088. |
-| Versión | 1.5 · DEC-001 a DEC-070 aprobadas por el equipo; DEC-071 a DEC-088, por Maicol |
-| Fecha | 3 de noviembre de 2026 |
+| Revisó y aprobó | Sebastián Lein Castro Grajales y Nicolás Muñoz Hernández: aprobación de DEC-001 a DEC-070, informada el 3 de noviembre de 2026. Maicol Esneider Posada Callejas: DEC-071 a DEC-089. |
+| Versión | 1.6 · DEC-001 a DEC-070 aprobadas por el equipo; DEC-071 a DEC-089, por Maicol |
+| Fecha | 4 de noviembre de 2026 |
 | Código y tarea en Jira | ART-03 · [SCRUM-140](https://sebastiancastro4848.atlassian.net/browse/SCRUM-140) |
 | Archivo en el repositorio | `docs/adr/registro-decisiones.md`, con un archivo por cada ADR en `docs/adr/`, en [MAICOL-ESNEIDER/domux-ga4](https://github.com/MAICOL-ESNEIDER/domux-ga4) |
 | Versión del producto | Reducida 1.0 (entrega del 1 de diciembre de 2026); se anotan también las decisiones que afectan a la Completa 2.0 y a la Futura |
@@ -32,12 +32,13 @@ Este documento reúne todas las decisiones del proyecto DOMUX con su motivo, su 
 | 1.3 | 3 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-076 a DEC-085 por los formatos oficiales del profesor y R-14. DEC-064 pasa a Reemplazada; DEC-078 y DEC-085 quedan como propuestas. Las tareas de documentación cambian de código (DEC-082). Cierra P-07 y abre P-11. |
 | 1.4 | 3 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-086 (más tareas para Nicolás) y DEC-087 (los documentos del profesor no se copian). DEC-078 y DEC-085 pasan a Aprobada. Cierra P-11. |
 | 1.5 | 3 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-088 (tareas para Sebastián). Corrige el código del Índice Maestro en DEC-065, DEC-082, DEC-083 y DEC-087: no tiene código propio, porque en el Índice Maestro oficial GOB-01 es la Arquitectura Documental del profesor. |
+| 1.6 | 4 nov 2026 | Maicol Esneider Posada Callejas | Agrega DEC-089: los documentos se hacen sobre las plantillas Word del profesor, que llegaron completas el 4 de noviembre. DEC-066 pasa a Reemplazada (R-15). |
 
-Cada cambio posterior suma una fila (1.5, 1.6…).
+Cada cambio posterior suma una fila (1.7, 1.8…).
 
 ## 1. Introducción y propósito
 
-Este registro es la fuente única de las decisiones de DOMUX: qué se decidió, por qué, cuándo y qué cambia en el proyecto. Reúne 88 decisiones tomadas entre el 21 de octubre y el 3 de noviembre de 2026, más el historial de lo que se reemplazó.
+Este registro es la fuente única de las decisiones de DOMUX: qué se decidió, por qué, cuándo y qué cambia en el proyecto. Reúne 89 decisiones tomadas entre el 21 de octubre y el 4 de noviembre de 2026, más el historial de lo que se reemplazó.
 
 Sirve para cuatro cosas:
 
@@ -98,7 +99,7 @@ Cada decisión es una fila con siete campos. Los campos combinan lo que pide un 
 
 ## 4. Resumen
 
-Hay 88 decisiones: 87 aprobadas y 1 reemplazada (DEC-064).
+Hay 89 decisiones: 87 aprobadas y 2 reemplazadas (DEC-064 y DEC-066).
 
 | Categoría | Decisiones | Cuántas | Lo más importante |
 | --- | --- | --- | --- |
@@ -110,7 +111,7 @@ Hay 88 decisiones: 87 aprobadas y 1 reemplazada (DEC-064).
 | Seguridad y datos personales | DEC-046 a DEC-049 y DEC-074 | 5 | Leyes 1581 y 675, autorización de datos, seguridad básica y datos de visitantes por 12 meses |
 | Diseño de la interfaz | DEC-050 a DEC-053 | 4 | Se mantiene la paleta; pantallas claras y accesibles |
 | Gestión, Jira y GitHub | DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086 y DEC-088 | 16 | Sprint VR-1, reparto del trabajo, commits en español con la clave de Jira, roles del equipo y códigos oficiales en Jira |
-| Documentación | DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DEC-083, DEC-085 y DEC-087 | 16 | Formatos del profesor como guía oficial, registro en docs/adr, declaración formal de IA, y portadas con DOMUX y la fila del instructor en blanco |
+| Documentación | DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DEC-083, DEC-085, DEC-087 y DEC-089 | 17 | Formatos y plantillas Word del profesor como guía oficial, registro en docs/adr, declaración formal de IA, y portadas con DOMUX y la fila del instructor en blanco |
 
 ## 5. Decisiones de alcance y versiones
 
@@ -242,12 +243,12 @@ Estas 16 decisiones (DEC-054 a DEC-064, DEC-078, DEC-082, DEC-084, DEC-086 y DEC
 
 ## 13. Decisiones de documentación
 
-Estas 16 decisiones (DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DEC-083, DEC-085 y DEC-087) definen cómo se hace la documentación.
+Estas 17 decisiones (DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DEC-083, DEC-085, DEC-087 y DEC-089) definen cómo se hace la documentación.
 
 | ID | Decisión | Por qué | Efecto | Fecha (2026) | Estado | En Jira o fuente |
 | --- | --- | --- | --- | --- | --- | --- |
 | DEC-065 | Los documentos se hacen uno por uno, empezando por este registro. Cada uno se revisa y se aprueba antes de pasar al siguiente. | Todos los demás documentos citan estas decisiones. | El orden queda en el Índice Maestro y en Jira. | 21–27 oct | Aprobada | ART-03 a DSN-01 y el Índice Maestro (antes DOC-07 a DOC-15) |
-| DEC-066 | Los documentos se escriben en Claude Docs, exportables a Word, y se ajustan a plantillas del SENA si el profesor las entrega. | Se pueden editar, comentar y exportar. | Cada documento se exporta como .docx a su carpeta del repositorio. | 27–29 oct | Aprobada | Repositorio, carpeta Documentacion\_Proyecto\_ADSO |
+| DEC-066 | Los documentos se escriben en Claude Docs, exportables a Word, y se ajustan a plantillas del SENA si el profesor las entrega. | Se pueden editar, comentar y exportar. | Cada documento se exporta como .docx a su carpeta del repositorio. Reemplazada por DEC-089 (R-15). | 27–29 oct | Reemplazada | Repositorio, carpeta Documentacion\_Proyecto\_ADSO |
 | DEC-067 | No se ponen nombres de instructores en la documentación ni en el desarrollo. | No es necesario para el proyecto. | Las portadas solo llevan a los aprendices; la fila del instructor queda con el nombre en blanco (DEC-077). | 21–27 oct | Aprobada | Encuesta, pregunta A6 |
 | DEC-068 | La documentación describe la versión reducida y deja anotado lo que es de la completa. | La entrega del 1 de diciembre evalúa la reducida. | Cada documento marca lo que es de la completa. | 27–29 oct | Aprobada | — |
 | DEC-069 | El Documento maestro de decisiones y funcionalidades es la fuente principal de la versión completa. La "Documentación DOMUX MVP Actualizada" de octubre queda como histórico. | El Documento maestro reúne las decisiones más recientes. | Los documentos nuevos citan el Documento maestro, no el de octubre. | 27 oct | Aprobada | — |
@@ -262,6 +263,7 @@ Estas 16 decisiones (DEC-065 a DEC-071, DEC-075 a DEC-077, DEC-079 a DEC-081, DE
 | DEC-083 | El equipo no escribe los documentos del profesor: la Arquitectura Documental, la Rúbrica Integral y la Guía de Sustentación. Sí llena el Índice Maestro, la Lista de Chequeo Final y la Guía de Estructura y Evidencias del Repositorio. | En el Índice Maestro, el responsable de esos tres documentos es el instructor. | Cambian las tareas del Índice Maestro y EVA-02. Cómo se ubican en el repositorio queda pendiente (P-11). | 3 nov | Aprobada | Decisión de Maicol |
 | DEC-085 | Las imágenes 2 y 3 del profesor (estructura de un proyecto en Node.js y React) no cambian la tecnología: no se usan Node.js ni React y DOMUX sigue con Flask y Kotlin (DEC-040). Solo se toma su forma de ordenar el código: separar configuración, rutas, lógica de negocio, modelos y pruebas, y no subir el archivo `.env`. La carpeta `docs` del repositorio sigue la Guía de Estructura y Evidencias (adr, architecture, api, data, security, testing, operations y evidence), y los documentos Word siguen en `Documentacion_Proyecto_ADSO`, como en la imagen 1. | DOMUX usa Flask y Kotlin, no Node.js ni React, y la Guía es el formato escrito del SENA. | El orden del código del servidor se hace en TT-013. Las carpetas de `docs` se crean a medida que se necesiten. | 3 nov | Aprobada | Propuesta de Claude, aprobada por Maicol |
 | DEC-087 | Los documentos del profesor (Arquitectura Documental, Rúbrica Integral y Guía de Sustentación) no se copian en el repositorio. El Índice Maestro dice dónde están, y se quitan de la carpeta los tres archivos vacíos que los representaban. | La Arquitectura Documental dice que el marco institucional no se copia en cada proyecto, y el PDF trae el nombre del instructor (DEC-067). | Resuelve P-11. Cambia la tarea del Índice Maestro. | 3 nov | Aprobada | Decisión de Maicol |
+| DEC-089 | Los documentos se hacen sobre las plantillas Word del profesor: se llena cada sección y cada tabla, se quitan los cuadros de instrucciones y el archivo .docx se revisa antes de subirlo. Claude Docs deja de usarse para los documentos. La Formulación (INI-01) y la Gestión (GES-01) se rehacen sobre sus plantillas como versión 2.0, con el contenido ya aprobado. | El 4 de noviembre llegaron las plantillas de todos los documentos, una por documento, con secciones y tablas exactas que la documentación debe seguir (DEC-076). | El Alcance (REQ-01) pasa a la versión 3.0 sobre su plantilla y los demás documentos se hacen igual, en el orden del Índice Maestro. El registro de decisiones sigue en Markdown en docs/adr (DEC-081). Reemplaza DEC-066 (R-15). | 4 nov | Aprobada | Indicación de Maicol del 4 de noviembre; carpeta de plantillas del profesor |
 
 ## 14. Decisiones reemplazadas o descartadas (historial)
 
@@ -283,6 +285,7 @@ Aquí quedan las ideas que el proyecto tuvo antes y que ya no rigen. No se borra
 | R-12 | Un vehículo visitante podía pasar hasta 5 noches seguidas en el parqueadero, con aviso. | Unidad de demostración (ajustes por defecto). | Máximo 3 días seguidos, ajustable en cada conjunto. | DEC-073 | Reemplazada |
 | R-13 | El proyecto se presentaba bajo la empresa "DRACKNOVAL". | Acta de constitución (mayo de 2026). | El proyecto se identifica solo como DOMUX. | DEC-075 | Reemplazada |
 | R-14 | Mencionar de pasada el uso de IA en la documentación. | DEC-064 de este registro. | Declaración formal de uso de IA, firmada por los tres, en el Informe de cierre. | DEC-079 | Reemplazada |
+| R-15 | Escribir los documentos en Claude Docs y exportarlos a Word. | DEC-066 de este registro. | Se llenan directamente las plantillas Word del profesor. | DEC-089 | Reemplazada |
 
 **Descartadas.** Por ahora ninguna decisión de este registro está descartada. Si el equipo rechaza una propuesta, se anota aquí con el motivo.
 
@@ -290,7 +293,7 @@ Aquí quedan las ideas que el proyecto tuvo antes y que ya no rigen. No se borra
 
 ## 15. Decisiones pendientes y preguntas abiertas
 
-Estas preguntas siguen sin respuesta. Cuando se respondan, cada una se convierte en una decisión nueva (de DEC-089 en adelante) o completa una que ya existe.
+Estas preguntas siguen sin respuesta. Cuando se respondan, cada una se convierte en una decisión nueva (de DEC-090 en adelante) o completa una que ya existe.
 
 | # | Pendiente | Por qué importa | Quién responde | Afecta a |
 | --- | --- | --- | --- | --- |
@@ -304,6 +307,8 @@ Estas preguntas siguen sin respuesta. Cuando se respondan, cada una se convierte
 **Resueltos en la versión 1.3.** P-07: el profesor entregó sus formatos el 3 de noviembre (DEC-076).
 
 **Resueltos en la versión 1.4.** P-11: los documentos del profesor no se copian en el repositorio (DEC-087).
+
+**Observaciones del Alcance.** Las observaciones abiertas del Alcance (REQ-01, sección 14.2: OBS-004 a OBS-013) se convierten en decisiones nuevas cuando el Product Owner las responda.
 
 ## 16. Procedimiento para registrar una decisión nueva
 
@@ -322,7 +327,7 @@ Mientras una decisión esté en estado Propuesta, no se cambia nada en Jira, en 
 
 **Reglas**
 
-- Los números DEC no se reutilizan ni se cambian. La siguiente decisión será la **DEC-089**.
+- Los números DEC no se reutilizan ni se cambian. La siguiente decisión será la **DEC-090**.
 - Cada cambio al registro suma una fila en el control de versiones, al inicio del documento.
 - Si la decisión cambia el alcance, también se ajusta la versión de las historias en Jira (Reducida 1.0, Completa 2.0 o Futura).
 
