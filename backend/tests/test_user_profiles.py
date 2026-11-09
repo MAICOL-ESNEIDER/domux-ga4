@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import date
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
@@ -212,6 +213,18 @@ class UserProfileTests(unittest.TestCase):
         )
         self.assertEqual(age_filter.status_code, 200)
         self.assertEqual([user["id"] for user in age_filter.json["users"]], [self.resident.id])
+
+        self.resident.birth_date = date.today().replace(year=date.today().year - 35).isoformat()
+        db.session.commit()
+        resident_age_filter = self.client.get(
+            "/api/users?minAge=30&maxAge=40",
+            headers=self.headers(self.admin),
+        )
+        self.assertEqual(resident_age_filter.status_code, 200)
+        self.assertEqual(
+            [user["id"] for user in resident_age_filter.json["users"]],
+            [self.resident.id],
+        )
 
     def test_vehicle_plate_cannot_be_reused_in_another_unit(self):
         db.session.add(Vehicle(

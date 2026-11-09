@@ -120,7 +120,8 @@ interface ApiService {
         @Query("status") status: String? = null,
         @Query("category") category: String? = null,
         @Query("search") search: String? = null,
-        @Query("residentId") residentId: Int? = null
+        @Query("residentId") residentId: Int? = null,
+        @Query("includeArchived") includeArchived: String? = null
     ): Response<PqrsListResponse>
 
     @POST("api/pqrs")
@@ -160,7 +161,31 @@ interface ApiService {
     suspend fun getCommonAreas(@Header("Authorization") auth: String): Response<CommonAreasListResponse>
 
     @GET("api/reservations")
-    suspend fun getReservations(@Header("Authorization") auth: String): Response<ReservationsListResponse>
+    suspend fun getReservations(
+        @Header("Authorization") auth: String,
+        @Query("includeArchived") includeArchived: String? = null
+    ): Response<ReservationsListResponse>
+
+    @GET("api/admin/census-template")
+    suspend fun getCensusTemplate(
+        @Header("Authorization") auth: String
+    ): Response<ExcelFileResponse>
+
+    @POST("api/admin/import-census")
+    suspend fun importCensus(
+        @Header("Authorization") auth: String,
+        @Body body: ImportCensusRequest
+    ): Response<ImportCensusResponse>
+
+    @GET("api/admin/export/legal-report")
+    suspend fun exportLegalReport(
+        @Header("Authorization") auth: String
+    ): Response<ExcelFileResponse>
+
+    @POST("api/admin/archive-history")
+    suspend fun archiveHistory(
+        @Header("Authorization") auth: String
+    ): Response<ExcelFileResponse>
 
     @GET("api/reservations/availability")
     suspend fun getReservationAvailability(

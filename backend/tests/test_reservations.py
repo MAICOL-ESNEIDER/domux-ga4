@@ -8,7 +8,7 @@ os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 from app import create_app
 from auth import generate_token
 from extensions import db
-from models import CommonArea, Notification, Reservation, ReservationMessage, User
+from models import AuditLog, CommonArea, Notification, Reservation, ReservationMessage, User
 from validators import VALID_TIME_SLOTS
 from werkzeug.security import generate_password_hash
 
@@ -99,6 +99,64 @@ class ReservationWorkflowTests(unittest.TestCase):
         self.assertTrue(
             Notification.query.filter_by(user_id=self.admin.id, type="reservation").count()
         )
+        self.assertEqual(
+            AuditLog.query.filter_by(
+                entity_type="RESERVATION", entity_id=reservation.id, action="created"
+            ).count(),
+            1,
+        )
+
+    def test_minor_without_parental_consent_cannot_request_reservation(self):
+        today = date.today()
+        try:
+            birth_date = today.replace(year=today.year - 15)
+        except ValueError:
+            birth_date = today.replace(year=today.year - 15, day=28)
+        self.resident.birth_date = birth_date.isoformat()
+        self.resident.parental_consent = False
+        db.session.commit()
+
+        response = self.create_request()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json["error"],
+            "Los menores de edad requieren autorización parental registrada por administración para solicitar reservas.",
+        )
+        self.assertEqual(Reservation.query.count(), 0)
+
+    def test_resident_cannot_create_two_active_reservations_on_same_day(self):
+        first = self.create_request(slot="10:00-12:00")
+        second = self.create_request(slot="12:00-14:00")
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 409)
+        self.assertEqual(
+            second.json["error"],
+            "Límite diario alcanzado: solo puedes tener 1 reserva activa o pendiente por día.",
+        )
+        self.assertEqual(Reservation.query.count(), 1)
+
+    def test_resident_is_limited_to_two_active_reservations_per_week(self):
+        week_start = date.today() + timedelta(days=7 - date.today().weekday())
+        first = self.create_request(date=week_start.isoformat(), slot="10:00-12:00")
+        second = self.create_request(
+            date=(week_start + timedelta(days=2)).isoformat(),
+            slot="12:00-14:00",
+        )
+        third = self.create_request(
+            date=(week_start + timedelta(days=4)).isoformat(),
+            slot="14:00-16:00",
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(third.status_code, 409)
+        self.assertEqual(
+            third.json["error"],
+            "Límite semanal alcanzado: máximo 2 reservas por semana para permitir el uso equitativo de las zonas comunes.",
+        )
+        self.assertEqual(Reservation.query.count(), 2)
 
     def test_pending_requests_do_not_occupy_but_approval_rechecks_conflicts(self):
         first = self.create_request()

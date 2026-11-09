@@ -27,6 +27,8 @@ SQLITE_ADDITIONS = {
         "occupancy_type": "VARCHAR(30)",
         "apartment_number": "INTEGER",
         "social_networks": "VARCHAR(500)",
+        "birth_date": "VARCHAR(20)",
+        "parental_consent": "BOOLEAN NOT NULL DEFAULT 0",
         "data_processing_consent": "BOOLEAN NOT NULL DEFAULT 0",
         "data_processing_consent_at": "DATETIME",
         "is_active": "BOOLEAN NOT NULL DEFAULT 1",
@@ -45,9 +47,13 @@ SQLITE_ADDITIONS = {
         "media_type": "VARCHAR(20)",
         "updated_at": "DATETIME",
         "created_by_admin_id": "INTEGER REFERENCES users(id)",
+        "is_archived": "BOOLEAN NOT NULL DEFAULT 0",
+        "archived_at": "DATETIME",
     },
     "reservations": {
         "created_by_admin_id": "INTEGER REFERENCES users(id)",
+        "is_archived": "BOOLEAN NOT NULL DEFAULT 0",
+        "archived_at": "DATETIME",
     },
     "packages": {
         "media_url": "TEXT",
@@ -126,6 +132,11 @@ def migrate_profile_columns():
     column_types = {
         "apartment_number": "INTEGER",
         "social_networks": "VARCHAR(500)",
+        "birth_date": "VARCHAR(20)",
+        "parental_consent": (
+            "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+            else "BOOLEAN NOT NULL DEFAULT 0"
+        ),
         "data_processing_consent": (
             "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
             else "BOOLEAN NOT NULL DEFAULT 0"
@@ -196,6 +207,20 @@ def migrate_security_columns():
         },
         "visit_qr_passes": {
             "revoked_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+        },
+        "pqrs": {
+            "is_archived": (
+                "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+                else "BOOLEAN NOT NULL DEFAULT 0"
+            ),
+            "archived_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+        },
+        "reservations": {
+            "is_archived": (
+                "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+                else "BOOLEAN NOT NULL DEFAULT 0"
+            ),
+            "archived_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
         },
     }
     with db.engine.begin() as connection:

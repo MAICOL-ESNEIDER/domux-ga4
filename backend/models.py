@@ -1,6 +1,6 @@
 """SQLAlchemy models and Android-compatible JSON serializers."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import Index, text
 
@@ -28,6 +28,8 @@ class User(db.Model):
     apartment_number = db.Column(db.Integer, nullable=True, index=True)
     occupancy_type = db.Column(db.String(30), nullable=True, default="propietario")
     social_networks = db.Column(db.String(500), nullable=True, default="")
+    birth_date = db.Column(db.String(20), nullable=True)
+    parental_consent = db.Column(db.Boolean, default=False, nullable=False)
     data_processing_consent = db.Column(db.Boolean, nullable=False, default=False)
     data_processing_consent_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -38,6 +40,25 @@ class User(db.Model):
         name = (self.name or "").strip()
         last_name = (self.last_name or "").strip()
         return f"{name} {last_name}".strip()
+
+    @property
+    def age(self):
+        if not self.birth_date:
+            return None
+        try:
+            birth_date = date.fromisoformat(self.birth_date)
+        except (TypeError, ValueError):
+            return None
+        if birth_date.isoformat() != self.birth_date:
+            return None
+        today = date.today()
+        return today.year - birth_date.year - (
+            (today.month, today.day) < (birth_date.month, birth_date.day)
+        )
+
+    @property
+    def is_minor(self):
+        return self.age is not None and self.age < 18
 
     def to_dict(self):
         return {
@@ -54,6 +75,10 @@ class User(db.Model):
             "apartmentNumber": self.apartment_number,
             "occupancyType": self.occupancy_type or "propietario",
             "socialNetworks": self.social_networks or "",
+            "birthDate": self.birth_date,
+            "age": self.age,
+            "isMinor": self.is_minor,
+            "parentalConsent": bool(self.parental_consent),
             "dataProcessingConsent": bool(self.data_processing_consent),
             "dataProcessingConsentAt": _fmt(self.data_processing_consent_at),
             "isActive": self.is_active if self.is_active is not None else True,
@@ -69,6 +94,10 @@ class User(db.Model):
             "apartment": self.apartment,
             "apartmentNumber": self.apartment_number,
             "occupancyType": self.occupancy_type or "propietario",
+            "birthDate": self.birth_date,
+            "age": self.age,
+            "isMinor": self.is_minor,
+            "parentalConsent": bool(self.parental_consent),
         }
 
 
@@ -242,6 +271,8 @@ class Pqrs(db.Model):
     incident_time = db.Column(db.String(20), nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
+    is_archived = db.Column(db.Boolean, default=False, nullable=False)
+    archived_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -270,6 +301,8 @@ class Pqrs(db.Model):
             "subject": self.subject or "",
             "message": self.message or "",
             "status": self.status or "abierta",
+            "isArchived": bool(self.is_archived),
+            "archivedAt": _fmt(self.archived_at),
             "adminResponse": self.admin_response,
             "incidentDate": self.incident_date,
             "incidentTime": self.incident_time,
@@ -379,6 +412,8 @@ class Reservation(db.Model):
     date = db.Column(db.String(20), nullable=False)
     time_slot = db.Column(db.String(40), nullable=False)
     status = db.Column(db.String(20), default="pendiente")
+    is_archived = db.Column(db.Boolean, default=False, nullable=False)
+    archived_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
@@ -401,6 +436,9 @@ class Reservation(db.Model):
             "date": self.date,
             "timeSlot": self.time_slot,
             "status": self.status or "activa",
+            "isArchived": bool(self.is_archived),
+            "archivedAt": _fmt(self.archived_at),
+            "requestedByMinor": bool(self.resident and self.resident.is_minor),
             "createdAt": _fmt(self.created_at),
             "residentName": self.resident.full_name if self.resident else None,
             "apartment": self.resident.apartment if self.resident else None,
@@ -621,5 +659,32 @@ class Notification(db.Model):
             "message": self.message or "",
             "type": self.type or "general",
             "isRead": self.is_read if self.is_read is not None else False,
+            "createdAt": _fmt(self.created_at),
+        }
+
+
+class AuditLog(db.Model):
+    __tablename__ = "audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(40), nullable=False, index=True)
+    entity_id = db.Column(db.Integer, nullable=True)
+    action = db.Column(db.String(60), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    actor_role = db.Column(db.String(20), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    actor = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "entityType": self.entity_type,
+            "entityId": self.entity_id,
+            "action": self.action,
+            "actorId": self.actor_id,
+            "actorRole": self.actor_role,
+            "details": self.details,
             "createdAt": _fmt(self.created_at),
         }
