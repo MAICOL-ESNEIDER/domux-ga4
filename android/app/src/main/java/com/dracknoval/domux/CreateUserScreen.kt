@@ -9,9 +9,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.navigation.NavController
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import com.dracknoval.domux.data.CreateUserRequest
+import com.dracknoval.domux.data.ExcelFileResponse
+import com.dracknoval.domux.data.ImportCensusRequest
 import com.dracknoval.domux.data.ResetPasswordRequest
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
@@ -22,6 +32,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import android.net.Uri
+import java.text.ParsePosition
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 private val occupancyOptions = listOf(
     "propietario" to "Propietario",
@@ -29,6 +43,22 @@ private val occupancyOptions = listOf(
     "residente" to "Residente"
 )
 private val passwordSpecialChars = setOf('@', '$', '!', '%', '*', '?', '&', '#', '.', '_', '-')
+
+private fun ageFromIsoDate(value: String): Int? {
+    val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+    val position = ParsePosition(0)
+    val birthDate = format.parse(value, position)
+    if (birthDate == null || position.index != value.length) return null
+    val birth = Calendar.getInstance().apply { time = birthDate }
+    val today = Calendar.getInstance()
+    var age = today.get(Calendar.YEAR) - birth.get(Calendar.YEAR)
+    val birthdayHasNotOccurred =
+        today.get(Calendar.MONTH) < birth.get(Calendar.MONTH) ||
+            (today.get(Calendar.MONTH) == birth.get(Calendar.MONTH) &&
+                today.get(Calendar.DAY_OF_MONTH) < birth.get(Calendar.DAY_OF_MONTH))
+    if (birthdayHasNotOccurred) age--
+    return age.takeIf { it >= 0 }
+}
 
 private fun validStrongPassword(value: String): Boolean =
     value.length >= 8 &&
@@ -81,6 +111,8 @@ fun CreateUserScreen(navController: NavController) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAdvancedFilters by remember { mutableStateOf(false) }
     var consentConfirmed by remember { mutableStateOf(false) }
+    var birthDate by remember { mutableStateOf("") }
+    var parentalConsent by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -147,7 +179,7 @@ fun CreateUserScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DomuxSectionTabs(
-                listOf("Usuarios ($totalUsers)", "Crear usuario"),
+                listOf("Usuarios ($totalUsers)", "Crear usuario", "Censo Excel"),
                 selectedTab
             ) { selectedTab = it }
             if (message.isNotBlank()) DomuxFeedbackBanner(message) { message = "" }
@@ -180,6 +212,25 @@ fun CreateUserScreen(navController: NavController) {
                 )
                 if (role == "RESIDENT") {
                     UserInput(apartment, { apartment = it }, "Apartamento", required = true, showMissingError = attemptedSubmit)
+                    DatePickerField(
+                        "Fecha de nacimiento (AAAA-MM-DD)",
+                        birthDate,
+                        { birthDate = it },
+                        allowPastDates = true
+                    )
+                    if (ageFromIsoDate(birthDate)?.let { it < 18 } == true) {
+                        Text(
+                            "Usuario menor de 18 años: por defecto tendrá cuenta en Modo Consulta (sin crear reservas ni PQRS).",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = parentalConsent,
+                                onCheckedChange = { parentalConsent = it }
+                            )
+                            Text("Cuenta con autorización de los padres/acudientes para solicitar reservas")
+                        }
+                    }
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Checkbox(checked = consentConfirmed, onCheckedChange = { consentConfirmed = it })
                         Text("El residente autorizó el tratamiento de sus datos para gestionar la vivienda.")
@@ -221,13 +272,17 @@ fun CreateUserScreen(navController: NavController) {
                                         name.trim(), email.trim().lowercase(), password, role,
                                         apartment.trim().takeIf { role == "RESIDENT" },
                                         lastName.trim(), phone.trim(), documentId.trim(), occupancyType,
-                                        role == "RESIDENT" && consentConfirmed
+                                        role == "RESIDENT" && consentConfirmed,
+                                        birthDate.trim().takeIf { it.isNotEmpty() },
+                                        role == "RESIDENT" && parentalConsent
                                     )
                                 )
                                 if (response.isSuccessful) {
                                     name = ""; lastName = ""; email = ""; phone = ""; documentId = ""
                                     password = ""; apartment = ""
                                     consentConfirmed = false
+                                    birthDate = ""
+                                    parentalConsent = false
                                     attemptedSubmit = false
                                     message = "Usuario creado exitosamente."
                                     selectedTab = 0
@@ -247,8 +302,8 @@ fun CreateUserScreen(navController: NavController) {
                 ) { Text(if (busy) "Guardando..." else "Crear usuario") }
             }
         }
-                }
-            } else {
+            }
+            } else if (selectedTab == 0) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -373,6 +428,15 @@ fun CreateUserScreen(navController: NavController) {
                         DomuxCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp)) {
                                 Text(user.fullName ?: user.name, style = MaterialTheme.typography.titleMedium)
+                                if (user.isMinor) {
+                                    DomuxStatusBadge(
+                                        if (user.parentalConsent) "Menor (Con permiso parental)"
+                                        else "Menor (Modo consulta)",
+                                        if (user.parentalConsent) DomuxBadgeTone.PROGRESS
+                                        else DomuxBadgeTone.ALERT
+                                    )
+                                    user.age?.let { Text("Edad: $it años") }
+                                }
                                 Text(user.email)
                                 Text("Teléfono: ${user.phone.orEmpty()} · Documento: ${user.documentId.orEmpty()}")
                                 Text("Rol: ${user.role} · Apto: ${user.apartment ?: "—"}")
@@ -410,6 +474,11 @@ fun CreateUserScreen(navController: NavController) {
                             ) { Text("Siguiente") }
                         }
                     }
+
+                }
+            } else if (selectedTab == 2) {
+                CensusExcelPanel {
+                    loadUsers(1)
                 }
             }
         }
@@ -431,6 +500,8 @@ fun CreateUserScreen(navController: NavController) {
         var eOccupancy by remember(user.id) { mutableStateOf(user.occupancyType ?: "propietario") }
         var eActive by remember(user.id) { mutableStateOf(user.isActive) }
         var eConsent by remember(user.id) { mutableStateOf(false) }
+        var eBirthDate by remember(user.id) { mutableStateOf(user.birthDate.orEmpty()) }
+        var eParentalConsent by remember(user.id) { mutableStateOf(user.parentalConsent) }
         var attemptedEdit by remember(user.id) { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { editUser = null },
@@ -449,6 +520,25 @@ fun CreateUserScreen(navController: NavController) {
                     }
                     if (eRole == "RESIDENT") {
                         UserInput(eApartment, { eApartment = it }, "Apartamento", true, showMissingError = attemptedEdit)
+                        DatePickerField(
+                            "Fecha de nacimiento (AAAA-MM-DD)",
+                            eBirthDate,
+                            { eBirthDate = it },
+                            allowPastDates = true
+                        )
+                        if (ageFromIsoDate(eBirthDate)?.let { it < 18 } == true) {
+                            Text(
+                                "Usuario menor de 18 años: por defecto tendrá cuenta en Modo Consulta (sin crear reservas ni PQRS).",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Checkbox(
+                                    eParentalConsent,
+                                    { eParentalConsent = it }
+                                )
+                                Text("Cuenta con autorización de los padres/acudientes para solicitar reservas")
+                            }
+                        }
                         if (user.role != "RESIDENT") {
                             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                 Checkbox(eConsent, { eConsent = it })
@@ -482,7 +572,9 @@ fun CreateUserScreen(navController: NavController) {
                         ePhone.trim(), eDocument.trim(), eRole,
                         eApartment.trim().takeIf { eRole == "RESIDENT" },
                         eOccupancy.takeIf { eRole == "RESIDENT" }, eActive,
-                        true.takeIf { eRole == "RESIDENT" && user.role != "RESIDENT" }
+                        true.takeIf { eRole == "RESIDENT" && user.role != "RESIDENT" },
+                        eBirthDate.trim().takeIf { it.isNotEmpty() },
+                        eParentalConsent.takeIf { eRole == "RESIDENT" }
                     )
                 }) { Text("Guardar") }
             },
@@ -573,6 +665,157 @@ fun CreateUserScreen(navController: NavController) {
             },
             onDismiss = { pendingPasswordReset = null }
         )
+    }
+}
+
+@Composable
+private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf("") }
+    var messageIsError by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var pendingTemplate by remember { mutableStateOf<ExcelFileResponse?>(null) }
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val file = pendingTemplate
+        pendingTemplate = null
+        if (granted && file != null) {
+            try {
+                saveBase64FileToDownloads(
+                    context,
+                    file.fileName,
+                    file.base64,
+                    file.mimeType
+                        ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                message = "Plantilla guardada exitosamente en Descargas."
+                messageIsError = false
+            } catch (exception: Exception) {
+                message = "No se pudo guardar la plantilla: ${exception.message}"
+                messageIsError = true
+            }
+        } else {
+            message = "Se requiere permiso de almacenamiento para guardar en Descargas."
+            messageIsError = true
+        }
+        busy = false
+    }
+
+    DomuxCard(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Censo Excel", style = MaterialTheme.typography.titleMedium)
+            Text("Descarga la plantilla o importa el censo de residentes de una unidad.")
+            Button(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    message = ""
+                    scope.launch {
+                        var waitingForPermission = false
+                        try {
+                            val response = RetrofitClient.api.getCensusTemplate(Session.bearer())
+                            if (response.isSuccessful) {
+                                val file = response.body()
+                                    ?: error("El servidor devolvió una plantilla vacía.")
+                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                    ) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    pendingTemplate = file
+                                    waitingForPermission = true
+                                    storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                } else {
+                                    saveBase64FileToDownloads(
+                                        context,
+                                        file.fileName,
+                                        file.base64,
+                                        file.mimeType
+                                            ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
+                                    message = "Plantilla guardada exitosamente en Descargas."
+                                    messageIsError = false
+                                }
+                            } else {
+                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                messageIsError = true
+                            }
+                        } catch (exception: Exception) {
+                            if (isCancellation(exception)) {
+                                if (exception is CancellationException) throw exception
+                                return@launch
+                            }
+                            message = "No se pudo descargar la plantilla: ${exception.message}"
+                            messageIsError = true
+                        } finally {
+                            if (!waitingForPermission) busy = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Descargar plantilla Excel de ejemplo")
+            }
+            ExcelFilePickerButton(
+                onFileSelected = { base64, fileName ->
+                    busy = true
+                    message = ""
+                    scope.launch {
+                        try {
+                            val response = RetrofitClient.api.importCensus(
+                                Session.bearer(),
+                                ImportCensusRequest(base64, fileName)
+                            )
+                            if (response.isSuccessful) {
+                                val result = response.body()
+                                    ?: error("El servidor devolvió un resumen vacío.")
+                                message = buildString {
+                                    append(result.message ?: "Importación del censo procesada.")
+                                    append("\nResidentes creados: ${result.createdUsers}")
+                                    append("\nResidentes actualizados: ${result.updatedUsers}")
+                                    append("\nUnidades procesadas: ${result.unitsProcessed}")
+                                    result.errors.orEmpty().takeIf { it.isNotEmpty() }?.let { warnings ->
+                                        append("\nAdvertencias:")
+                                        warnings.forEach { append("\n• $it") }
+                                    }
+                                }
+                                messageIsError = false
+                                onImportComplete()
+                            } else {
+                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                messageIsError = true
+                            }
+                        } catch (exception: Exception) {
+                            if (isCancellation(exception)) {
+                                if (exception is CancellationException) throw exception
+                                return@launch
+                            }
+                            message = "No se pudo importar el censo: ${exception.message}"
+                            messageIsError = true
+                        } finally {
+                            busy = false
+                        }
+                    }
+                },
+                onError = {
+                    message = it
+                    messageIsError = true
+                }
+            )
+            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (message.isNotBlank()) {
+                Text(
+                    message,
+                    color = if (messageIsError) MaterialTheme.colorScheme.error else Color(0xFF34D399)
+                )
+            }
+        }
     }
 }
 

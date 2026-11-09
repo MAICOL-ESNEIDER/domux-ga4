@@ -11,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -45,6 +47,10 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var search by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf<String?>(null) }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
+    var includeArchived by remember { mutableStateOf(false) }
+    var legalSuccessMessage by remember { mutableStateOf("") }
+    var legalBusy by remember { mutableStateOf(false) }
+    var archiveDialog by remember { mutableStateOf(false) }
     var expandedId by remember { mutableStateOf<Int?>(null) }
     var selectedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -67,6 +73,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var selectedTab by remember {
         mutableIntStateOf(if (targetResidentId != null) 1 else 0)
     }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     suspend fun load() {
@@ -74,7 +81,8 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
         try {
             val response = RetrofitClient.api.getPqrs(
                 Session.bearer(), null, null, search.trim().ifEmpty { null },
-                targetResidentId.takeIf { Session.isAdmin }
+                targetResidentId.takeIf { Session.isAdmin },
+                if (includeArchived) "true" else null
             )
             if (response.isSuccessful) {
                 allItems = response.body()?.pqrs.orEmpty()
@@ -102,7 +110,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
         }
     }
 
-    LaunchedEffect(search) {
+    LaunchedEffect(search, includeArchived) {
         selectedIds = emptySet()
         selectedCategory = null
         load()
@@ -122,7 +130,66 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
             selectedTab
         ) { selectedTab = it }
         DomuxFeedbackBanner(message) { message = "" }
+        if (legalSuccessMessage.isNotBlank()) {
+            Text(legalSuccessMessage, color = Color(0xFF34D399), modifier = Modifier.padding(vertical = 4.dp))
+        }
         if (selectedTab == 0) {
+        if (Session.isAdmin) {
+            DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Column(
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("Respaldo Legal y Archivo Excel", style = MaterialTheme.typography.titleSmall)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            enabled = !legalBusy,
+                            onClick = {
+                                legalBusy = true
+                                legalSuccessMessage = ""
+                                scope.launch {
+                                    try {
+                                        val response = RetrofitClient.api.exportLegalReport(Session.bearer())
+                                        if (response.isSuccessful) {
+                                            val file = response.body()
+                                                ?: error("El servidor devolvió un reporte vacío.")
+                                            saveBase64FileToDownloads(
+                                                context,
+                                                file.fileName,
+                                                file.base64,
+                                                file.mimeType
+                                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            )
+                                            legalSuccessMessage =
+                                                "Reporte legal guardado exitosamente en Descargas/${file.fileName}."
+                                            message = ""
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        }
+                                    } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
+                                        message = "No se pudo guardar el reporte legal: ${exception.message}"
+                                    } finally {
+                                        legalBusy = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Descargar Excel Legal") }
+                        OutlinedButton(
+                            enabled = !legalBusy,
+                            onClick = { archiveDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Archivar resueltas y limpiar") }
+                    }
+                    FilterChip(
+                        selected = includeArchived,
+                        onClick = { includeArchived = !includeArchived },
+                        label = { Text("Ver archivadas") }
+                    )
+                }
+            }
+        }
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
@@ -164,6 +231,13 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(12.dp)) {
+                    if (Session.isResident && Session.isMinor && !Session.parentalConsent) {
+                        Text(
+                            "Tu cuenta de menor de edad está en Modo Consulta. Puedes ver anuncios, paquetes y notificaciones, pero para radicar PQRS necesitas autorización parental registrada por la administración.",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                    }
                     Text(
                         if (Session.isAdmin) "Crear PQRS para un residente" else "Nueva PQRS",
                         style = MaterialTheme.typography.titleMedium
@@ -210,7 +284,8 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                         mediaName = name
                     }, { message = it })
                     Button(
-                        enabled = !sending,
+                        enabled = !sending &&
+                            !(Session.isResident && Session.isMinor && !Session.parentalConsent),
                         onClick = {
                             attemptedSubmit = true
                             if (subject.trim().isEmpty() || detail.trim().isEmpty() ||
@@ -337,6 +412,47 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
         }
         }
     }
+    }
+
+    if (archiveDialog) {
+        DomuxConfirmDialog(
+            title = "Archivar y limpiar historial",
+            message = "Las PQRS resueltas y las reservas finalizadas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa.",
+            confirmLabel = "Archivar y descargar",
+            onConfirm = {
+                archiveDialog = false
+                legalBusy = true
+                legalSuccessMessage = ""
+                scope.launch {
+                    try {
+                        val response = RetrofitClient.api.archiveHistory(Session.bearer())
+                        if (response.isSuccessful) {
+                            val file = response.body()
+                                ?: error("El servidor devolvió un archivo vacío.")
+                            load()
+                            saveBase64FileToDownloads(
+                                context,
+                                file.fileName,
+                                file.base64,
+                                file.mimeType
+                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                            legalSuccessMessage =
+                                "${file.message ?: "Historial archivado."} Archivo guardado en Descargas/${file.fileName}."
+                            message = ""
+                        } else {
+                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                        }
+                    } catch (exception: Exception) {
+                        if (exception is CancellationException) throw exception
+                        message = "No se pudo archivar y guardar el historial: ${exception.message}"
+                    } finally {
+                        legalBusy = false
+                    }
+                }
+            },
+            onDismiss = { archiveDialog = false }
+        )
     }
 
     if (batchDialog) {

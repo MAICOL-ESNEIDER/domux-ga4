@@ -14,6 +14,8 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -138,15 +140,22 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var message by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var attemptedCreate by remember { mutableStateOf(false) }
+    var includeArchived by remember { mutableStateOf(false) }
+    var legalSuccessMessage by remember { mutableStateOf("") }
+    var legalBusy by remember { mutableStateOf(false) }
     var selectedTab by remember {
         mutableIntStateOf(if (targetResidentId != null) 1 else 0)
     }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     suspend fun load() {
         loading = true
         try {
-            val response = RetrofitClient.api.getReservations(Session.bearer())
+            val response = RetrofitClient.api.getReservations(
+                Session.bearer(),
+                if (includeArchived) "true" else null
+            )
             if (response.isSuccessful) reservations = response.body()?.reservations.orEmpty()
             else message = mensajeDeError(response.code(), response.errorBody()?.string())
             val areaResponse = RetrofitClient.api.getCommonAreas(Session.bearer())
@@ -173,7 +182,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
         }
     }
 
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(includeArchived) { load() }
     LaunchedEffect(selectedArea?.id, date) {
         val area = selectedArea
         if (area != null && date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
@@ -215,10 +224,20 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             selectedTab
         ) { selectedTab = it }
         DomuxFeedbackBanner(message) { message = "" }
+        if (legalSuccessMessage.isNotBlank()) {
+            Text(legalSuccessMessage, color = Color(0xFF34D399), modifier = Modifier.padding(vertical = 4.dp))
+        }
         if ((Session.isAdmin || Session.isResident) && selectedTab == 1) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(14.dp)) {
+                    if (Session.isResident && Session.isMinor && !Session.parentalConsent) {
+                        Text(
+                            "Los menores de edad no pueden reservar zonas comunes salvo que cuenten con autorización parental activa registrada en administración.",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                    }
                     Text(if (Session.isAdmin) "Crear reserva para un residente" else "Nueva reserva", style = MaterialTheme.typography.titleMedium)
                     Text("Zona común")
                     Row {
@@ -266,6 +285,11 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                     if (attemptedCreate && Session.isAdmin && selectedResident == null) {
                         Text("Selecciona el residente.", color = MaterialTheme.colorScheme.error)
                     }
+                    Text(
+                        "Máximo 1 reserva por día y 2 reservas por semana por residente.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     OutlinedTextField(
                         value = requestMessage,
                         onValueChange = { requestMessage = it },
@@ -278,7 +302,8 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                         requestMediaName = name
                     }, { message = it })
                     Button(
-                        enabled = !submitting,
+                        enabled = !submitting &&
+                            !(Session.isResident && Session.isMinor && !Session.parentalConsent),
                         onClick = {
                             attemptedCreate = true
                             val area = selectedArea
@@ -332,6 +357,95 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
         }
 
         if (selectedTab == 0) {
+        if (Session.isAdmin) {
+            DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Column(
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("Respaldo Legal y Archivo Excel", style = MaterialTheme.typography.titleSmall)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            enabled = !legalBusy,
+                            onClick = {
+                                legalBusy = true
+                                legalSuccessMessage = ""
+                                scope.launch {
+                                    try {
+                                        val response = RetrofitClient.api.exportLegalReport(Session.bearer())
+                                        if (response.isSuccessful) {
+                                            val file = response.body()
+                                                ?: error("El servidor devolvió un reporte vacío.")
+                                            saveBase64FileToDownloads(
+                                                context,
+                                                file.fileName,
+                                                file.base64,
+                                                file.mimeType
+                                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            )
+                                            legalSuccessMessage =
+                                                "Reporte legal guardado exitosamente en Descargas/${file.fileName}."
+                                            message = ""
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        }
+                                    } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
+                                        message = "No se pudo guardar el reporte legal: ${exception.message}"
+                                    } finally {
+                                        legalBusy = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Descargar Excel Legal") }
+                        OutlinedButton(
+                            enabled = !legalBusy,
+                            onClick = {
+                                confirmation =
+                                    "Las reservas finalizadas y las PQRS resueltas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa." to {
+                                        legalBusy = true
+                                        legalSuccessMessage = ""
+                                        scope.launch {
+                                            try {
+                                                val response = RetrofitClient.api.archiveHistory(Session.bearer())
+                                                if (response.isSuccessful) {
+                                                    val file = response.body()
+                                                        ?: error("El servidor devolvió un archivo vacío.")
+                                                    load()
+                                                    saveBase64FileToDownloads(
+                                                        context,
+                                                        file.fileName,
+                                                        file.base64,
+                                                        file.mimeType
+                                                            ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                                    )
+                                                    legalSuccessMessage =
+                                                        "${file.message ?: "Historial archivado."} Archivo guardado en Descargas/${file.fileName}."
+                                                    message = ""
+                                                } else {
+                                                    message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                                }
+                                            } catch (exception: Exception) {
+                                                if (exception is CancellationException) throw exception
+                                                message = "No se pudo archivar y guardar el historial: ${exception.message}"
+                                            } finally {
+                                                legalBusy = false
+                                            }
+                                        }
+                                    }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Archivar finalizadas y limpiar") }
+                    }
+                    FilterChip(
+                        selected = includeArchived,
+                        onClick = { includeArchived = !includeArchived },
+                        label = { Text("Ver archivadas") }
+                    )
+                }
+            }
+        }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f)) {
             items(reservations, key = { it.id }) { reservation ->
@@ -359,6 +473,15 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                 else -> DomuxBadgeTone.PROGRESS
                             }
                         )
+                        if (reservation.requestedByMinor) {
+                            DomuxStatusBadge(
+                                "Menor con autorización parental",
+                                DomuxBadgeTone.PROGRESS
+                            )
+                        }
+                        if (reservation.isArchived) {
+                            DomuxStatusBadge("Archivada en Excel", DomuxBadgeTone.ALERT)
+                        }
                         if (Session.isAdmin && reservation.status in listOf("pendiente", "activa")) {
                             Row {
                                 TextButton(onClick = {
