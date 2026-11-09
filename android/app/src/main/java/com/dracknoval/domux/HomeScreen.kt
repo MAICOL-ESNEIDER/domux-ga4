@@ -1,6 +1,5 @@
 package com.dracknoval.domux
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,16 +7,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -80,6 +76,13 @@ fun HomeScreen(navController: NavController) {
         initial = navController.currentBackStackEntry
     )
     val currentRoute = backStackEntry?.destination?.route
+    val userName = Session.userName?.trim().orEmpty().ifBlank { "usuario" }
+    val lastName = Session.lastName?.trim().orEmpty()
+    val greetingName = if (lastName.isNotBlank() && userName.contains(lastName, ignoreCase = true)) {
+        userName
+    } else {
+        listOf(userName, lastName).filter(String::isNotBlank).joinToString(" ")
+    }
 
     LaunchedEffect(currentRoute, Session.userId) {
         if (currentRoute != "home") return@LaunchedEffect
@@ -141,6 +144,7 @@ fun HomeScreen(navController: NavController) {
             add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry"))
             add(HomeModule("Usuarios", "Administración", "♙", "createUser"))
         } else if (Session.isResident) {
+            add(HomeModule("Mi perfil", "Mis datos y hogar", "♙", "profile"))
             add(HomeModule("Mis PQRS", "Solicitudes y respuestas", "◎", "pqrs"))
             add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations"))
             add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry"))
@@ -149,27 +153,15 @@ fun HomeScreen(navController: NavController) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DomuxBrandMark(size = 44.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("DOMUX", fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Text("Residential Security OS", color = Color(0xFF94A3B8), fontSize = 11.sp)
-            }
-            Box {
+    DomuxScreenScaffold(
+        title = "DOMUX",
+        navController = navController,
+        showBackButton = false,
+        actions = {
+            Box(modifier = Modifier.padding(end = 8.dp)) {
                 Surface(
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(42.dp)
                         .semantics { contentDescription = "Notificaciones, $unreadCount sin leer" },
                     color = Color(0xFF152C4A),
                     shape = CircleShape,
@@ -194,6 +186,15 @@ fun HomeScreen(navController: NavController) {
                 }
             }
         }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -208,7 +209,7 @@ fun HomeScreen(navController: NavController) {
                 Text("CENTRO DE CONTROL", color = Color(0xFF38BDF8), fontSize = 11.sp, letterSpacing = 1.5.sp)
                 Text("Altos de DOMUX", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    "Hola, ${Session.userName ?: "usuario"}${Session.lastName?.let { " $it" }.orEmpty()}",
+                    "Hola, $greetingName",
                     color = Color(0xFFCBD5E1)
                 )
                 Row(
@@ -252,18 +253,9 @@ fun HomeScreen(navController: NavController) {
         notificationError?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
-        Button(
-            onClick = {
-                Session.clear()
-                navController.navigate("login") { popUpTo(0) }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Cerrar sesión")
         }
-    }
 
-    if (showNotifications) {
+        if (showNotifications) {
         Dialog(
             onDismissRequest = { showNotifications = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -366,4 +358,5 @@ fun HomeScreen(navController: NavController) {
             }
         }
     }
+}
 }

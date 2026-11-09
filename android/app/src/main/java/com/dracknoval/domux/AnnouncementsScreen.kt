@@ -3,6 +3,8 @@ package com.dracknoval.domux
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -22,6 +24,7 @@ import com.dracknoval.domux.data.CreateAnnouncementRequest
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.mensajeDeError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -39,6 +42,7 @@ fun AnnouncementsScreen(navController: NavController) {
     var confirmation by remember { mutableStateOf<Announcement?>(null) }
     var publishing by remember { mutableStateOf(false) }
     var attemptedSubmit by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
     suspend fun load() {
@@ -48,6 +52,7 @@ fun AnnouncementsScreen(navController: NavController) {
             if (response.isSuccessful) announcements = response.body()?.announcements.orEmpty()
             else message = mensajeDeError(response.code(), response.errorBody()?.string())
         } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
             message = "No se pudieron cargar los anuncios: ${exception.message}"
         } finally {
             loading = false
@@ -56,10 +61,17 @@ fun AnnouncementsScreen(navController: NavController) {
 
     LaunchedEffect(Unit) { load() }
 
-    Column(Modifier.fillMaxSize().padding(18.dp)) {
-        Text("Anuncios de la unidad", fontSize = 23.sp, color = MaterialTheme.colorScheme.primary)
-        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+    DomuxScreenScaffold(title = "Anuncios de la unidad", navController = navController) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding).padding(18.dp)) {
+        DomuxFeedbackBanner(message) { message = "" }
         if (Session.isAdmin) {
+            DomuxSectionTabs(
+                listOf("Comunicados", "Publicar anuncio"),
+                selectedTab
+            ) { selectedTab = it }
+        }
+        if (Session.isAdmin && selectedTab == 1) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(12.dp)) {
                     Text("Publicar anuncio", style = MaterialTheme.typography.titleMedium)
@@ -104,9 +116,11 @@ fun AnnouncementsScreen(navController: NavController) {
                                         mediaUrl = null; mediaType = null; mediaName = null
                                         attemptedSubmit = false
                                         message = "Anuncio publicado."
+                                        selectedTab = 0
                                         load()
                                     } else message = mensajeDeError(response.code(), response.errorBody()?.string())
                                 } catch (exception: Exception) {
+                                    if (exception is CancellationException) throw exception
                                     message = "No se pudo publicar: ${exception.message}"
                                 } finally {
                                     publishing = false
@@ -117,9 +131,11 @@ fun AnnouncementsScreen(navController: NavController) {
                     ) { Text(if (publishing) "Publicando..." else "Publicar") }
                 }
             }
+            }
         }
-        if (loading) CircularProgressIndicator()
-        else LazyColumn(Modifier.weight(1f)) {
+        if (!Session.isAdmin || selectedTab == 0) {
+        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        LazyColumn(Modifier.weight(1f)) {
             items(announcements, key = { it.id }) { announcement ->
                 DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column(Modifier.padding(13.dp)) {
@@ -140,7 +156,8 @@ fun AnnouncementsScreen(navController: NavController) {
                 }
             }
         }
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        }
+    }
     }
 
     confirmation?.let { item ->
@@ -158,6 +175,7 @@ fun AnnouncementsScreen(navController: NavController) {
                         else mensajeDeError(response.code(), response.errorBody()?.string())
                         if (response.isSuccessful) load()
                     } catch (exception: Exception) {
+                        if (exception is CancellationException) throw exception
                         message = "No se pudo eliminar el anuncio: ${exception.message}"
                     }
                 }

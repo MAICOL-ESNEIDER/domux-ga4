@@ -1,9 +1,11 @@
 """Create demo accounts and community data for an empty database."""
 
+from datetime import datetime
+
 from werkzeug.security import generate_password_hash
 
 from extensions import db
-from models import Announcement, CommonArea, User
+from models import Announcement, CommonArea, PackageItem, User
 
 
 def seed_if_empty():
@@ -66,6 +68,29 @@ def seed_if_empty():
         ),
         author_id=admin.id,
     ))
+    db.session.add_all([
+        PackageItem(
+            resident_id=residente1.id,
+            registered_by=guardia.id,
+            description="Paquete de prueba pendiente",
+            status="pendiente",
+        ),
+        PackageItem(
+            resident_id=residente2.id,
+            registered_by=guardia.id,
+            description="Paquete de prueba por llegar",
+            status="por_llegar",
+        ),
+        PackageItem(
+            resident_id=residente1.id,
+            registered_by=guardia.id,
+            description="Paquete de prueba entregado",
+            status="entregado",
+            delivered_at=datetime.utcnow(),
+            delivered_to=residente1.full_name,
+            delivered_by_id=guardia.id,
+        ),
+    ])
     db.session.commit()
 
     print("Datos de prueba creados:")

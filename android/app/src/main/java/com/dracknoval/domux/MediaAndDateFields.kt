@@ -83,6 +83,26 @@ fun MediaAttachmentPicker(
     onAttachment: (mediaUrl: String, mediaType: String, fileName: String) -> Unit,
     onError: (String) -> Unit
 ) {
+    MediaAttachmentPickerFiltered(attachmentName, onAttachment, null, onError)
+}
+
+@Composable
+fun MediaAttachmentPicker(
+    attachmentName: String?,
+    onAttachment: (mediaUrl: String, mediaType: String, fileName: String) -> Unit,
+    mimeTypeFilter: String,
+    onError: (String) -> Unit
+) {
+    MediaAttachmentPickerFiltered(attachmentName, onAttachment, mimeTypeFilter, onError)
+}
+
+@Composable
+private fun MediaAttachmentPickerFiltered(
+    attachmentName: String?,
+    onAttachment: (mediaUrl: String, mediaType: String, fileName: String) -> Unit,
+    mimeTypeFilter: String?,
+    onError: (String) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -110,7 +130,7 @@ fun MediaAttachmentPicker(
         }
     }
     Column {
-        Button(onClick = { launcher.launch("*/*") }) {
+        Button(onClick = { launcher.launch(mimeTypeFilter ?: "*/*") }) {
             Text(if (attachmentName == null) "Adjuntar imagen, video o audio" else "Cambiar adjunto")
         }
         if (attachmentName != null) {

@@ -25,17 +25,20 @@ import androidx.navigation.NavController
 import com.dracknoval.domux.data.LoginRequest
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
+import com.dracknoval.domux.data.PushRegistration
 import com.dracknoval.domux.data.mensajeDeError
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(navController: NavController) {
+fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var result by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var attemptedLogin by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -130,16 +133,19 @@ fun LoginScreen(navController: NavController) {
                             if (user == null) {
                                 result = "⚠️ El servidor no envió los datos del usuario"
                             } else {
-                                Session.token = response.body()?.token
-                                Session.userId = user.id
-                                Session.userName = user.name
-                                Session.lastName = user.lastName
-                                Session.email = user.email
-                                Session.role = user.role
-                                Session.apartment = user.apartment
+                                val accessToken = response.body()?.token
+                                if (accessToken.isNullOrBlank()) {
+                                    result = "El servidor no envió el token de sesión."
+                                    return@launch
+                                }
+                                Session.token = accessToken
+                                Session.updateFrom(user)
+                                Session.persist(context)
+                                PushRegistration.registerAfterAuthentication(context.applicationContext)
                                 navController.navigate("home") {
                                     popUpTo("login") { inclusive = true }
                                 }
+                                onLoginComplete()
                             }
                         } else {
                             result = "❌ ${mensajeDeError(response.code(), response.errorBody()?.string())}"

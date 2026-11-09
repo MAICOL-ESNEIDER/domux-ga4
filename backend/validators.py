@@ -8,7 +8,29 @@ PASSWORD_REGEX = re.compile(
     r"[A-Za-z\d@$!%*?&#._-]{8,}$"
 )
 MEDIA_TYPES = ("image", "video", "audio")
-OCCUPANCY_TYPES = ("propietario", "arrendatario", "arrendador", "visitante")
+OCCUPANCY_TYPES = ("propietario", "arrendatario", "residente")
+RESIDENT_OCCUPANCY_TYPES = OCCUPANCY_TYPES
+HOUSEHOLD_RELATIONSHIPS = (
+    "propietario",
+    "conyuge_pareja",
+    "hijo",
+    "hija",
+    "padre",
+    "madre",
+    "hermano",
+    "hermana",
+    "abuelo",
+    "abuela",
+    "tio",
+    "tia",
+    "primo",
+    "prima",
+    "yerno",
+    "nuera",
+    "suegro",
+    "suegra",
+    "otro",
+)
 VALID_TIME_SLOTS = (
     "08:00-10:00",
     "10:00-12:00",
@@ -121,3 +143,33 @@ def validate_media_fields(data):
 
 def validate_occupancy_type(value):
     return None if value in OCCUPANCY_TYPES else "Tipo de tenencia inválido."
+
+
+def apartment_number_from_label(value):
+    """Extract the apartment number from labels such as 'Torre 1 · Apto 101'."""
+    if not isinstance(value, str):
+        return None
+    apartment_match = re.search(r"(?:apto|apartamento)\s*#?\s*(\d+)", value, re.IGNORECASE)
+    matches = re.findall(r"\d+", value)
+    candidate = apartment_match.group(1) if apartment_match else (matches[-1] if matches else None)
+    return int(candidate) if candidate else None
+
+
+def validate_colombian_plate(value):
+    if not isinstance(value, str):
+        return "La placa debe ser texto."
+    normalized = re.sub(r"[\s-]", "", value).upper()
+    if not re.fullmatch(r"[A-Z]{3}\d{3}|[A-Z]{3}\d{2}[A-Z]", normalized):
+        return "La placa debe tener formato colombiano, por ejemplo ABC123 o ABC12D."
+    return None
+
+
+def parse_optional_bool(value, name):
+    if value is None or value == "":
+        return None, None
+    normalized = value.strip().lower()
+    if normalized in ("true", "1", "si", "sí"):
+        return True, None
+    if normalized in ("false", "0", "no"):
+        return False, None
+    return None, f"El filtro '{name}' debe ser true o false."
