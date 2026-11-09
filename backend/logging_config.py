@@ -1,12 +1,11 @@
 import logging
 import os
-from logging.handlers import RotatingFileHandler
 
 from flask import request
 
 
 def configure_logging(app):
-    """Configura auditoría de solicitudes y errores sin depender de print()."""
+    """Log request audit events to the server console only."""
     level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
     formatter = logging.Formatter(
         "%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -17,12 +16,6 @@ def configure_logging(app):
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     app.logger.addHandler(console_handler)
-
-    log_file = os.getenv("LOG_FILE")
-    if log_file:
-        file_handler = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=3)
-        file_handler.setFormatter(formatter)
-        app.logger.addHandler(file_handler)
 
     @app.before_request
     def log_request_start():

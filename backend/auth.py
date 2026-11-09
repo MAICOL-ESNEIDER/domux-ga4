@@ -6,26 +6,23 @@
 # oculte botones, el backend vuelve a comprobar todo.
 
 import os
-import secrets
-import logging
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import jwt
+from dotenv import load_dotenv
 from flask import request, g
 
 from errors import error_response
+from extensions import db
 from models import User
 
-logger = logging.getLogger(__name__)
+load_dotenv()
 
-JWT_SECRET = os.environ.get("JWT_SECRET")
-if not JWT_SECRET:
-    JWT_SECRET = secrets.token_urlsafe(32)
-    logger.warning(
-        "JWT_SECRET no está configurado; se usará una clave temporal. "
-        "Configúralo antes de ejecutar el backend en producción."
-    )
+JWT_SECRET = os.environ.get(
+    "JWT_SECRET",
+    "domux-super-secret-jwt-key-2026",
+)
 
 JWT_ALGORITHM = "HS256"
 JWT_EXP_HOURS = 24 * 7  # el token dura 7 días
@@ -60,7 +57,7 @@ def token_required(f):
         except jwt.PyJWTError:
             return error_response(401, "Token inválido")
 
-        user = User.query.get(payload.get("user_id"))
+        user = db.session.get(User, payload.get("user_id"))
         if user is None:
             return error_response(401, "El usuario del token ya no existe")
         if not getattr(user, "is_active", True):
@@ -77,7 +74,9 @@ def role_required(*roles_permitidos):
         @wraps(f)
         def wrapper(*args, **kwargs):
             user = getattr(g, "current_user", None)
-            if user is None or user.role not in roles_permitidos:
+            if user is None:
+                return error_response(401, "Autenticación requerida")
+            if user.role != "ADMIN" and user.role not in roles_permitidos:
                 return error_response(403, "No tienes permiso para hacer esta acción")
             return f(*args, **kwargs)
 
