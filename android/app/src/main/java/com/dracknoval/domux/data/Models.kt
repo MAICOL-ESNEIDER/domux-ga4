@@ -18,7 +18,11 @@ data class UserData(
     val createdAt: String? = null,
     val socialNetworks: String? = "",
     val dataProcessingConsent: Boolean = false,
-    val firstName: String? = null
+    val firstName: String? = null,
+    val birthDate: String? = null,
+    val age: Int? = null,
+    val isMinor: Boolean = false,
+    val parentalConsent: Boolean = false
 )
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
@@ -34,7 +38,9 @@ data class CreateUserRequest(
     val phone: String = "",
     val documentId: String = "",
     val occupancyType: String = "propietario",
-    val dataProcessingConsent: Boolean = false
+    val dataProcessingConsent: Boolean = false,
+    val birthDate: String? = null,
+    val parentalConsent: Boolean? = null
 )
 data class UpdateUserRequest(
     val name: String? = null,
@@ -46,7 +52,9 @@ data class UpdateUserRequest(
     val apartment: String? = null,
     val occupancyType: String? = null,
     val isActive: Boolean? = null,
-    val dataProcessingConsent: Boolean? = null
+    val dataProcessingConsent: Boolean? = null,
+    val birthDate: String? = null,
+    val parentalConsent: Boolean? = null
 )
 data class ResetPasswordRequest(val password: String)
 data class CreateUserResponse(val message: String?, val user: UserData?)
@@ -133,7 +141,11 @@ data class ResidentSummary(
     val apartment: String?,
     val email: String? = "",
     val phone: String? = "",
-    val occupancyType: String? = "propietario"
+    val occupancyType: String? = "propietario",
+    val birthDate: String? = null,
+    val age: Int? = null,
+    val isMinor: Boolean = false,
+    val parentalConsent: Boolean = false
 )
 data class ResidentsListResponse(val residents: List<ResidentSummary>?)
 
@@ -179,7 +191,9 @@ data class Pqrs(
     val messages: List<PqrsMessageItem>? = null,
     val satisfactionRating: Int? = null,
     val satisfactionComment: String? = null,
-    val satisfactionUpdatedAt: String? = null
+    val satisfactionUpdatedAt: String? = null,
+    val isArchived: Boolean = false,
+    val archivedAt: String? = null
 )
 data class PqrsMessageItem(
     val id: Int,
@@ -243,7 +257,10 @@ data class Reservation(
     val apartment: String? = null,
     val createdByAdminId: Int? = null,
     val createdByAdministration: Boolean = false,
-    val messages: List<ReservationMessageItem>? = null
+    val messages: List<ReservationMessageItem>? = null,
+    val isArchived: Boolean = false,
+    val archivedAt: String? = null,
+    val requestedByMinor: Boolean = false
 )
 data class ReservationMessageItem(
     val id: Int,
@@ -285,6 +302,28 @@ data class ReservationAvailabilityResponse(
     val occupiedSlots: List<String>?
 )
 data class UpdateReservationStatusRequest(val status: String)
+
+data class ExcelFileResponse(
+    val message: String? = null,
+    val fileName: String,
+    val mimeType: String? = null,
+    val base64: String,
+    val pqrsCount: Int? = null,
+    val reservationsCount: Int? = null,
+    val auditLogsCount: Int? = null,
+    val archivedPqrsCount: Int? = null,
+    val archivedReservationsCount: Int? = null
+)
+
+data class ImportCensusRequest(val fileBase64: String, val fileName: String)
+
+data class ImportCensusResponse(
+    val message: String?,
+    val createdUsers: Int = 0,
+    val updatedUsers: Int = 0,
+    val unitsProcessed: Int = 0,
+    val errors: List<String>? = null
+)
 
 data class PackageItem(
     val id: Int,

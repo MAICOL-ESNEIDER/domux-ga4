@@ -21,6 +21,8 @@ object Session {
     var email: String? = null
     var role: String? = null
     var apartment: String? = null
+    var isMinor: Boolean = false
+    var parentalConsent: Boolean = false
 
     val isAdmin: Boolean get() = role == "ADMIN"
     val isResident: Boolean get() = role == "RESIDENT"
@@ -37,6 +39,8 @@ object Session {
             .put("email", email)
             .put("role", role)
             .put("apartment", apartment)
+            .put("isMinor", isMinor)
+            .put("parentalConsent", parentalConsent)
             .toString()
         SessionStorage.write(context, payload)
     }
@@ -63,6 +67,8 @@ object Session {
             email = session.optString("email").takeIf { it.isNotBlank() }
             role = session.optString("role").takeIf { it.isNotBlank() }
             apartment = session.optString("apartment").takeIf { it.isNotBlank() }
+            isMinor = session.optBoolean("isMinor", false)
+            parentalConsent = session.optBoolean("parentalConsent", false)
             if (token != null && userId != null && role != null) true else {
                 clear()
                 SessionStorage.clear(context)
@@ -84,6 +90,8 @@ object Session {
         email = null
         role = null
         apartment = null
+        isMinor = false
+        parentalConsent = false
     }
 
     fun clear(context: Context) {
@@ -98,6 +106,8 @@ object Session {
         email = user.email
         role = user.role
         apartment = user.apartment
+        isMinor = user.isMinor
+        parentalConsent = user.parentalConsent
     }
 }
 
