@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import date
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
@@ -7,7 +8,7 @@ os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 from app import create_app, migrate_pqrs_conversations
 from auth import generate_token
 from extensions import db
-from models import Notification, Pqrs, PqrsMessage, PqrsSatisfaction, User
+from models import AuditLog, Notification, Pqrs, PqrsMessage, PqrsSatisfaction, User
 from werkzeug.security import generate_password_hash
 
 
@@ -99,6 +100,33 @@ class PqrsWorkflowTests(unittest.TestCase):
         self.assertEqual(pqrs.resident_id, self.resident.id)
         self.assertEqual(pqrs.conversation[0].author_role, "ADMIN")
         self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 1)
+        self.assertEqual(
+            AuditLog.query.filter_by(entity_type="PQRS", entity_id=pqrs.id, action="created").count(),
+            1,
+        )
+
+    def test_minor_without_parental_consent_cannot_create_pqrs(self):
+        today = date.today()
+        try:
+            birth_date = today.replace(year=today.year - 15)
+        except ValueError:
+            birth_date = today.replace(year=today.year - 15, day=28)
+        self.resident.birth_date = birth_date.isoformat()
+        self.resident.parental_consent = False
+        db.session.commit()
+
+        response = self.client.post(
+            "/api/pqrs",
+            headers=self.auth(self.resident),
+            json={"subject": "Tema", "message": "Descripción"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json["error"],
+            "Las cuentas de menores de edad sin autorización parental están en modo consulta y no pueden radicar PQRS.",
+        )
+        self.assertEqual(Pqrs.query.count(), 0)
 
     def test_guard_cannot_create_pqrs(self):
         response = self.client.post(

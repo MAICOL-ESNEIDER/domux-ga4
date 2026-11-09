@@ -1,4 +1,6 @@
-from datetime import datetime
+import base64
+import json
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -8,6 +10,7 @@ from errors import error_response
 from extensions import db
 from models import (
     Announcement,
+    AuditLog,
     CommonArea,
     Pqrs,
     PqrsMessage,
@@ -17,6 +20,10 @@ from models import (
     User,
 )
 from services.notification_service import notify_residents, notify_user
+from services.excel_service import (
+    MIME_XLSX,
+    generate_legal_report_xlsx,
+)
 from services.reservation_service import (
     ACTIVE_RESERVATION_STATUSES,
     reservation_availability,
@@ -25,6 +32,7 @@ from services.reservation_service import (
 from validators import (
     VALID_PQRS_STATUSES,
     VALID_TIME_SLOTS,
+    parse_optional_bool,
     require_non_empty_fields,
     validate_future_or_today_date,
     validate_iso_date,
@@ -35,6 +43,67 @@ from validators import (
 )
 
 bp = Blueprint("community", __name__, url_prefix="/api")
+
+
+def _add_audit_log(entity_type, entity_id, action, details=None):
+    db.session.add(AuditLog(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        action=action,
+        actor_id=g.current_user.id,
+        actor_role=g.current_user.role,
+        details=json.dumps(details, ensure_ascii=False) if details is not None else None,
+    ))
+
+
+@bp.post("/admin/archive-history")
+@token_required
+@role_required("ADMIN")
+def archive_history():
+    today = date.today().isoformat()
+    pqrs_items = Pqrs.query.filter(
+        Pqrs.status == "resuelta",
+        Pqrs.is_archived.is_(False),
+    ).all()
+    reservations = Reservation.query.filter(
+        Reservation.is_archived.is_(False),
+        db.or_(
+            Reservation.status.in_(("rechazada", "cancelada")),
+            Reservation.date < today,
+        ),
+    ).all()
+    archived_at = datetime.utcnow()
+    for pqrs in pqrs_items:
+        pqrs.is_archived = True
+        pqrs.archived_at = archived_at
+    for reservation in reservations:
+        reservation.is_archived = True
+        reservation.archived_at = archived_at
+
+    archived_pqrs = len(pqrs_items)
+    archived_reservations = len(reservations)
+    _add_audit_log(
+        "history_archive",
+        None,
+        "archived",
+        {
+            "archivedPqrsCount": archived_pqrs,
+            "archivedReservationsCount": archived_reservations,
+        },
+    )
+    db.session.commit()
+    workbook_bytes, _ = generate_legal_report_xlsx()
+    return jsonify({
+        "message": (
+            f"Se archivaron {archived_pqrs} PQRS y {archived_reservations} "
+            "reservas en el expediente Excel."
+        ),
+        "archivedPqrsCount": archived_pqrs,
+        "archivedReservationsCount": archived_reservations,
+        "fileName": f"Archivo_Historico_DOMUX_{date.today().isoformat()}.xlsx",
+        "mimeType": MIME_XLSX,
+        "base64": base64.b64encode(workbook_bytes).decode("ascii"),
+    })
 
 
 def _json_body():
@@ -128,6 +197,13 @@ def delete_announcement(announcement_id):
 def get_pqrs():
     user = g.current_user
     query = Pqrs.query.join(User, Pqrs.resident_id == User.id)
+    include_archived, error = parse_optional_bool(
+        request.args.get("includeArchived"), "includeArchived"
+    )
+    if error:
+        return error_response(400, error)
+    if include_archived is not True:
+        query = query.filter(Pqrs.is_archived.is_(False))
     if user.role == "RESIDENT":
         query = query.filter(Pqrs.resident_id == user.id)
     elif user.role != "ADMIN":
@@ -183,6 +259,26 @@ def create_pqrs():
     resident = _resident_for_write(data)
     if resident is None:
         return error_response(400, "Selecciona un residente válido")
+    if (
+        g.current_user.role == "RESIDENT"
+        and g.current_user.is_minor
+        and not g.current_user.parental_consent
+    ):
+        return error_response(
+            403,
+            "Las cuentas de menores de edad sin autorización parental están en modo consulta y no pueden radicar PQRS.",
+        )
+    if g.current_user.role == "RESIDENT":
+        active_pqrs_count = Pqrs.query.filter(
+            Pqrs.resident_id == resident.id,
+            Pqrs.status.in_(("abierta", "en_proceso")),
+            Pqrs.is_archived.is_(False),
+        ).count()
+        if active_pqrs_count >= 3:
+            return error_response(
+                409,
+                "Límite alcanzado: ya tienes 3 PQRS activas en trámite. Espera a que sean resueltas.",
+            )
     category = data.get("category", "Petición")
     if not isinstance(category, str):
         return error_response(400, "La categoría debe ser texto")
@@ -214,6 +310,7 @@ def create_pqrs():
             f"Administración registró una PQRS a tu nombre: {pqrs.subject}.",
             "pqrs",
         )
+    _add_audit_log("PQRS", pqrs.id, "created")
     db.session.commit()
     return jsonify({"message": "PQRS enviada", "pqrs": pqrs.to_dict()}), 201
 
@@ -250,6 +347,19 @@ def respond_pqrs(pqrs_id):
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     ))
+    _add_audit_log(
+        "PQRS",
+        pqrs.id,
+        "responded",
+        {"status": pqrs.status},
+    )
+    if previous_status != pqrs.status:
+        _add_audit_log(
+            "PQRS",
+            pqrs.id,
+            "status_changed",
+            {"previousStatus": previous_status, "status": pqrs.status},
+        )
     notify_user(
         pqrs.resident_id,
         "Actualización de PQRS",
@@ -292,6 +402,14 @@ def add_pqrs_message(pqrs_id):
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     ))
+    _add_audit_log("PQRS", pqrs.id, "responded")
+    if was_resolved:
+        _add_audit_log(
+            "PQRS",
+            pqrs.id,
+            "status_changed",
+            {"previousStatus": "resuelta", "status": "abierta"},
+        )
     if was_resolved:
         admins = User.query.filter_by(role="ADMIN", is_active=True).all()
         for admin in admins:
@@ -396,6 +514,14 @@ def respond_pqrs_batch():
             media_url=data.get("mediaUrl"),
             media_type=data.get("mediaType"),
         ))
+        _add_audit_log("PQRS", pqrs.id, "responded", {"status": status})
+        if previous_status != status:
+            _add_audit_log(
+                "PQRS",
+                pqrs.id,
+                "status_changed",
+                {"previousStatus": previous_status, "status": status},
+            )
     for resident_id in resident_ids:
         notify_user(
             resident_id,
@@ -433,13 +559,19 @@ def get_common_areas():
 def get_reservations():
     user = g.current_user
     if user.role == "ADMIN":
-        items = Reservation.query.order_by(Reservation.created_at.desc()).all()
+        query = Reservation.query
     elif user.role == "RESIDENT":
-        items = Reservation.query.filter_by(
-            resident_id=user.id
-        ).order_by(Reservation.created_at.desc()).all()
+        query = Reservation.query.filter_by(resident_id=user.id)
     else:
         return error_response(403, "No tienes permiso para ver las reservas")
+    include_archived, error = parse_optional_bool(
+        request.args.get("includeArchived"), "includeArchived"
+    )
+    if error:
+        return error_response(400, error)
+    if include_archived is not True:
+        query = query.filter(Reservation.is_archived.is_(False))
+    items = query.order_by(Reservation.created_at.desc()).all()
     return jsonify({"reservations": [item.to_dict() for item in items]})
 
 
@@ -496,7 +628,7 @@ def get_reservation_calendar():
 
 @bp.post("/reservations")
 @token_required
-@role_required("RESIDENT")
+@role_required("RESIDENT", "ADMIN")
 def create_reservation():
     data, failure = _json_body()
     if failure:
@@ -527,6 +659,42 @@ def create_reservation():
     resident = _resident_for_write(data)
     if resident is None:
         return error_response(400, "Selecciona un residente válido")
+    if (
+        g.current_user.role == "RESIDENT"
+        and g.current_user.is_minor
+        and not g.current_user.parental_consent
+    ):
+        return error_response(
+            403,
+            "Los menores de edad requieren autorización parental registrada por administración para solicitar reservas.",
+        )
+    if g.current_user.role == "RESIDENT":
+        active_statuses = ("pendiente", "activa", "aprobada")
+        daily_reservation = Reservation.query.filter(
+            Reservation.resident_id == resident.id,
+            Reservation.date == data["date"],
+            Reservation.status.in_(active_statuses),
+            Reservation.is_archived.is_(False),
+        ).first()
+        if daily_reservation is not None:
+            return error_response(
+                409,
+                "Límite diario alcanzado: solo puedes tener 1 reserva activa o pendiente por día.",
+            )
+        requested_date = date.fromisoformat(data["date"])
+        week_start = requested_date - timedelta(days=requested_date.weekday())
+        week_end = week_start + timedelta(days=6)
+        weekly_reservation_count = Reservation.query.filter(
+            Reservation.resident_id == resident.id,
+            Reservation.date.between(week_start.isoformat(), week_end.isoformat()),
+            Reservation.status.in_(active_statuses),
+            Reservation.is_archived.is_(False),
+        ).count()
+        if weekly_reservation_count >= 2:
+            return error_response(
+                409,
+                "Límite semanal alcanzado: máximo 2 reservas por semana para permitir el uso equitativo de las zonas comunes.",
+            )
     if reservation_conflicts(area.id, data["date"], data["timeSlot"]):
         return error_response(409, "Ese horario ya no está disponible")
 
@@ -564,6 +732,7 @@ def create_reservation():
                 f"de {reservation.time_slot}.",
                 "reservation",
             )
+    _add_audit_log("RESERVATION", reservation.id, "created")
     try:
         db.session.commit()
     except IntegrityError:
@@ -599,6 +768,13 @@ def update_reservation_status(res_id):
 
     previous_status = reservation.status
     reservation.status = status
+    if previous_status != status:
+        _add_audit_log(
+            "RESERVATION",
+            reservation.id,
+            "status_changed",
+            {"previousStatus": previous_status, "status": status},
+        )
     if status in ("aprobada", "rechazada") and status != previous_status:
         notify_user(
             reservation.resident_id,
@@ -651,6 +827,7 @@ def add_reservation_message(res_id):
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     ))
+    _add_audit_log("RESERVATION", reservation.id, "responded")
     if g.current_user.role == "ADMIN":
         notify_user(
             reservation.resident_id,
@@ -688,7 +865,14 @@ def cancel_reservation(res_id):
         return error_response(400, "Solo se pueden cancelar reservas pendientes o aprobadas.")
     if g.current_user.role == "RESIDENT" and reservation.date <= datetime.utcnow().date().isoformat():
         return error_response(400, "Solo puedes cancelar la reserva antes del día reservado.")
+    previous_status = reservation.status
     reservation.status = "cancelada"
+    _add_audit_log(
+        "RESERVATION",
+        reservation.id,
+        "status_changed",
+        {"previousStatus": previous_status, "status": reservation.status},
+    )
     if g.current_user.role == "RESIDENT":
         for admin in User.query.filter_by(role="ADMIN", is_active=True).all():
             notify_user(
