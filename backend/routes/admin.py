@@ -1,3 +1,5 @@
+import base64
+import binascii
 from datetime import date, datetime
 
 from flask import Blueprint, g, jsonify, request
@@ -15,6 +17,12 @@ from models import (
     User,
     Vehicle,
 )
+from services.excel_service import (
+    MIME_XLSX,
+    generate_census_template_xlsx,
+    generate_legal_report_xlsx,
+    import_census_from_bytes,
+)
 from validators import (
     HOUSEHOLD_RELATIONSHIPS,
     OCCUPANCY_TYPES,
@@ -25,9 +33,14 @@ from validators import (
     validate_occupancy_type,
     validate_strong_password,
     validate_colombian_plate,
+    validate_iso_date,
 )
 
 bp = Blueprint("admin", __name__, url_prefix="/api")
+
+
+def _encode_base64(value):
+    return base64.b64encode(value).decode("ascii")
 
 
 def _json_body():
@@ -42,6 +55,62 @@ def _json_body():
 
 def _normalize_role(value):
     return value.strip().upper() if isinstance(value, str) else None
+
+
+@bp.get("/admin/census-template")
+@token_required
+@role_required("ADMIN")
+def get_census_template():
+    return jsonify({
+        "fileName": "Plantilla_Censo_DOMUX.xlsx",
+        "mimeType": MIME_XLSX,
+        "base64": _encode_base64(generate_census_template_xlsx()),
+    })
+
+
+@bp.post("/admin/import-census")
+@token_required
+@role_required("ADMIN")
+def post_import_census():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
+    encoded_file = data.get("fileBase64")
+    filename = data.get("fileName")
+    if not isinstance(encoded_file, str) or not encoded_file:
+        return error_response(400, "fileBase64 es obligatorio.")
+    if not isinstance(filename, str) or not filename.strip():
+        return error_response(400, "fileName es obligatorio.")
+    if encoded_file.startswith("data:"):
+        header, separator, encoded_file = encoded_file.partition(",")
+        if not separator or ";base64" not in header.lower():
+            return error_response(400, "El prefijo data URL debe usar base64.")
+    try:
+        file_bytes = base64.b64decode(encoded_file, validate=True)
+    except (binascii.Error, ValueError):
+        return error_response(400, "fileBase64 no contiene datos base64 válidos.")
+    try:
+        result = import_census_from_bytes(file_bytes, filename.strip(), g.current_user)
+    except ValueError as error:
+        return error_response(400, str(error))
+    return jsonify({
+        "message": "Importación del censo procesada.",
+        **result,
+    })
+
+
+@bp.get("/admin/export/legal-report")
+@token_required
+@role_required("ADMIN")
+def get_legal_report():
+    workbook_bytes, counts = generate_legal_report_xlsx()
+    return jsonify({
+        "message": "Reporte legal generado exitosamente.",
+        "fileName": f"Reporte_Legal_DOMUX_{date.today().isoformat()}.xlsx",
+        "mimeType": MIME_XLSX,
+        "base64": _encode_base64(workbook_bytes),
+        **counts,
+    })
 
 
 @bp.get("/users")
@@ -157,20 +226,30 @@ def get_users():
             except ValueError:
                 return today.replace(year=today.year - years, day=28)
 
-        birth_date_conditions = []
+        user_birth_date_conditions = [User.birth_date.isnot(None)]
+        member_birth_date_conditions = []
         if minimum_age is not None:
             latest_birth_date = years_before(minimum_age)
-            birth_date_conditions.append(HouseholdMember.birth_date <= latest_birth_date.isoformat())
+            user_birth_date_conditions.append(User.birth_date <= latest_birth_date.isoformat())
+            member_birth_date_conditions.append(
+                HouseholdMember.birth_date <= latest_birth_date.isoformat()
+            )
         if maximum_age is not None:
             earliest_birth_date = years_before(maximum_age + 1)
-            birth_date_conditions.append(HouseholdMember.birth_date > earliest_birth_date.isoformat())
-        age_match = db.session.query(HouseholdMember.id).join(
+            user_birth_date_conditions.append(User.birth_date > earliest_birth_date.isoformat())
+            member_birth_date_conditions.append(
+                HouseholdMember.birth_date > earliest_birth_date.isoformat()
+            )
+        member_age_match = db.session.query(HouseholdMember.id).join(
             ResidentialUnit, HouseholdMember.unit_id == ResidentialUnit.id
         ).filter(
             ResidentialUnit.apartment == User.apartment,
-            *birth_date_conditions,
+            *member_birth_date_conditions,
         ).exists()
-        query = query.filter(age_match, User.role == "RESIDENT")
+        query = query.filter(
+            db.or_(db.and_(*user_birth_date_conditions), member_age_match),
+            User.role == "RESIDENT",
+        )
 
     total = query.count()
     users = query.order_by(User.apartment_number, User.apartment, User.id).offset(
@@ -215,6 +294,14 @@ def create_user():
         return error_response(400, "El residente necesita un apartamento")
     if role == "RESIDENT" and data.get("dataProcessingConsent") is not True:
         return error_response(400, "Debes registrar la autorización de tratamiento de datos del residente.")
+    if "birthDate" in data:
+        if error := validate_iso_date(data["birthDate"]):
+            return error_response(400, error)
+        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > date.today():
+            return error_response(400, "La fecha de nacimiento no puede ser futura.")
+    parental_consent = data.get("parentalConsent", False)
+    if not isinstance(parental_consent, bool):
+        return error_response(400, "parentalConsent debe ser verdadero o falso.")
     if not isinstance(occupancy_type, str) or occupancy_type not in OCCUPANCY_TYPES:
         return error_response(400, validate_occupancy_type(occupancy_type))
     for field in ("lastName", "phone", "documentId"):
@@ -235,6 +322,8 @@ def create_user():
         apartment_number=apartment_number_from_label(apartment) if role == "RESIDENT" else None,
         occupancy_type=occupancy_type,
         social_networks="",
+        birth_date=data.get("birthDate"),
+        parental_consent=parental_consent,
         data_processing_consent=role == "RESIDENT",
         data_processing_consent_at=datetime.utcnow() if role == "RESIDENT" else None,
         is_active=True,
@@ -264,6 +353,17 @@ def update_user(user_id):
     user = db.session.get(User, user_id)
     if user is None:
         return error_response(404, "Usuario no encontrado")
+
+    if "birthDate" in data:
+        if error := validate_iso_date(data["birthDate"]):
+            return error_response(400, error)
+        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > date.today():
+            return error_response(400, "La fecha de nacimiento no puede ser futura.")
+        user.birth_date = data["birthDate"]
+    if "parentalConsent" in data:
+        if not isinstance(data["parentalConsent"], bool):
+            return error_response(400, "parentalConsent debe ser verdadero o falso.")
+        user.parental_consent = data["parentalConsent"]
 
     if "name" in data:
         if not isinstance(data["name"], str):

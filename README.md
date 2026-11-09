@@ -137,6 +137,10 @@ Todas las rutas protegidas requieren el encabezado `Authorization: Bearer <token
 | Residentes | `GET /api/residents` | ADMIN, GUARD | Búsqueda rápida por nombre completo o apto. |
 | Unidades | `GET / PUT /api/admin/units` | ADMIN | Consulta y guardado de la ficha del hogar. |
 | Perfil | `GET / PUT /api/profile` | RESIDENT | Consulta y actualización de datos de contacto. |
+| Censo | `GET /api/admin/census-template` | ADMIN | Descarga la plantilla Excel para importar residentes y datos de sus unidades. |
+| Censo | `POST /api/admin/import-census` | ADMIN | Importa o actualiza residentes desde `.xlsx` o `.csv` codificado en base64. |
+| Archivo legal | `GET /api/admin/export/legal-report` | ADMIN | Exporta PQRS, conversaciones, reservas y auditoría en un libro Excel. |
+| Archivo legal | `POST /api/admin/archive-history` | ADMIN | Archiva PQRS resueltas y reservas históricas y genera el respaldo Excel. |
 | Anuncios | `GET / POST / DELETE /api/announcements` | Todos (GET), ADMIN (POST/DELETE) | Tablón de comunicados con soporte multimedia. |
 | PQRS | `GET / POST /api/pqrs` | ADMIN, RESIDENT | Listado filtrado y radicación de solicitudes. |
 | PQRS | `PUT /api/pqrs/<id>/respond` | ADMIN | Respuesta administrativa y cambio de estado. |
@@ -170,7 +174,7 @@ Todas las rutas protegidas requieren el encabezado `Authorization: Bearer <token
 | `data/RetrofitClient.kt` | `android/.../data/RetrofitClient.kt` configurado dinámicamente por variante (`BuildConfig.BASE_URL`). |
 | `data/Session.kt` | `android/.../data/Session.kt` con 3 roles (ADMIN, RESIDENT, GUARD) y cifrado AES/GCM en Android KeyStore. |
 | `MainActivity.kt` (NavHost) | `android/.../MainActivity.kt` integrado con `DomuxScreenScaffold`, `ModalNavigationDrawer` y deep-linking de notificaciones. |
-| Backend Flask académico | `backend/app.py` estructurado en capas (`routes/`, `services/`, `models.py`, `validators.py`) y cubierto por 45 tests automatizados. |
+| Backend Flask académico | `backend/app.py` estructurado en capas (`routes/`, `services/`, `models.py`, `validators.py`) y cubierto por 56 tests automatizados. |
 
 ## 8. Gobierno Documental SENA ADSO
 
