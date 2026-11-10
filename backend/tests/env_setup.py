@@ -9,7 +9,7 @@ para correr las mismas pruebas en PostgreSQL).
 import os
 import secrets
 
-os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "sqlite://")
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
 # Contraseñas al azar para las cuentas de prueba: así la semilla no crea archivos.

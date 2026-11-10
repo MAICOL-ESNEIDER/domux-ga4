@@ -1,4 +1,3 @@
-import os
 import unittest
 
 import env_setup  # noqa: F401  (va antes de importar la app)

@@ -1,6 +1,5 @@
 import base64
 import io
-import os
 import unittest
 from datetime import date, timedelta
 

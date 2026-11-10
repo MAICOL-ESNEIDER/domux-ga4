@@ -1,4 +1,3 @@
-import os
 import unittest
 from datetime import date, timedelta
 
@@ -240,6 +239,7 @@ class ReservationWorkflowTests(unittest.TestCase):
 
     def test_resident_can_cancel_before_date_but_not_on_or_after_reserved_date(self):
         created = self.create_request()
+        self.assertEqual(created.status_code, 201)
         reservation = Reservation.query.one()
         approval = self.client.put(
             f"/api/reservations/{reservation.id}/status",
