@@ -28,3 +28,13 @@ backend/.env
 # ---------- Sistema operativo ----------
 .DS_Store
 Thumbs.db
+
+# ---------- Pruebas y cobertura ----------
+.coverage
+htmlcov/
+backend/.coverage
+backend/htmlcov/
+
+# ---------- Notas locales de herramientas de IA o del editor ----------
+.artifacts/
+android/.artifacts/
