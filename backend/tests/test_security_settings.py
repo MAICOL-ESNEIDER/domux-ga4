@@ -126,6 +126,18 @@ class DemoAccountTests(unittest.TestCase):
         guard = User.query.filter_by(email="guardia@domux.com").one()
         self.assertTrue(check_password_hash(guard.password_hash, new_password))
 
+    def test_missing_variable_in_production_is_reported_by_name(self):
+        env = environment_without("RENDER", "APP_ENV", **self.passwords)
+        with mock.patch.dict(os.environ, env, clear=True):
+            seed.seed_if_empty()
+        others = {k: v for k, v in self.passwords.items() if k != "SEED_ADMIN_PASSWORD"}
+        env = environment_without("SEED_ADMIN_PASSWORD", RENDER="true", **others)
+        with mock.patch.dict(os.environ, env, clear=True):
+            with self.assertLogs("seed", level="WARNING") as logs:
+                seed.sync_demo_passwords()
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("SEED_ADMIN_PASSWORD no está configurada", logs.output[0])
+
     def test_production_without_variables_creates_no_demo_accounts(self):
         env = environment_without(*SEED_VARS, RENDER="true")
         with mock.patch.dict(os.environ, env, clear=True):

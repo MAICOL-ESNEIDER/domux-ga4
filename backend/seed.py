@@ -100,6 +100,9 @@ def sync_demo_passwords():
     for email, var in DEMO_PASSWORD_VARS.items():
         password = _env_password(var)
         if not password:
+            # En el servidor de pruebas se avisa: la cuenta sigue con su clave vieja.
+            if is_production() and not os.environ.get(var):
+                logger.warning("%s no está configurada: %s conserva su contraseña anterior.", var, email)
             continue
         user = User.query.filter_by(email=email).first()
         if user is not None and not check_password_hash(user.password_hash, password):
