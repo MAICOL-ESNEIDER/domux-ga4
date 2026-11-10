@@ -5,6 +5,7 @@ from datetime import datetime
 
 from time_utils import colombia_today
 
+PIN_REGEX = re.compile(r"[0-9]{4}")
 PASSWORD_REGEX = re.compile(
     r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._-])"
     r"[A-Za-z\d@$!%*?&#._-]{8,}$"
@@ -89,6 +90,13 @@ def validate_strong_password(password):
             "mayúscula, una minúscula, un número y un carácter especial "
             "(@$!%*?&#._-)."
         )
+    return None
+
+
+def validate_pin(pin):
+    """El PIN del guardia son exactamente 4 dígitos, escritos como texto (RN-029)."""
+    if not isinstance(pin, str) or not PIN_REGEX.fullmatch(pin):
+        return "El PIN debe ser un texto de exactamente 4 dígitos."
     return None
 
 

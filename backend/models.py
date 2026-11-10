@@ -65,6 +65,9 @@ class User(db.Model):
     phone = db.Column(db.String(30), nullable=True, default="")
     document_id = db.Column(db.String(40), nullable=True, default="")
     password_hash = db.Column(db.String(255), nullable=False)
+    #: PIN de 4 dígitos del guardia para cambiar de turno en la tablet (RN-029, HU-010).
+    #: Se guarda con hash, como la contraseña; solo los guardias lo tienen.
+    pin_hash = db.Column(db.String(255), nullable=True)
     role = db.Column(db.String(20), nullable=False)
     #: El apartamento es una llave a la estructura de la unidad (HU-014 y HU-017).
     #: El texto «Torre 1 · Apto 101» ya no se guarda: se arma con la torre y el código.
@@ -159,6 +162,7 @@ class User(db.Model):
             "phone": self.phone or "",
             "documentId": self.document_id or "",
             "role": self.role or "",
+            "hasPin": bool(self.pin_hash),
             "apartmentId": self.apartment_id,
             "apartment": self.apartment,
             "apartmentNumber": self.apartment_number,

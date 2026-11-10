@@ -23,7 +23,7 @@ from models import (
 )
 from routes.common import json_body, page_args
 from services.audit_service import add_audit_log
-from services.login_attempt_service import LOGIN, register_success
+from services.login_attempt_service import LOGIN, PIN, register_success
 from services.excel_service import (
     MIME_XLSX,
     generate_census_template_xlsx,
@@ -42,6 +42,7 @@ from validators import (
     parse_optional_bool,
     require_non_empty_fields,
     validate_occupancy_type,
+    validate_pin,
     validate_strong_password,
     validate_colombian_plate,
     validate_iso_date,
@@ -437,6 +438,9 @@ def update_user(user_id):
             user.data_processing_consent = True
             user.data_processing_consent_at = utc_now()
         user.role = role
+    if user.role != "GUARD":
+        # El PIN de turno es solo de los guardias: quien deja de serlo lo pierde (RN-029).
+        user.pin_hash = None
     if "occupancyType" in data:
         error = validate_occupancy_type(data["occupancyType"])
         if error:
@@ -492,6 +496,34 @@ def reset_user_password(user_id):
     register_success(LOGIN, user.email.strip().lower()[:160])
     db.session.commit()
     return jsonify({"message": "Contraseña restablecida"})
+
+
+@bp.put("/admin/users/<int:user_id>/pin")
+@token_required
+@role_required("ADMIN")
+def set_guard_pin(user_id):
+    """Asigna o cambia el PIN de 4 dígitos con el que un guardia toma el turno (HU-010).
+
+    El PIN se guarda con hash y nunca se devuelve. Asignar uno nuevo también
+    quita el bloqueo del PIN anterior, igual que restablecer una contraseña.
+    """
+    data, failure = json_body()
+    if failure:
+        return failure
+    pin_error = validate_pin(data.get("pin"))
+    if pin_error:
+        return error_response(400, pin_error)
+
+    user = db.session.get(User, user_id)
+    if user is None:
+        return error_response(404, "Usuario no encontrado")
+    if user.role != "GUARD":
+        return error_response(400, "Solo los guardias tienen PIN para cambiar de turno.")
+    user.pin_hash = generate_password_hash(data["pin"])
+    register_success(PIN, str(user.id))
+    add_audit_log("user", user.id, "pin_set")
+    db.session.commit()
+    return jsonify({"message": "PIN asignado", "user": user.to_dict()})
 
 
 @bp.get("/residents")
