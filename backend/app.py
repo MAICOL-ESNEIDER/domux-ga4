@@ -4,11 +4,12 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, request
 from flask_cors import CORS
+from flask_migrate import stamp, upgrade
 from sqlalchemy import inspect
 
 from config import cors_origins
 from errors import error_response, register_error_handlers
-from extensions import db
+from extensions import db, migrations
 from logging_config import configure_logging
 from models import Pqrs, PqrsMessage, ResidentialUnit, User
 from routes.admin import bp as admin_bp
@@ -19,6 +20,10 @@ from seed import seed_if_empty, sync_demo_passwords
 from validators import apartment_number_from_label, validate_no_empty_strings
 
 load_dotenv()
+
+#: Carpeta de las migraciones de Alembic y versión que tienen las bases antiguas.
+MIGRATIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
+BASE_REVISION = "0001_base"
 
 SQLITE_ADDITIONS = {
     "users": {
@@ -280,6 +285,25 @@ def migrate_pqrs_conversations():
     db.session.commit()
 
 
+def prepare_database():
+    """Deja la estructura de la base al día al arrancar el servidor (TT-008).
+
+    Una base nueva se crea con las migraciones de Alembic. Una base creada antes
+    de usar migraciones (con db.create_all) se completa con las tablas y columnas
+    que le falten, se marca con la versión inicial y desde ahí sigue con
+    migraciones, sin perder datos.
+    """
+    tables = set(inspect(db.engine).get_table_names())
+    if tables and "alembic_version" not in tables:
+        db.create_all()
+        migrate_sqlite_schema()
+        migrate_profile_columns()
+        migrate_admin_action_columns()
+        migrate_security_columns()
+        stamp(directory=MIGRATIONS_DIR, revision=BASE_REVISION)
+    upgrade(directory=MIGRATIONS_DIR)
+
+
 def create_app():
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
@@ -297,6 +321,7 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     db.init_app(app)
+    migrations.init_app(app, db, directory=MIGRATIONS_DIR, render_as_batch=True)
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -322,15 +347,12 @@ def create_app():
         return None
 
     with app.app_context():
-        db.create_all()
-        migrate_sqlite_schema()
-        migrate_profile_columns()
-        migrate_admin_action_columns()
-        migrate_security_columns()
-        migrate_resident_profiles()
-        migrate_pqrs_conversations()
+        prepare_database()
         seed_if_empty()
         sync_demo_passwords()
+        # Completan datos de registros viejos; no hacen nada si ya están al día.
+        migrate_resident_profiles()
+        migrate_pqrs_conversations()
 
     return app
 

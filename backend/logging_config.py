@@ -4,18 +4,31 @@ import os
 from flask import request
 
 
-def configure_logging(app):
-    """Log request audit events to the server console only."""
-    level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+#: Marca de la salida de consola que agrega DOMUX, para no duplicarla.
+_HANDLER_NAME = "domux-consola"
 
-    app.logger.setLevel(level)
+
+def configure_logging(app):
+    """Configura los registros del servidor: una sola salida por consola, con fecha.
+
+    Todos los registros (los de la app, los de cada módulo y los de Alembic) pasan
+    por la misma salida, así ninguna línea sale repetida. El nivel se toma de
+    LOG_LEVEL (INFO si no se define).
+    """
+    level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    root = logging.getLogger()
+    if not any(handler.get_name() == _HANDLER_NAME for handler in root.handlers):
+        console_handler = logging.StreamHandler()
+        console_handler.set_name(_HANDLER_NAME)
+        console_handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+        root.addHandler(console_handler)
+    root.setLevel(level)
+    # La app usa la salida común; las migraciones solo informan si algo falla.
     app.logger.handlers.clear()
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    app.logger.addHandler(console_handler)
+    app.logger.setLevel(level)
+    logging.getLogger("alembic").setLevel(logging.WARNING)
 
     @app.before_request
     def log_request_start():
