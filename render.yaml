@@ -1,25 +1,47 @@
-# render.yaml — Blueprint de Render. En el dashboard de Render: New + > Blueprint,
-# apunta al repo de GitHub, y Render lee este archivo solo. Crea el servicio web
-# Y la base de datos Postgres automáticamente, ya conectados entre sí.
+# render.yaml — Blueprint de Render: describe el servidor de pruebas de DOMUX.
+# En el panel de Render (New + > Blueprint) crea el servicio web, la base
+# PostgreSQL y el grupo de variables, ya conectados entre sí.
+# Los secretos nunca se escriben aquí: Render genera JWT_SECRET y las variables
+# con "sync: false" se llenan a mano en el panel.
 
 services:
   - type: web
-    name: domux-backend
+    name: domux-ga4
     runtime: python
     plan: free
+    region: oregon
+    branch: release/v1.0-reducida
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
+    healthCheckPath: /api/health
     envVars:
-      - key: JWT_SECRET
-        generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: domux-db
+          name: domux-db-reducida
           property: connectionString
+      - fromGroup: DOMUX
+
+envVarGroups:
+  - name: DOMUX
+    envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_GUARD_PASSWORD
+        sync: false
+      - key: SEED_RESIDENT_PASSWORD
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
 
 databases:
-  - name: domux-db
+  - name: domux-db-reducida
     plan: free
+    region: oregon
+    postgresMajorVersion: "18"
+    # Sin direcciones permitidas: solo el servidor de Render puede conectarse.
+    ipAllowList: []
