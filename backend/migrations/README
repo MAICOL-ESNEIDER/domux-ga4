@@ -1,1 +1,31 @@
-Single-database configuration for Flask.
+Migraciones de la base de datos de DOMUX (TT-008)
+=================================================
+
+Cada cambio en la estructura de la base (una tabla o una columna nueva) queda
+en un archivo de versions/. El servidor las aplica solo al arrancar
+(prepare_database en app.py), igual en SQLite y en PostgreSQL.
+
+Crear una migración nueva
+-------------------------
+1. Cambia el modelo en models.py.
+2. Desde la carpeta backend/, con una base local de prueba:
+
+     DOMUX_SKIP_STARTUP=1 flask --app app db upgrade
+     DOMUX_SKIP_STARTUP=1 flask --app app db migrate -m "qué cambia" --rev-id 000N_nombre
+
+   En PowerShell (Windows), antes de los dos comandos:
+
+     $env:DOMUX_SKIP_STARTUP = "1"
+
+   DOMUX_SKIP_STARTUP=1 evita que el servidor toque la base al cargarse;
+   sin él, Flask aplicaría las migraciones y los datos de prueba antes de
+   comparar la base con los modelos.
+3. Revisa el archivo que se generó: explicación en español arriba, nombre
+   propio para cada llave foránea y que no falle si la columna ya existe
+   (mira 0002_comunicados_retiro_logico.py).
+4. Corre las pruebas en SQLite y en PostgreSQL antes de subir el cambio.
+
+Reglas
+------
+- Una migración que ya se subió no se cambia: se crea otra nueva.
+- Nada se borra (DEC-090): una migración no elimina filas ni columnas con datos.

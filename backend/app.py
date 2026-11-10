@@ -346,6 +346,11 @@ def create_app():
             return error_response(400, validation_error)
         return None
 
+    # Para crear una migración nueva (flask db migrate) la base debe quedar como
+    # está: con DOMUX_SKIP_STARTUP=1 el servidor no la toca al cargarse.
+    if os.environ.get("DOMUX_SKIP_STARTUP") == "1":
+        return app
+
     with app.app_context():
         prepare_database()
         seed_if_empty()
