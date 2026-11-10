@@ -88,14 +88,9 @@ pip install -r requirements.txt
 python app.py
 ```
 
-El servidor quedará escuchando en `http://localhost:5000/` (accesible desde el emulador Android mediante `http://10.0.2.2:5000/`). En su primer arranque crea automáticamente la base de datos `domux.db`, ejecuta las migraciones de esquema y siembra los siguientes usuarios de prueba:
+El servidor quedará escuchando en `http://localhost:5000/` (desde el emulador Android: `http://10.0.2.2:5000/`). En su primer arranque crea la base de datos `domux.db` y las cuentas de prueba: `admin@domux.com` (administración), `guardia@domux.com` (portería), `maria@domux.com` y `carlos@domux.com` (residentes).
 
-| Rol | Correo | Contraseña | Unidad Asignada |
-| :--- | :--- | :--- | :--- |
-| Administrador | `admin@domux.com` | `Admin123*` | Administración |
-| Guardia | `guardia@domux.com` | `Guardia123*` | Portería Principal |
-| Residente | `maria@domux.com` | `Residente123*` | Torre 1 Apto 101 |
-| Residente | `carlos@domux.com` | `Residente123*` | Torre 2 Apto 202 |
+Las contraseñas de prueba **no están en el código**. Copia `backend/.env.example` como `backend/.env` y escribe las tuyas en `SEED_ADMIN_PASSWORD`, `SEED_GUARD_PASSWORD` y `SEED_RESIDENT_PASSWORD` (mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo). Si no lo haces, el servidor las crea al azar y las guarda en `backend/instance/demo_credentials.txt`, un archivo que nunca se sube a GitHub. Si cambias una de esas variables, el servidor aplica la nueva contraseña al reiniciar.
 
 ### Ejecutar la Suite de Pruebas del Backend
 
@@ -120,7 +115,7 @@ cd android
 
 ## 5. Despliegue en la Nube (Render)
 
-Conecta el repositorio en Render (**New +** → **Blueprint**). Render detecta automáticamente `render.yaml` y aprovisiona el servicio web `domux-backend` junto con la base de datos PostgreSQL `domux-db`. `app.py` normaliza automáticamente las cadenas `postgres://` a `postgresql://` para compatibilidad con SQLAlchemy y ejecuta las migraciones de columnas al iniciar.
+El servidor de pruebas corre en Render como el servicio web `domux-ga4`, conectado a la rama `release/v1.0-reducida` y a la base PostgreSQL `domux-db-reducida`. Sus variables (`JWT_SECRET`, `DATABASE_URL`, `SEED_*_PASSWORD`, `PYTHON_VERSION` y, para los avisos al celular, `FIREBASE_SERVICE_ACCOUNT_JSON`) están en el grupo de variables `DOMUX` del panel de Render, nunca en el repositorio. `app.py` convierte las direcciones `postgres://` en `postgresql://` y prepara la base al iniciar.
 
 ## 6. Contrato de la API REST (Endpoints Principales)
 
