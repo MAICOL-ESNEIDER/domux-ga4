@@ -101,10 +101,12 @@ event.listen(Session, "after_rollback", _clear_queued_pushes)
 
 
 def _queue_push(user_id, title, message, notification_type, notification):
+    # Un usuario desactivado no recibe avisos al celular (TT-027).
     tokens = [
         row[0]
         for row in db.session.query(DevicePushToken.token)
-        .filter_by(user_id=user_id)
+        .join(User, DevicePushToken.user_id == User.id)
+        .filter(DevicePushToken.user_id == user_id, User.is_active.is_(True))
         .all()
     ]
     if not tokens:
@@ -140,7 +142,8 @@ def notify_user(user_id, title, message, notification_type):
 
 
 def notify_residents(title, message, notification_type):
-    residents = db.session.query(User.id).filter_by(role="RESIDENT").all()
+    # Solo los residentes activos reciben los comunicados (DEF-011).
+    residents = db.session.query(User.id).filter_by(role="RESIDENT", is_active=True).all()
     notifications = [
         Notification(
             user_id=user_id,

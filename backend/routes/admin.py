@@ -10,12 +10,14 @@ from auth import role_required, token_required
 from errors import error_response
 from extensions import db
 from models import (
+    DevicePushToken,
     HouseholdMember,
     Pet,
     ResidentialUnit,
     ROLES,
     User,
     Vehicle,
+    VisitQrPass,
 )
 from services.audit_service import add_audit_log
 from services.excel_service import (
@@ -342,6 +344,26 @@ def create_user():
     return jsonify({"message": "Usuario creado", "user": user.to_dict()}), 201
 
 
+def _close_access_of_deactivated_user(user):
+    """Cierra lo que un usuario desactivado todavía podría usar (TT-027).
+
+    Anula sus QR de visita que siguen vigentes (CA-HU-008-02) y borra sus tokens
+    de avisos al celular, que no se archivan (DEC-090). Su historial se queda.
+    Devuelve cuántos QR se anularon y cuántos tokens se quitaron.
+    """
+    passes = VisitQrPass.query.filter(
+        VisitQrPass.resident_id == user.id,
+        VisitQrPass.revoked.is_(False),
+        VisitQrPass.valid_until >= date.today().isoformat(),
+    ).all()
+    revoked_at = datetime.utcnow()
+    for qr_pass in passes:
+        qr_pass.revoked = True
+        qr_pass.revoked_at = revoked_at
+    removed_tokens = DevicePushToken.query.filter_by(user_id=user.id).delete()
+    return {"revokedQrPasses": len(passes), "removedPushTokens": removed_tokens}
+
+
 @bp.put("/users/<int:user_id>")
 @bp.put("/admin/users/<int:user_id>")
 @token_required
@@ -434,7 +456,12 @@ def update_user(user_id):
     if "isActive" in data:
         if not isinstance(data["isActive"], bool):
             return error_response(400, "isActive debe ser verdadero o falso")
+        was_active = user.is_active
         user.is_active = data["isActive"]
+        if was_active and not user.is_active:
+            add_audit_log("user", user.id, "deactivated", _close_access_of_deactivated_user(user))
+        elif not was_active and user.is_active:
+            add_audit_log("user", user.id, "reactivated")
 
     db.session.commit()
     return jsonify({"message": "Usuario actualizado", "user": user.to_dict()})

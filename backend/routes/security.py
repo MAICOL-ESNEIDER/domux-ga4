@@ -604,7 +604,8 @@ def revoke_visit_qr_pass(pass_id):
 
 def _qr_pass_for_guard(token):
     qr_pass = VisitQrPass.query.filter_by(token=token).first()
-    if qr_pass is None or qr_pass.revoked:
+    # El QR de un residente desactivado tampoco sirve, aunque no esté anulado (TT-027).
+    if qr_pass is None or qr_pass.revoked or not qr_pass.resident.is_active:
         return None, error_response(404, "Código QR inválido o revocado.")
     today = date.today().isoformat()
     if not qr_pass.valid_from <= today <= qr_pass.valid_until:
@@ -625,7 +626,9 @@ def inspect_visit_qr(token):
         "residentName": qr_pass.resident.full_name,
         "apartment": qr_pass.resident.apartment,
         "canRegister": (
-            not qr_pass.revoked and qr_pass.valid_from <= today <= qr_pass.valid_until
+            not qr_pass.revoked
+            and qr_pass.resident.is_active
+            and qr_pass.valid_from <= today <= qr_pass.valid_until
         ),
         "inside": [visit.to_dict() for visit in qr_pass.visits if visit.entered_at and not visit.exited_at],
         "registeredVisits": [visit.to_dict() for visit in qr_pass.visits],
