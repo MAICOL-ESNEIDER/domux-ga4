@@ -163,11 +163,6 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
             Text(if (loading) "Entrando..." else "Entrar")
         }
 
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Cuentas de prueba: admin@domux.com / Admin123* · guardia@domux.com / Guardia123* · maria@domux.com / Residente123*",
-            style = MaterialTheme.typography.bodySmall
-        )
         if (result.isNotEmpty()) {
             Spacer(Modifier.height(20.dp))
             Text(result)
