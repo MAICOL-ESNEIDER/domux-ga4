@@ -235,9 +235,17 @@ fun DomuxFeedbackBanner(message: String, onDismiss: (() -> Unit)? = null) {
         )
         val isSuccess = errorPrefixes.none { message.startsWith(it, ignoreCase = true) } &&
             confirmations.any { message.contains(it, ignoreCase = true) }
-        val background = if (isSuccess) Color(0xFF052E16) else Color(0xFF450A0A)
-        val foreground = if (isSuccess) Color(0xFF34D399) else Color(0xFFF87171)
-        val outline = if (isSuccess) Color(0xFF10B981) else Color(0xFFEF4444)
+        DomuxMessageBanner(message, isError = !isSuccess, onDismiss = onDismiss)
+    }
+
+/** Aviso verde (acierto) o rojo (error); quien lo usa ya sabe de cuál de los dos se trata. */
+@Composable
+fun DomuxMessageBanner(message: String, isError: Boolean, onDismiss: (() -> Unit)? = null) {
+        if (message.isBlank()) return
+
+        val background = if (isError) Color(0xFF450A0A) else Color(0xFF052E16)
+        val foreground = if (isError) Color(0xFFF87171) else Color(0xFF34D399)
+        val outline = if (isError) Color(0xFFEF4444) else Color(0xFF10B981)
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -251,7 +259,7 @@ fun DomuxFeedbackBanner(message: String, onDismiss: (() -> Unit)? = null) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "${if (isSuccess) "✓" else "⚠"} $message",
+                    "${if (isError) "⚠" else "✓"} $message",
                     modifier = Modifier.weight(1f),
                     color = foreground,
                     style = MaterialTheme.typography.bodyMedium
@@ -464,6 +472,10 @@ fun DomuxScreenScaffold(
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         var logoutError by remember { mutableStateOf<String?>(null) }
+        // Se lee para que el menú lateral se vuelva a dibujar si cambian los datos de la sesión
+        // (por ejemplo, el nombre del guardia que acaba de recibir el turno).
+        @Suppress("UNUSED_VARIABLE")
+        val sessionVersion = Session.changeCount
         val destinations = buildList {
             add("Inicio" to "home")
             add("Anuncios" to "announcements")
@@ -473,6 +485,7 @@ fun DomuxScreenScaffold(
                 add("Reservas" to "reservations")
                 add("Paquetería y visitas" to "registry")
                 add("Gestión de usuarios" to "createUser")
+                add("Estructura de la unidad" to "structure")
             } else if (Session.isResident) {
                 add("Mi perfil" to "profile")
                 add("Mis PQRS" to "pqrs")

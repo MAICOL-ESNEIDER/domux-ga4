@@ -22,7 +22,11 @@ data class UserData(
     val birthDate: String? = null,
     val age: Int? = null,
     val isMinor: Boolean = false,
-    val parentalConsent: Boolean = false
+    val parentalConsent: Boolean = false,
+    // El apartamento es una llave a la estructura de la unidad (HU-017); `apartment` es su texto.
+    val apartmentId: Int? = null,
+    // Solo los guardias tienen PIN para cambiar de turno (HU-010).
+    val hasPin: Boolean = false
 )
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
@@ -33,7 +37,7 @@ data class CreateUserRequest(
     val email: String,
     val password: String,
     val role: String,
-    val apartment: String?,
+    val apartmentId: Int?,
     val lastName: String = "",
     val phone: String = "",
     val documentId: String = "",
@@ -49,7 +53,7 @@ data class UpdateUserRequest(
     val phone: String? = null,
     val documentId: String? = null,
     val role: String? = null,
-    val apartment: String? = null,
+    val apartmentId: Int? = null,
     val occupancyType: String? = null,
     val isActive: Boolean? = null,
     val dataProcessingConsent: Boolean? = null,
@@ -57,6 +61,13 @@ data class UpdateUserRequest(
     val parentalConsent: Boolean? = null
 )
 data class ResetPasswordRequest(val password: String)
+
+// PIN de 4 dígitos del guardia (HU-010): el administrador lo asigna y el guardia lo usa en la tablet.
+data class SetPinRequest(val pin: String)
+data class GuardOption(val id: Int, val name: String)
+data class GuardsListResponse(val guards: List<GuardOption>?)
+data class GuardShiftRequest(val guardId: Int, val pin: String)
+data class GuardShiftResponse(val message: String?, val token: String?, val user: UserData?)
 data class CreateUserResponse(val message: String?, val user: UserData?)
 data class UsersListResponse(
     val users: List<UserData>?,
@@ -138,10 +149,9 @@ data class ResidentialUnitData(
 )
 
 data class ResidentialUnitResponse(val unit: ResidentialUnitData?)
+// El parqueadero y el cuarto útil ya no se guardan aquí: se asignan en la estructura de la unidad.
 data class SaveResidentialUnitRequest(
     val apartment: String,
-    val parkingIdentifier: String? = null,
-    val storageIdentifier: String? = null,
     val petInsurance: Boolean = false,
     val petInsurer: String? = null,
     val members: List<HouseholdMemberData> = emptyList(),

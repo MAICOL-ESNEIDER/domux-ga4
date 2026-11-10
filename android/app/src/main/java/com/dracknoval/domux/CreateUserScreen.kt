@@ -5,12 +5,14 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,12 +21,14 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.dracknoval.domux.data.ApartmentOption
 import com.dracknoval.domux.data.CreateUserRequest
 import com.dracknoval.domux.data.ExcelFileResponse
 import com.dracknoval.domux.data.ImportCensusRequest
 import com.dracknoval.domux.data.ResetPasswordRequest
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
+import com.dracknoval.domux.data.SetPinRequest
 import com.dracknoval.domux.data.UpdateUserRequest
 import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.data.mensajeDeError
@@ -120,11 +124,17 @@ fun CreateUserScreen(navController: NavController) {
     var documentId by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("RESIDENT") }
-    var apartment by remember { mutableStateOf("") }
+    // El residente se vincula a un apartamento que ya existe en la estructura de la unidad (HU-017).
+    var apartment by remember { mutableStateOf<ApartmentOption?>(null) }
     var occupancyType by remember { mutableStateOf("propietario") }
     var editUser by remember { mutableStateOf<UserData?>(null) }
     var resetUser by remember { mutableStateOf<UserData?>(null) }
     var resetPassword by remember { mutableStateOf("") }
+    // PIN de 4 dígitos del guardia (HU-010): a quién se le está asignando y lo que se escribe.
+    var pinUser by remember { mutableStateOf<UserData?>(null) }
+    var pinValue by remember { mutableStateOf("") }
+    var pinBusy by remember { mutableStateOf(false) }
+    var pinError by remember { mutableStateOf("") }
     var pendingUserUpdate by remember { mutableStateOf<Pair<Int, UpdateUserRequest>?>(null) }
     var pendingPasswordReset by remember { mutableStateOf<Pair<Int, String>?>(null) }
     val scope = rememberCoroutineScope()
@@ -211,7 +221,16 @@ fun CreateUserScreen(navController: NavController) {
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (role == "RESIDENT") {
-                    UserInput(apartment, { apartment = it }, "Apartamento", required = true, showMissingError = attemptedSubmit)
+                    ApartmentPickerField(
+                        label = "Apartamento *",
+                        selected = apartment,
+                        onSelect = { apartment = it },
+                        errorText = if (attemptedSubmit && apartment == null) {
+                            "Elige el apartamento del residente."
+                        } else {
+                            null
+                        }
+                    )
                     DatePickerField(
                         "Fecha de nacimiento (AAAA-MM-DD)",
                         birthDate,
@@ -255,7 +274,7 @@ fun CreateUserScreen(navController: NavController) {
                     onClick = {
                         attemptedSubmit = true
                         if (listOf(name, lastName, email, phone, documentId).any { it.trim().isEmpty() } ||
-                            (role == "RESIDENT" && apartment.trim().isEmpty()) ||
+                            (role == "RESIDENT" && apartment == null) ||
                             (role == "RESIDENT" && !consentConfirmed) ||
                             !email.trim().contains("@") || !validStrongPassword(password)
                         ) {
@@ -270,7 +289,7 @@ fun CreateUserScreen(navController: NavController) {
                                     Session.bearer(),
                                     CreateUserRequest(
                                         name.trim(), email.trim().lowercase(), password, role,
-                                        apartment.trim().takeIf { role == "RESIDENT" },
+                                        if (role == "RESIDENT") apartment?.id else null,
                                         lastName.trim(), phone.trim(), documentId.trim(), occupancyType,
                                         role == "RESIDENT" && consentConfirmed,
                                         birthDate.trim().takeIf { it.isNotEmpty() },
@@ -279,7 +298,7 @@ fun CreateUserScreen(navController: NavController) {
                                 )
                                 if (response.isSuccessful) {
                                     name = ""; lastName = ""; email = ""; phone = ""; documentId = ""
-                                    password = ""; apartment = ""
+                                    password = ""; apartment = null
                                     consentConfirmed = false
                                     birthDate = ""
                                     parentalConsent = false
@@ -444,12 +463,22 @@ fun CreateUserScreen(navController: NavController) {
                                     "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
                                         if (user.isActive) "Activo" else "Inactivo"
                                 )
-                                Row {
+                                if (user.role == "GUARD") {
+                                    Text(if (user.hasPin) "PIN de turno: asignado" else "PIN de turno: sin asignar")
+                                }
+                                Row(Modifier.horizontalScroll(rememberScrollState())) {
                                     TextButton(onClick = { editUser = user }) { Text("Editar") }
                                     TextButton(onClick = {
                                         resetUser = user
                                         resetPassword = ""
                                     }) { Text("Restablecer contraseña") }
+                                    if (user.role == "GUARD") {
+                                        TextButton(onClick = {
+                                            pinUser = user
+                                            pinValue = ""
+                                            pinError = ""
+                                        }) { Text(if (user.hasPin) "Cambiar PIN" else "Asignar PIN") }
+                                    }
                                     if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
                                         TextButton(onClick = {
                                             navController.navigate("unitProfile/${Uri.encode(user.apartment)}")
@@ -495,7 +524,16 @@ fun CreateUserScreen(navController: NavController) {
         var eEmail by remember(user.id) { mutableStateOf(user.email) }
         var ePhone by remember(user.id) { mutableStateOf(user.phone.orEmpty()) }
         var eDocument by remember(user.id) { mutableStateOf(user.documentId.orEmpty()) }
-        var eApartment by remember(user.id) { mutableStateOf(user.apartment.orEmpty()) }
+        val initialApartmentId = user.apartmentId
+        var eApartment by remember(user.id) {
+            mutableStateOf<ApartmentOption?>(
+                if (initialApartmentId != null) {
+                    ApartmentOption(initialApartmentId, user.apartment.orEmpty())
+                } else {
+                    null
+                }
+            )
+        }
         var eRole by remember(user.id) { mutableStateOf(user.role) }
         var eOccupancy by remember(user.id) { mutableStateOf(user.occupancyType ?: "propietario") }
         var eActive by remember(user.id) { mutableStateOf(user.isActive) }
@@ -519,7 +557,16 @@ fun CreateUserScreen(navController: NavController) {
                         }
                     }
                     if (eRole == "RESIDENT") {
-                        UserInput(eApartment, { eApartment = it }, "Apartamento", true, showMissingError = attemptedEdit)
+                        ApartmentPickerField(
+                            label = "Apartamento *",
+                            selected = eApartment,
+                            onSelect = { eApartment = it },
+                            errorText = if (attemptedEdit && eApartment == null) {
+                                "Elige el apartamento del residente."
+                            } else {
+                                null
+                            }
+                        )
                         DatePickerField(
                             "Fecha de nacimiento (AAAA-MM-DD)",
                             eBirthDate,
@@ -561,7 +608,7 @@ fun CreateUserScreen(navController: NavController) {
                 TextButton(onClick = {
                     attemptedEdit = true
                     if (listOf(eName, eLastName, eEmail, ePhone, eDocument).any { it.trim().isEmpty() } ||
-                        !eEmail.trim().contains("@") || (eRole == "RESIDENT" && eApartment.trim().isEmpty()) ||
+                        !eEmail.trim().contains("@") || (eRole == "RESIDENT" && eApartment == null) ||
                         (eRole == "RESIDENT" && user.role != "RESIDENT" && !eConsent)
                     ) {
                         message = "Completa los campos obligatorios."
@@ -570,7 +617,7 @@ fun CreateUserScreen(navController: NavController) {
                     pendingUserUpdate = user.id to UpdateUserRequest(
                         eName.trim(), eLastName.trim(), eEmail.trim().lowercase(),
                         ePhone.trim(), eDocument.trim(), eRole,
-                        eApartment.trim().takeIf { eRole == "RESIDENT" },
+                        if (eRole == "RESIDENT") eApartment?.id else null,
                         eOccupancy.takeIf { eRole == "RESIDENT" }, eActive,
                         true.takeIf { eRole == "RESIDENT" && user.role != "RESIDENT" },
                         eBirthDate.trim().takeIf { it.isNotEmpty() },
@@ -608,6 +655,75 @@ fun CreateUserScreen(navController: NavController) {
                 }) { Text("Continuar") }
             },
             dismissButton = { TextButton(onClick = { resetUser = null }) { Text("Cancelar") } }
+        )
+    }
+
+    pinUser?.let { user ->
+        AlertDialog(
+            onDismissRequest = { if (!pinBusy) pinUser = null },
+            title = { Text(if (user.hasPin) "Cambiar PIN del guardia" else "Asignar PIN al guardia") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "PIN de 4 dígitos para ${user.fullName ?: user.name}. Lo usará en la tablet " +
+                            "de portería al recibir el turno. Después no se puede ver: solo cambiarlo."
+                    )
+                    OutlinedTextField(
+                        value = pinValue,
+                        onValueChange = { pinValue = it.filter(Char::isDigit).take(4) },
+                        label = { Text("PIN de 4 dígitos") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (pinError.isNotBlank()) {
+                        Text(
+                            pinError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !pinBusy,
+                    onClick = {
+                        if (pinValue.length != 4) {
+                            pinError = "El PIN tiene exactamente 4 dígitos."
+                            return@TextButton
+                        }
+                        pinBusy = true
+                        pinError = ""
+                        scope.launch {
+                            try {
+                                val response = RetrofitClient.api.setGuardPin(
+                                    Session.bearer(), user.id, SetPinRequest(pinValue)
+                                )
+                                if (response.isSuccessful) {
+                                    pinUser = null
+                                    pinValue = ""
+                                    message = "PIN guardado."
+                                    loadUsers()
+                                } else {
+                                    pinError = mensajeDeError(response.code(), response.errorBody()?.string())
+                                }
+                            } catch (exception: Exception) {
+                                if (isCancellation(exception)) {
+                                    if (exception is CancellationException) throw exception else return@launch
+                                }
+                                pinError = "No se pudo guardar el PIN: ${exception.message}"
+                            } finally {
+                                pinBusy = false
+                            }
+                        }
+                    }
+                ) { Text(if (pinBusy) "Guardando..." else "Guardar PIN") }
+            },
+            dismissButton = {
+                TextButton(enabled = !pinBusy, onClick = { pinUser = null }) { Text("Cancelar") }
+            }
         )
     }
 

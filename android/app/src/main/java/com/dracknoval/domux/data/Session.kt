@@ -3,6 +3,9 @@ package com.dracknoval.domux.data
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import org.json.JSONObject
 import java.security.GeneralSecurityException
 import java.security.KeyStore
@@ -23,6 +26,11 @@ object Session {
     var apartment: String? = null
     var isMinor: Boolean = false
     var parentalConsent: Boolean = false
+
+    // Sube cada vez que cambian los datos de la sesión (por ejemplo, al cambiar de guardia con su
+    // PIN): quien dibuja algo con ellos, como el menú lateral, lo lee para volver a dibujarse.
+    var changeCount by mutableIntStateOf(0)
+        private set
 
     val isAdmin: Boolean get() = role == "ADMIN"
     val isResident: Boolean get() = role == "RESIDENT"
@@ -108,6 +116,7 @@ object Session {
         apartment = user.apartment
         isMinor = user.isMinor
         parentalConsent = user.parentalConsent
+        changeCount++
     }
 }
 

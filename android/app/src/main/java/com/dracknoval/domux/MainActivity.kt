@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("registry") { RegistryScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
+                        composable("structure") { StructureScreen(navController) }
                         composable("profile") { ResidentProfileScreen(navController) }
                         composable(
                             "unitProfile/{apartment}",

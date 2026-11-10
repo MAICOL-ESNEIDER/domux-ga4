@@ -96,6 +96,9 @@ fun RegistryScreen(navController: NavController) {
     var search by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf<String?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    // Cambio de guardia con PIN (HU-010): guardName es quien tiene el turno ahora.
+    var showGuardShift by remember { mutableStateOf(false) }
+    var guardName by remember { mutableStateOf(Session.userName.orEmpty()) }
 
     var selectedPackageResident by remember { mutableStateOf<ResidentSummary?>(null) }
     var packageDescription by remember { mutableStateOf("") }
@@ -265,6 +268,19 @@ fun RegistryScreen(navController: NavController) {
             DomuxSectionTabs(tabs, selectedTab.coerceIn(tabs.indices)) { selectedTab = it }
             if (message.isNotBlank()) {
                 DomuxFeedbackBanner(message) { message = "" }
+            }
+            if (Session.isGuard) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Guardia en turno: $guardName",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    TextButton(onClick = { showGuardShift = true }) { Text("Cambiar de guardia") }
+                }
             }
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
 
@@ -802,6 +818,19 @@ fun RegistryScreen(navController: NavController) {
             },
             dismissButton = {
                 TextButton(onClick = { exitQrVisit(false) }) { Text("No, salida definitiva") }
+            }
+        )
+    }
+
+    if (showGuardShift) {
+        GuardShiftDialog(
+            onDismiss = { showGuardShift = false },
+            onShiftDone = { shiftMessage ->
+                showGuardShift = false
+                guardName = Session.userName.orEmpty()
+                message = shiftMessage
+                // Lo que se vea desde ahora se pide con la sesión del guardia que entra.
+                scope.launch { load() }
             }
         )
     }

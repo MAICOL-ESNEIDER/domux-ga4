@@ -18,6 +18,16 @@ interface ApiService {
     @GET("api/auth/session")
     suspend fun currentSession(@Header("Authorization") auth: String): Response<UserDataResponse>
 
+    // Cambio de guardia en la tablet de portería (HU-010): lista de guardias con PIN y cambio con PIN.
+    @GET("api/auth/guards")
+    suspend fun getGuards(@Header("Authorization") auth: String): Response<GuardsListResponse>
+
+    @POST("api/auth/guard-shift")
+    suspend fun guardShift(
+        @Header("Authorization") auth: String,
+        @Body body: GuardShiftRequest
+    ): Response<GuardShiftResponse>
+
     @POST("api/push-tokens")
     suspend fun registerPushToken(
         @Header("Authorization") auth: String,
@@ -92,6 +102,13 @@ interface ApiService {
         @Path("id") id: Int,
         @Body body: ResetPasswordRequest
     ): Response<GenericMessageResponse>
+
+    @PUT("api/admin/users/{id}/pin")
+    suspend fun setGuardPin(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: SetPinRequest
+    ): Response<CreateUserResponse>
 
     @GET("api/residents")
     suspend fun getResidents(

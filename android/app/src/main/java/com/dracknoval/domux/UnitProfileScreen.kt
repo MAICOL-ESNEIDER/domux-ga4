@@ -56,8 +56,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
-    var parking by remember { mutableStateOf("") }
-    var storage by remember { mutableStateOf("") }
     var petInsurance by remember { mutableStateOf(false) }
     var petInsurer by remember { mutableStateOf("") }
     val members = remember { mutableStateListOf<HouseholdMemberData>() }
@@ -77,8 +75,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             }
             val result = response.body()?.unit ?: return
             unit = result
-            parking = result.parkingIdentifier.orEmpty()
-            storage = result.storageIdentifier.orEmpty()
             petInsurance = result.petInsurance
             petInsurer = result.petInsurer.orEmpty()
             members.clear(); members.addAll(result.members)
@@ -114,8 +110,13 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                     }
                 }
             }
-            OutlinedTextField(parking, { parking = it }, label = { Text("Parqueadero (identificador)") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(storage, { storage = it }, label = { Text("Cuarto útil (identificador)") }, modifier = Modifier.fillMaxWidth())
+            // Los parqueaderos y cuartos útiles se asignan en «Estructura de la unidad»; aquí solo se ven.
+            Text("Parqueadero: ${unit?.parkingIdentifier ?: "No registrado"}")
+            Text("Cuarto útil: ${unit?.storageIdentifier ?: "No registrado"}")
+            Text(
+                "Para cambiarlos, usa «Estructura de la unidad» en el menú.",
+                style = MaterialTheme.typography.bodySmall
+            )
             Row {
                 Checkbox(petInsurance, { petInsurance = it })
                 Text("Tiene seguro de mascotas", Modifier.padding(top = 12.dp))
@@ -275,8 +276,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                                 Session.bearer(),
                                 SaveResidentialUnitRequest(
                                     apartment = apartment,
-                                    parkingIdentifier = parking.trim().takeIf(String::isNotEmpty),
-                                    storageIdentifier = storage.trim().takeIf(String::isNotEmpty),
                                     petInsurance = petInsurance,
                                     petInsurer = petInsurer.trim().takeIf(String::isNotEmpty),
                                     members = members.toList(),
