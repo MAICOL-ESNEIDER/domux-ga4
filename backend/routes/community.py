@@ -1,5 +1,4 @@
 import base64
-import json
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, g, jsonify, request
@@ -10,7 +9,6 @@ from errors import error_response
 from extensions import db
 from models import (
     Announcement,
-    AuditLog,
     CommonArea,
     Pqrs,
     PqrsMessage,
@@ -19,6 +17,7 @@ from models import (
     ReservationMessage,
     User,
 )
+from services.audit_service import add_audit_log
 from services.notification_service import notify_residents, notify_user
 from services.excel_service import (
     MIME_XLSX,
@@ -43,17 +42,6 @@ from validators import (
 )
 
 bp = Blueprint("community", __name__, url_prefix="/api")
-
-
-def _add_audit_log(entity_type, entity_id, action, details=None):
-    db.session.add(AuditLog(
-        entity_type=entity_type,
-        entity_id=entity_id,
-        action=action,
-        actor_id=g.current_user.id,
-        actor_role=g.current_user.role,
-        details=json.dumps(details, ensure_ascii=False) if details is not None else None,
-    ))
 
 
 @bp.post("/admin/archive-history")
@@ -82,7 +70,7 @@ def archive_history():
 
     archived_pqrs = len(pqrs_items)
     archived_reservations = len(reservations)
-    _add_audit_log(
+    add_audit_log(
         "history_archive",
         None,
         "archived",
@@ -201,7 +189,7 @@ def _retire_announcement(announcement_id):
         return error_response(409, "El anuncio ya estaba retirado.")
     announcement.retired_at = datetime.utcnow()
     announcement.retired_by_id = g.current_user.id
-    _add_audit_log("announcement", announcement.id, "retired", {"title": announcement.title})
+    add_audit_log("announcement", announcement.id, "retired", {"title": announcement.title})
     db.session.commit()
     return jsonify({
         "message": "Anuncio retirado. Ya no se ve en la app, pero queda guardado.",
@@ -347,7 +335,7 @@ def create_pqrs():
             f"Administración registró una PQRS a tu nombre: {pqrs.subject}.",
             "pqrs",
         )
-    _add_audit_log("PQRS", pqrs.id, "created")
+    add_audit_log("PQRS", pqrs.id, "created")
     db.session.commit()
     return jsonify({"message": "PQRS enviada", "pqrs": pqrs.to_dict()}), 201
 
@@ -384,14 +372,14 @@ def respond_pqrs(pqrs_id):
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     ))
-    _add_audit_log(
+    add_audit_log(
         "PQRS",
         pqrs.id,
         "responded",
         {"status": pqrs.status},
     )
     if previous_status != pqrs.status:
-        _add_audit_log(
+        add_audit_log(
             "PQRS",
             pqrs.id,
             "status_changed",
@@ -439,9 +427,9 @@ def add_pqrs_message(pqrs_id):
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     ))
-    _add_audit_log("PQRS", pqrs.id, "responded")
+    add_audit_log("PQRS", pqrs.id, "responded")
     if was_resolved:
-        _add_audit_log(
+        add_audit_log(
             "PQRS",
             pqrs.id,
             "status_changed",
@@ -551,9 +539,9 @@ def respond_pqrs_batch():
             media_url=data.get("mediaUrl"),
             media_type=data.get("mediaType"),
         ))
-        _add_audit_log("PQRS", pqrs.id, "responded", {"status": status})
+        add_audit_log("PQRS", pqrs.id, "responded", {"status": status})
         if previous_status != status:
-            _add_audit_log(
+            add_audit_log(
                 "PQRS",
                 pqrs.id,
                 "status_changed",
@@ -769,7 +757,7 @@ def create_reservation():
                 f"de {reservation.time_slot}.",
                 "reservation",
             )
-    _add_audit_log("RESERVATION", reservation.id, "created")
+    add_audit_log("RESERVATION", reservation.id, "created")
     try:
         db.session.commit()
     except IntegrityError:
@@ -806,7 +794,7 @@ def update_reservation_status(res_id):
     previous_status = reservation.status
     reservation.status = status
     if previous_status != status:
-        _add_audit_log(
+        add_audit_log(
             "RESERVATION",
             reservation.id,
             "status_changed",
@@ -864,7 +852,7 @@ def add_reservation_message(res_id):
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     ))
-    _add_audit_log("RESERVATION", reservation.id, "responded")
+    add_audit_log("RESERVATION", reservation.id, "responded")
     if g.current_user.role == "ADMIN":
         notify_user(
             reservation.resident_id,
@@ -904,7 +892,7 @@ def cancel_reservation(res_id):
         return error_response(400, "Solo puedes cancelar la reserva antes del día reservado.")
     previous_status = reservation.status
     reservation.status = "cancelada"
-    _add_audit_log(
+    add_audit_log(
         "RESERVATION",
         reservation.id,
         "status_changed",
