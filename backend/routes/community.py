@@ -141,7 +141,15 @@ def _resident_for_write(data):
 @bp.get("/announcements")
 @token_required
 def get_announcements():
-    items = Announcement.query.order_by(Announcement.created_at.desc()).all()
+    """Lista los comunicados publicados, del más nuevo al más antiguo.
+
+    Los retirados no salen en la lista, pero siguen guardados en la base.
+    """
+    items = (
+        Announcement.query.filter(Announcement.retired_at.is_(None))
+        .order_by(Announcement.created_at.desc())
+        .all()
+    )
     return jsonify({"announcements": [item.to_dict() for item in items]})
 
 
@@ -180,16 +188,45 @@ def create_announcement():
     return jsonify({"message": "Anuncio publicado", "announcement": announcement.to_dict()}), 201
 
 
+def _retire_announcement(announcement_id):
+    """Retira un comunicado sin borrarlo (TT-029, DEC-090 y ADR-013).
+
+    Guarda cuándo y quién lo retiró y lo anota en el registro de auditoría.
+    Deja de verse en la app, pero la fila queda en la base para el historial.
+    """
+    announcement = db.session.get(Announcement, announcement_id)
+    if announcement is None:
+        return error_response(404, "Anuncio no encontrado")
+    if announcement.is_retired:
+        return error_response(409, "El anuncio ya estaba retirado.")
+    announcement.retired_at = datetime.utcnow()
+    announcement.retired_by_id = g.current_user.id
+    _add_audit_log("announcement", announcement.id, "retired", {"title": announcement.title})
+    db.session.commit()
+    return jsonify({
+        "message": "Anuncio retirado. Ya no se ve en la app, pero queda guardado.",
+        "announcement": announcement.to_dict(),
+    })
+
+
+@bp.put("/announcements/<int:announcement_id>/retire")
+@token_required
+@role_required("ADMIN")
+def retire_announcement(announcement_id):
+    """Retira un comunicado (API-COM-04). Solo la administración."""
+    return _retire_announcement(announcement_id)
+
+
 @bp.delete("/announcements/<int:announcement_id>")
 @token_required
 @role_required("ADMIN")
 def delete_announcement(announcement_id):
-    announcement = db.session.get(Announcement, announcement_id)
-    if announcement is None:
-        return error_response(404, "Anuncio no encontrado")
-    db.session.delete(announcement)
-    db.session.commit()
-    return jsonify({"message": "Anuncio eliminado"})
+    """Ruta anterior para quitar un comunicado: ahora también lo retira.
+
+    Se deja para que las versiones viejas de la app sigan funcionando; ya no
+    borra nada. La ruta nueva es PUT /api/announcements/<id>/retire.
+    """
+    return _retire_announcement(announcement_id)
 
 
 @bp.get("/pqrs")

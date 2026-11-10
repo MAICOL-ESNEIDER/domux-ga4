@@ -108,8 +108,9 @@ interface ApiService {
         @Body body: CreateAnnouncementRequest
     ): Response<CreateAnnouncementResponse>
 
-    @DELETE("api/announcements/{id}")
-    suspend fun deleteAnnouncement(
+    // Retira el anuncio: deja de verse en la app, pero no se borra (TT-029).
+    @PUT("api/announcements/{id}/retire")
+    suspend fun retireAnnouncement(
         @Header("Authorization") auth: String,
         @Path("id") id: Int
     ): Response<GenericMessageResponse>

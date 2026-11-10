@@ -228,6 +228,12 @@ class Vehicle(db.Model):
 
 
 class Announcement(db.Model):
+    """Comunicado de la administración para los residentes.
+
+    Un comunicado nunca se borra (DEC-090 y ADR-013): al retirarlo se guarda
+    cuándo y quién lo hizo, deja de verse en la app y sigue en la base.
+    """
+
     __tablename__ = "announcements"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -239,8 +245,20 @@ class Announcement(db.Model):
     media_type = db.Column(db.String(20), nullable=True)
     author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Retiro lógico (TT-029): vacíos mientras el comunicado está publicado.
+    retired_at = db.Column(db.DateTime, nullable=True)
+    retired_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_announcements_retired_by_id_users"),
+        nullable=True,
+    )
 
-    author = db.relationship("User")
+    author = db.relationship("User", foreign_keys=[author_id])
+    retired_by = db.relationship("User", foreign_keys=[retired_by_id])
+
+    @property
+    def is_retired(self):
+        return self.retired_at is not None
 
     def to_dict(self):
         return {
@@ -253,6 +271,8 @@ class Announcement(db.Model):
             "mediaType": self.media_type,
             "createdAt": _fmt(self.created_at),
             "authorName": self.author.full_name if self.author else None,
+            "isRetired": self.is_retired,
+            "retiredAt": _fmt(self.retired_at),
         }
 
 

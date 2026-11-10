@@ -150,7 +150,7 @@ fun AnnouncementsScreen(navController: NavController) {
                             style = MaterialTheme.typography.bodySmall
                         )
                         if (Session.isAdmin) {
-                            DeleteAnnouncementButton(onClick = { confirmation = announcement })
+                            RetireAnnouncementButton(onClick = { confirmation = announcement })
                         }
                     }
                 }
@@ -160,23 +160,24 @@ fun AnnouncementsScreen(navController: NavController) {
     }
     }
 
+    // Retirar no borra (TT-029): el anuncio deja de verse, pero queda en el historial.
     confirmation?.let { item ->
         DomuxConfirmDialog(
-            title = "Eliminar anuncio",
-            message = "¿Estás seguro de eliminar “${item.title}”?",
-            confirmLabel = "Eliminar",
+            title = "Retirar anuncio",
+            message = "“${item.title}” dejará de verse en la app. No se borra: queda guardado en el historial.",
+            confirmLabel = "Retirar",
             danger = true,
             onConfirm = {
                 confirmation = null
                 scope.launch {
                     try {
-                        val response = RetrofitClient.api.deleteAnnouncement(Session.bearer(), item.id)
-                        message = if (response.isSuccessful) "Anuncio eliminado."
+                        val response = RetrofitClient.api.retireAnnouncement(Session.bearer(), item.id)
+                        message = if (response.isSuccessful) "Anuncio retirado."
                         else mensajeDeError(response.code(), response.errorBody()?.string())
                         if (response.isSuccessful) load()
                     } catch (exception: Exception) {
                         if (exception is CancellationException) throw exception
-                        message = "No se pudo eliminar el anuncio: ${exception.message}"
+                        message = "No se pudo retirar el anuncio. Revisa tu conexión e inténtalo de nuevo."
                     }
                 }
             },
@@ -186,10 +187,10 @@ fun AnnouncementsScreen(navController: NavController) {
 }
 
 @Composable
-private fun DeleteAnnouncementButton(onClick: () -> Unit) {
+private fun RetireAnnouncementButton(onClick: () -> Unit) {
     Surface(
         modifier = Modifier
-            .semantics { contentDescription = "Eliminar anuncio" },
+            .semantics { contentDescription = "Retirar anuncio" },
         onClick = onClick,
         color = Color(0xFF450A0A),
         contentColor = Color(0xFFF87171),
