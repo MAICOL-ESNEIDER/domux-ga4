@@ -775,3 +775,28 @@ class AuditLog(db.Model):
             "details": self.details,
             "createdAt": _fmt(self.created_at),
         }
+
+
+class LoginAttempt(db.Model):
+    """Intentos fallidos seguidos de una cuenta o de un PIN (HU-006, RN-002 y DAT-02).
+
+    Hay una fila por cada correo (o por cada guardia, en el caso del PIN) que ha
+    fallado alguna vez. Un inicio correcto pone el contador en cero y, al llegar
+    al quinto fallo, locked_until guarda hasta cuándo dura el bloqueo. También se
+    lleva para los correos que no existen: así el bloqueo no revela qué cuentas
+    hay en el sistema.
+    """
+
+    __tablename__ = "login_attempts"
+    __table_args__ = (
+        db.UniqueConstraint("kind", "subject", name="uq_login_attempts_kind_subject"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    #: «login» para la contraseña o «pin» para el cambio de turno del guardia.
+    kind = db.Column(db.String(10), nullable=False)
+    #: El correo en minúscula, o el id del guardia cuando es un PIN.
+    subject = db.Column(db.String(160), nullable=False)
+    failed_count = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
+    last_failed_at = db.Column(db.DateTime, nullable=True)

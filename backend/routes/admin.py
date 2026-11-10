@@ -20,6 +20,7 @@ from models import (
     VisitQrPass,
 )
 from services.audit_service import add_audit_log
+from services.login_attempt_service import LOGIN, register_success
 from services.excel_service import (
     MIME_XLSX,
     generate_census_template_xlsx,
@@ -487,6 +488,8 @@ def reset_user_password(user_id):
     if user is None:
         return error_response(404, "Usuario no encontrado")
     user.password_hash = generate_password_hash(data["password"])
+    # Con la clave nueva la persona debe poder entrar: se quita el bloqueo por intentos (HU-006).
+    register_success(LOGIN, user.email.strip().lower()[:160])
     db.session.commit()
     return jsonify({"message": "Contraseña restablecida"})
 
