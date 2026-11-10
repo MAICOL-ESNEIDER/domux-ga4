@@ -15,6 +15,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import Announcement, AuditLog, User
+from structure_fixtures import apartment_for
 
 
 class AnnouncementRetireTests(unittest.TestCase):
@@ -29,7 +30,7 @@ class AnnouncementRetireTests(unittest.TestCase):
         db.drop_all()
         db.create_all()
         self.admin = self.user("ADMIN", "admin-anuncios@test.local")
-        self.resident = self.user("RESIDENT", "residente-anuncios@test.local", apartment="Apto 101")
+        self.resident = self.user("RESIDENT", "residente-anuncios@test.local", apartment_ref=apartment_for("Apto 101"))
         self.guard = self.user("GUARD", "guardia-anuncios@test.local")
         db.session.commit()
         self.client = self.app.test_client()

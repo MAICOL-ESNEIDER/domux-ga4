@@ -15,6 +15,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import User, Visit, VisitQrPass
+from structure_fixtures import apartment_for
 
 
 class RolePermissionTests(unittest.TestCase):
@@ -32,7 +33,7 @@ class RolePermissionTests(unittest.TestCase):
         self.guard = self.user("GUARD", "guardia-permisos@test.local")
         self.resident = self.user(
             "RESIDENT", "residente-permisos@test.local",
-            apartment="Apto 101", phone="3000000000", occupancy_type="propietario",
+            apartment_ref=apartment_for("Apto 101"), phone="3000000000", occupancy_type="propietario",
         )
         db.session.flush()
         self.visit = Visit(

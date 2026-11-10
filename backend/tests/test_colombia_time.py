@@ -19,6 +19,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import User, VisitQrPass, _fmt
+from structure_fixtures import apartment_for
 
 #: 10 de noviembre de 2026 a las 10 de la noche en Colombia (ya es 11 en UTC).
 NIGHT_IN_COLOMBIA = datetime(2026, 11, 10, 22, 0, tzinfo=time_utils.COLOMBIA)
@@ -54,7 +55,7 @@ class QrAtNightTests(unittest.TestCase):
         )
         resident = User(
             name="Residente", email="residente-noche@test.local", role="RESIDENT",
-            apartment="Apto 101", is_active=True,
+            apartment_ref=apartment_for("Apto 101"), is_active=True,
             password_hash=generate_password_hash("Clave-de-prueba-1*"),
         )
         db.session.add_all([self.guard, resident])

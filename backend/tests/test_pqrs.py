@@ -7,6 +7,7 @@ from app import create_app, migrate_pqrs_conversations
 from auth import generate_token
 from extensions import db
 from models import AuditLog, Notification, Pqrs, PqrsMessage, PqrsSatisfaction, User
+from structure_fixtures import apartment_for
 from werkzeug.security import generate_password_hash
 
 
@@ -33,7 +34,7 @@ class PqrsWorkflowTests(unittest.TestCase):
             email="resident@test.local",
             password_hash=generate_password_hash("Resident123*"),
             role="RESIDENT",
-            apartment="Torre 1 · 101",
+            apartment_ref=apartment_for("Torre 1 · 101"),
             is_active=True,
         )
         self.other_resident = User(
@@ -41,7 +42,7 @@ class PqrsWorkflowTests(unittest.TestCase):
             email="other@test.local",
             password_hash=generate_password_hash("Other123*"),
             role="RESIDENT",
-            apartment="Torre 2 · 202",
+            apartment_ref=apartment_for("Torre 2 · 202"),
             is_active=True,
         )
         self.guard = User(

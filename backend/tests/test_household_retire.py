@@ -14,7 +14,8 @@ from werkzeug.security import generate_password_hash
 from app import create_app
 from auth import generate_token
 from extensions import db
-from models import AuditLog, HouseholdMember, Pet, ResidentialUnit, User, Vehicle
+from models import AuditLog, HouseholdMember, Pet, User, Vehicle
+from structure_fixtures import apartment_for
 
 APTO_101 = "Torre 1 · Apto 101"
 APTO_202 = "Torre 2 · Apto 202"
@@ -51,13 +52,11 @@ class HouseholdRetireTests(unittest.TestCase):
         )
         self.resident = User(
             name="Residente", email="residente-ficha@test.local", role="RESIDENT",
-            apartment=APTO_101, apartment_number=101, is_active=True,
+            apartment_ref=apartment_for(APTO_101), is_active=True,
             password_hash=generate_password_hash("Clave-de-prueba-1*"),
         )
-        db.session.add_all([
-            self.admin, self.resident,
-            ResidentialUnit(apartment=APTO_101), ResidentialUnit(apartment=APTO_202),
-        ])
+        apartment_for(APTO_202)
+        db.session.add_all([self.admin, self.resident])
         db.session.commit()
         self.client = self.app.test_client()
 

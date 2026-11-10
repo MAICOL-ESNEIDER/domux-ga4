@@ -17,6 +17,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import AuditLog, DevicePushToken, Notification, User, VisitQrPass
+from structure_fixtures import apartment_for
 
 
 def days_from_today(days):
@@ -36,8 +37,8 @@ class UserDeactivationTests(unittest.TestCase):
         db.create_all()
         self.admin = self.user("ADMIN", "admin-desactivar@test.local")
         self.guard = self.user("GUARD", "guardia-desactivar@test.local")
-        self.resident = self.user("RESIDENT", "residente-desactivar@test.local", apartment="Apto 101")
-        self.neighbor = self.user("RESIDENT", "vecina-desactivar@test.local", apartment="Apto 102")
+        self.resident = self.user("RESIDENT", "residente-desactivar@test.local", apartment_ref=apartment_for("Apto 101"))
+        self.neighbor = self.user("RESIDENT", "vecina-desactivar@test.local", apartment_ref=apartment_for("Apto 102"))
         db.session.flush()
         self.current_pass = self.qr_pass("qr-vigente", days_from_today(0), days_from_today(2))
         self.expired_pass = self.qr_pass("qr-vencido", days_from_today(-5), days_from_today(-1))

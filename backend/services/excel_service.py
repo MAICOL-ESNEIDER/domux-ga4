@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import re
+import secrets
 import unicodedata
 from datetime import date, datetime
 from zipfile import BadZipFile
@@ -22,12 +23,17 @@ from models import (
     Pqrs,
     PqrsMessage,
     Reservation,
-    ResidentialUnit,
     User,
     Vehicle,
 )
+from services.structure_service import (
+    apartment_by_text,
+    assign_parking_codes,
+    assign_storage_codes,
+    ensure_unit,
+)
 from time_utils import colombia_today, to_colombia, utc_now
-from validators import apartment_number_from_label, validate_colombian_plate
+from validators import validate_colombian_plate
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 CENSUS_HEADERS = (
@@ -184,10 +190,16 @@ def _normalized_rows(file_bytes, filename):
 
 
 def _upsert_census_row(row):
-    apartment = row.get("apartment", "").strip()
+    apartment_text = row.get("apartment", "").strip()
     name = row.get("name", "").strip()
-    if not apartment or not name:
+    if not apartment_text or not name:
         raise ValueError("Apartamento y Nombre son obligatorios.")
+    # El apartamento debe existir en la estructura de la unidad (HU-014 y HU-017).
+    apartment = apartment_by_text(apartment_text)
+    if apartment is None:
+        raise ValueError(
+            f"El apartamento «{apartment_text}» no existe: créalo antes en la estructura de la unidad."
+        )
     email = row.get("email", "").strip().lower() or None
     document_id = row.get("document_id", "").strip() or None
     if not email and not document_id:
@@ -217,10 +229,12 @@ def _upsert_census_row(row):
     if user is None:
         if email is None:
             email = f"censo-{document_id}@domux.invalid"
+        # Sin contraseña conocida: nadie entra hasta que el administrador la restablezca
+        # (SEC: ninguna cuenta nace con una clave que otros conozcan).
         user = User(
             name=name,
             email=email,
-            password_hash=generate_password_hash("Domux2026*"),
+            password_hash=generate_password_hash(secrets.token_urlsafe(24)),
             role="RESIDENT",
         )
         db.session.add(user)
@@ -238,8 +252,7 @@ def _upsert_census_row(row):
     if document_id:
         user.document_id = document_id
     user.role = "RESIDENT"
-    user.apartment = apartment
-    user.apartment_number = apartment_number_from_label(apartment)
+    user.apartment_ref = apartment
     if "occupancy_type" in row:
         user.occupancy_type = occupancy_type
     if "birth_date" in row:
@@ -251,18 +264,13 @@ def _upsert_census_row(row):
         user.data_processing_consent_at = utc_now()
     db.session.flush()
 
-    unit = ResidentialUnit.query.filter_by(apartment=apartment).first()
-    if unit is None:
-        unit = ResidentialUnit(apartment=apartment)
-        db.session.add(unit)
-        db.session.flush()
-    for column, attribute in (
-        ("parking_identifier", "parking_identifier"),
-        ("storage_identifier", "storage_identifier"),
-        ("pet_insurer", "pet_insurer"),
-    ):
-        if column in row:
-            setattr(unit, attribute, row[column].strip() or None)
+    unit = ensure_unit(apartment)
+    db.session.flush()
+    # Un dato vacío no quita nada: el parqueadero y el cuarto se retiran en la estructura.
+    assign_parking_codes(row.get("parking_identifier", ""), apartment)
+    assign_storage_codes(row.get("storage_identifier", ""), apartment)
+    if "pet_insurer" in row:
+        unit.pet_insurer = row["pet_insurer"].strip() or None
     if "pet_insurance" in row:
         unit.pet_insurance = _parse_bool(row["pet_insurance"])
 
@@ -329,7 +337,7 @@ def _upsert_census_row(row):
             existing_vehicle.registered_owner = user.full_name[:120]
             existing_vehicle.color = row.get("vehicle_color", "").strip() or None
 
-    return created, apartment
+    return created, apartment.id
 
 
 def import_census_from_bytes(

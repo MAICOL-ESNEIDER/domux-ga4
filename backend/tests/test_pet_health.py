@@ -15,7 +15,8 @@ from werkzeug.security import generate_password_hash
 from app import create_app
 from auth import generate_token
 from extensions import db
-from models import Pet, ResidentialUnit, User
+from models import Pet, User
+from structure_fixtures import apartment_for
 
 APARTMENT = "Torre 3 · Apto 303"
 
@@ -39,7 +40,8 @@ class PetHealthTests(unittest.TestCase):
             name="Admin", email="admin-mascotas@test.local", role="ADMIN", is_active=True,
             password_hash=generate_password_hash("Clave-de-prueba-1*"),
         )
-        db.session.add_all([self.admin, ResidentialUnit(apartment=APARTMENT)])
+        apartment_for(APARTMENT)
+        db.session.add(self.admin)
         db.session.commit()
         self.client = self.app.test_client()
 

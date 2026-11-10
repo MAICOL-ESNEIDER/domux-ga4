@@ -12,6 +12,7 @@ from auth import generate_token
 from extensions import db
 from time_utils import utc_now
 from models import DevicePushToken, Notification, PackageItem, User, Visit, VisitQrPass
+from structure_fixtures import apartment_for
 from services import notification_service
 from werkzeug.security import generate_password_hash
 
@@ -39,7 +40,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             email="security-resident@test.local",
             password_hash=generate_password_hash("Resident123*"),
             role="RESIDENT",
-            apartment="Torre 1 · Apto 101",
+            apartment_ref=apartment_for("Torre 1 · Apto 101"),
             document_id="123456",
             is_active=True,
         )
@@ -48,7 +49,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             email="security-other@test.local",
             password_hash=generate_password_hash("Other123*"),
             role="RESIDENT",
-            apartment="Torre 2 · Apto 202",
+            apartment_ref=apartment_for("Torre 2 · Apto 202"),
             is_active=True,
         )
         self.guard = User(

@@ -6,6 +6,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import CommonArea, Notification, Pqrs, Reservation, User
+from structure_fixtures import apartment_for
 from werkzeug.security import generate_password_hash
 
 
@@ -32,7 +33,7 @@ class AdminResidentActionTests(unittest.TestCase):
             email="resident-actions@test.local",
             password_hash=generate_password_hash("Resident123*"),
             role="RESIDENT",
-            apartment="Torre 1 · Apto 101",
+            apartment_ref=apartment_for("Torre 1 · Apto 101"),
             is_active=True,
         )
         self.other_resident = User(
@@ -40,7 +41,7 @@ class AdminResidentActionTests(unittest.TestCase):
             email="other-actions@test.local",
             password_hash=generate_password_hash("Other123*"),
             role="RESIDENT",
-            apartment="Torre 2 · Apto 202",
+            apartment_ref=apartment_for("Torre 2 · Apto 202"),
             is_active=True,
         )
         self.guard = User(

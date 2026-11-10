@@ -2,7 +2,8 @@
 
 from datetime import date
 
-from sqlalchemy import Index, false, text
+from sqlalchemy import Index, false, select, text
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr
 
 from extensions import db
@@ -10,10 +11,21 @@ from time_utils import colombia_today, to_colombia, utc_now
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
 
+#: Tipos de parqueadero de la unidad (HU-015).
+PARKING_KINDS = ("residente", "visitante")
+
+#: Lo que va entre la torre y el código en el texto de un apartamento: «Torre 1 · Apto 101».
+APARTMENT_LABEL_SEPARATOR = " · Apto "
+
 
 def _fmt(value):
     """Muestra una hora guardada en UTC en la hora de Colombia (ADR-011, TT-031)."""
     return to_colombia(value).strftime("%Y-%m-%d %H:%M") if value else None
+
+
+def apartment_label(tower_name, code):
+    """Arma el texto de un apartamento con su torre y su código: «Torre 1 · Apto 101»."""
+    return f"{tower_name}{APARTMENT_LABEL_SEPARATOR}{code}"
 
 
 class RetirableMixin:
@@ -54,8 +66,16 @@ class User(db.Model):
     document_id = db.Column(db.String(40), nullable=True, default="")
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)
-    apartment = db.Column(db.String(60), nullable=True)
-    apartment_number = db.Column(db.Integer, nullable=True, index=True)
+    #: El apartamento es una llave a la estructura de la unidad (HU-014 y HU-017).
+    #: El texto «Torre 1 · Apto 101» ya no se guarda: se arma con la torre y el código.
+    #: Los apartamentos apuntan de vuelta a users (quién los retiró): ese ciclo se
+    #: declara con use_alter para que SQLAlchemy lo ordene al crear y borrar tablas.
+    apartment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("apartments.id", name="fk_users_apartment_id_apartments", use_alter=True),
+        nullable=True,
+        index=True,
+    )
     occupancy_type = db.Column(db.String(30), nullable=True, default="propietario")
     social_networks = db.Column(db.String(500), nullable=True, default="")
     birth_date = db.Column(db.String(20), nullable=True)
@@ -64,6 +84,44 @@ class User(db.Model):
     data_processing_consent_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=utc_now)
+
+    # Entre usuarios y apartamentos hay dos llaves (apartment_id y el retiro lógico
+    # retired_by_id del apartamento): se indica cuál es la del vínculo.
+    apartment_ref = db.relationship(
+        "Apartment", back_populates="residents", foreign_keys=[apartment_id], lazy="joined"
+    )
+
+    @hybrid_property
+    def apartment(self):
+        """Texto del apartamento, como «Torre 1 · Apto 101» (torre y código)."""
+        return self.apartment_ref.label if self.apartment_ref else None
+
+    @apartment.expression
+    def apartment(cls):
+        # En una consulta (filtro, búsqueda u orden) el texto se calcula con una
+        # subconsulta; así User.apartment.ilike(...) sigue funcionando.
+        return (
+            select(Tower.name + APARTMENT_LABEL_SEPARATOR + Apartment.code)
+            .select_from(Apartment)
+            .join(Tower, Tower.id == Apartment.tower_id)
+            .where(Apartment.id == cls.apartment_id)
+            .correlate_except(Apartment, Tower)
+            .scalar_subquery()
+        )
+
+    @hybrid_property
+    def apartment_number(self):
+        """Número del apartamento para filtrar y ordenar (sale de su código)."""
+        return self.apartment_ref.number if self.apartment_ref else None
+
+    @apartment_number.expression
+    def apartment_number(cls):
+        return (
+            select(Apartment.number)
+            .where(Apartment.id == cls.apartment_id)
+            .correlate_except(Apartment)
+            .scalar_subquery()
+        )
 
     @property
     def full_name(self):
@@ -101,6 +159,7 @@ class User(db.Model):
             "phone": self.phone or "",
             "documentId": self.document_id or "",
             "role": self.role or "",
+            "apartmentId": self.apartment_id,
             "apartment": self.apartment,
             "apartmentNumber": self.apartment_number,
             "occupancyType": self.occupancy_type or "propietario",
@@ -141,16 +200,228 @@ class User(db.Model):
         }
 
 
+class Tower(RetirableMixin, db.Model):
+    """Torre de la unidad residencial (HU-013 y RF-013); retirarla no la borra.
+
+    El nombre es único entre las torres vigentes (RN-008): una torre retirada
+    libera su nombre.
+    """
+
+    __tablename__ = "towers"
+    __table_args__ = (
+        Index(
+            "uq_towers_active_name",
+            "name",
+            unique=True,
+            sqlite_where=text("retired_at IS NULL"),
+            postgresql_where=text("retired_at IS NULL"),
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(60), nullable=False)
+    floors = db.Column(db.Integer, nullable=False)
+
+    apartments = db.relationship(
+        "Apartment", back_populates="tower", order_by="Apartment.number, Apartment.code"
+    )
+
+    @property
+    def active_apartments(self):
+        return [apartment for apartment in self.apartments if not apartment.is_retired]
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "floors": self.floors,
+            "apartmentCount": len(self.active_apartments),
+        }
+
+
+class Apartment(RetirableMixin, db.Model):
+    """Apartamento de una torre (HU-014 y RF-014); retirarlo no lo borra.
+
+    El código es único dentro de su torre entre los apartamentos vigentes
+    (RN-008). number es el número del código y sirve para filtrar y ordenar.
+    """
+
+    __tablename__ = "apartments"
+    __table_args__ = (
+        Index(
+            "uq_apartments_active_code",
+            "tower_id",
+            "code",
+            unique=True,
+            sqlite_where=text("retired_at IS NULL"),
+            postgresql_where=text("retired_at IS NULL"),
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    tower_id = db.Column(
+        db.Integer,
+        db.ForeignKey("towers.id", name="fk_apartments_tower_id_towers"),
+        nullable=False,
+        index=True,
+    )
+    code = db.Column(db.String(20), nullable=False)
+    floor = db.Column(db.Integer, nullable=False)
+    number = db.Column(db.Integer, nullable=True, index=True)
+
+    tower = db.relationship("Tower", back_populates="apartments", lazy="joined")
+    unit = db.relationship("ResidentialUnit", back_populates="apartment_ref", uselist=False)
+    residents = db.relationship(
+        "User", back_populates="apartment_ref", foreign_keys="User.apartment_id"
+    )
+    parking_spots = db.relationship(
+        "ParkingSpot", back_populates="apartment", order_by="ParkingSpot.code"
+    )
+    storage_rooms = db.relationship(
+        "StorageRoom", back_populates="apartment", order_by="StorageRoom.code"
+    )
+
+    @property
+    def label(self):
+        """El apartamento con su torre, como «Torre 1 · Apto 101»."""
+        return apartment_label(self.tower.name, self.code)
+
+    @property
+    def active_residents(self):
+        """Residentes con la cuenta activa; los desactivados se quedan en el historial."""
+        return [
+            resident for resident in self.residents
+            if resident.role == "RESIDENT" and resident.is_active
+        ]
+
+    @property
+    def active_parking_spots(self):
+        return [spot for spot in self.parking_spots if not spot.is_retired]
+
+    @property
+    def active_storage_rooms(self):
+        return [room for room in self.storage_rooms if not room.is_retired]
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "towerId": self.tower_id,
+            "tower": self.tower.name,
+            "code": self.code,
+            "floor": self.floor,
+            "number": self.number,
+            "label": self.label,
+            "residentCount": len(self.active_residents),
+            "parkingSpots": [spot.code for spot in self.active_parking_spots],
+            "storageRooms": [room.code for room in self.active_storage_rooms],
+        }
+
+
+class ParkingSpot(RetirableMixin, db.Model):
+    """Parqueadero de residentes o de visitantes (HU-015 y RF-015).
+
+    El de residente puede asignarse a un apartamento; el de visitantes no y
+    empieza libre (occupied en falso). El código es único entre los vigentes
+    (RN-008).
+    """
+
+    __tablename__ = "parking_spots"
+    __table_args__ = (
+        Index(
+            "uq_parking_spots_active_code",
+            "code",
+            unique=True,
+            sqlite_where=text("retired_at IS NULL"),
+            postgresql_where=text("retired_at IS NULL"),
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False)
+    kind = db.Column(db.String(12), nullable=False)
+    location = db.Column(db.String(120), nullable=False)
+    apartment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("apartments.id", name="fk_parking_spots_apartment_id_apartments"),
+        nullable=True,
+        index=True,
+    )
+    occupied = db.Column(db.Boolean, nullable=False, default=False, server_default=false())
+
+    apartment = db.relationship("Apartment", back_populates="parking_spots", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "code": self.code,
+            "type": self.kind,
+            "location": self.location,
+            "apartmentId": self.apartment_id,
+            "apartment": self.apartment.label if self.apartment else None,
+            "isOccupied": bool(self.occupied),
+        }
+
+
+class StorageRoom(RetirableMixin, db.Model):
+    """Cuarto útil de la unidad, asignado a un apartamento (HU-016 y RF-016).
+
+    El código es único entre los vigentes (RN-008).
+    """
+
+    __tablename__ = "storage_rooms"
+    __table_args__ = (
+        Index(
+            "uq_storage_rooms_active_code",
+            "code",
+            unique=True,
+            sqlite_where=text("retired_at IS NULL"),
+            postgresql_where=text("retired_at IS NULL"),
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False)
+    apartment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("apartments.id", name="fk_storage_rooms_apartment_id_apartments"),
+        nullable=True,
+        index=True,
+    )
+
+    apartment = db.relationship("Apartment", back_populates="storage_rooms", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "code": self.code,
+            "apartmentId": self.apartment_id,
+            "apartment": self.apartment.label if self.apartment else None,
+        }
+
+
 class ResidentialUnit(db.Model):
+    """Ficha del hogar de un apartamento: integrantes, mascotas y vehículos.
+
+    Hay una por apartamento y se crea junto con él. Los parqueaderos y cuartos
+    útiles ya no se escriben aquí: se asignan al apartamento en la estructura de
+    la unidad (HU-015 y HU-016).
+    """
+
     __tablename__ = "residential_units"
 
     id = db.Column(db.Integer, primary_key=True)
-    apartment = db.Column(db.String(60), nullable=False, unique=True, index=True)
-    parking_identifier = db.Column(db.String(80), nullable=True)
-    storage_identifier = db.Column(db.String(80), nullable=True)
+    apartment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("apartments.id", name="fk_residential_units_apartment_id_apartments"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
     pet_insurance = db.Column(db.Boolean, nullable=False, default=False)
     pet_insurer = db.Column(db.String(120), nullable=True)
     # El plan funerario ya no se registra (DEC-015, DEF-013): se quitó en la migración 0004.
+
+    apartment_ref = db.relationship("Apartment", back_populates="unit", lazy="joined")
 
     # Incluyen también lo retirado: es el historial de la ficha (TT-032). Sin
     # «delete-orphan», quitar algo de la lista nunca lo borra de la base.
@@ -159,6 +430,11 @@ class ResidentialUnit(db.Model):
     )
     pets = db.relationship("Pet", back_populates="unit", order_by="Pet.id")
     vehicles = db.relationship("Vehicle", back_populates="unit", order_by="Vehicle.id")
+
+    @property
+    def apartment(self):
+        """Texto del apartamento de esta ficha, «Torre 1 · Apto 101»."""
+        return self.apartment_ref.label
 
     @property
     def active_members(self):
@@ -173,11 +449,16 @@ class ResidentialUnit(db.Model):
         return [vehicle for vehicle in self.vehicles if not vehicle.is_retired]
 
     def to_dict(self):
-        residents = User.query.filter_by(apartment=self.apartment, role="RESIDENT").order_by(
-            User.occupancy_type, User.name, User.id
-        ).all()
+        residents = User.query.filter_by(
+            apartment_id=self.apartment_id, role="RESIDENT"
+        ).order_by(User.occupancy_type, User.name, User.id).all()
+        parking_spots = [
+            spot.code for spot in self.apartment_ref.active_parking_spots if spot.kind == "residente"
+        ]
+        storage_rooms = [room.code for room in self.apartment_ref.active_storage_rooms]
         return {
             "id": self.id,
+            "apartmentId": self.apartment_id,
             "apartment": self.apartment,
             "residents": [
                 {
@@ -187,8 +468,9 @@ class ResidentialUnit(db.Model):
                 }
                 for resident in residents
             ],
-            "parkingIdentifier": self.parking_identifier,
-            "storageIdentifier": self.storage_identifier,
+            # Salen de la estructura de la unidad; la ficha solo los muestra.
+            "parkingIdentifier": ", ".join(parking_spots) or None,
+            "storageIdentifier": ", ".join(storage_rooms) or None,
             "petInsurance": self.pet_insurance,
             "petInsurer": self.pet_insurer,
             "members": [member.to_dict() for member in self.active_members],

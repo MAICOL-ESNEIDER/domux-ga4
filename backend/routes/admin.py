@@ -12,14 +12,16 @@ from extensions import db
 from models import (
     DevicePushToken,
     HouseholdMember,
+    ParkingSpot,
     Pet,
     ResidentialUnit,
     ROLES,
+    StorageRoom,
     User,
     Vehicle,
     VisitQrPass,
 )
-from routes.common import json_body
+from routes.common import json_body, page_args
 from services.audit_service import add_audit_log
 from services.login_attempt_service import LOGIN, register_success
 from services.excel_service import (
@@ -28,10 +30,15 @@ from services.excel_service import (
     generate_legal_report_xlsx,
     import_census_from_bytes,
 )
+from services.structure_service import (
+    apartment_by_text,
+    apartment_from_payload,
+    ensure_unit,
+    find_apartment,
+)
 from validators import (
     HOUSEHOLD_RELATIONSHIPS,
     OCCUPANCY_TYPES,
-    apartment_number_from_label,
     parse_optional_bool,
     require_non_empty_fields,
     validate_occupancy_type,
@@ -42,6 +49,11 @@ from validators import (
 from time_utils import colombia_today, utc_now
 
 bp = Blueprint("admin", __name__, url_prefix="/api")
+
+#: Todo residente vinculado a un apartamento tiene tipo de ocupación (RN-007, HU-017).
+OCCUPANCY_REQUIRED_MESSAGE = (
+    "Indica el tipo de ocupación del residente: propietario, arrendatario o residente."
+)
 
 
 def _encode_base64(value):
@@ -88,10 +100,11 @@ def post_import_census():
         result = import_census_from_bytes(file_bytes, filename.strip(), g.current_user)
     except ValueError as error:
         return error_response(400, str(error))
-    return jsonify({
-        "message": "Importación del censo procesada.",
-        **result,
-    })
+    message = "Importación del censo procesada."
+    if result["createdUsers"]:
+        # Las cuentas nuevas nacen con una clave al azar que nadie conoce (sin contraseña común).
+        message += " Los residentes nuevos aún no tienen contraseña: asígnala desde la lista de usuarios."
+    return jsonify({"message": message, **result})
 
 
 @bp.get("/admin/export/legal-report")
@@ -113,10 +126,7 @@ def get_legal_report():
 @token_required
 @role_required("ADMIN")
 def get_users():
-    page = request.args.get("page", default=1, type=int)
-    page_size = request.args.get("pageSize", default=25, type=int)
-    if page is None or page < 1 or page_size is None or not 1 <= page_size <= 100:
-        return error_response(400, "La página debe ser positiva y pageSize debe estar entre 1 y 100.")
+    page, page_size = page_args()
 
     query = User.query
     search = (request.args.get("search") or "").strip()
@@ -125,7 +135,7 @@ def get_users():
         member_match = db.session.query(HouseholdMember.id).join(
             ResidentialUnit, HouseholdMember.unit_id == ResidentialUnit.id
         ).filter(
-            ResidentialUnit.apartment == User.apartment,
+            ResidentialUnit.apartment_id == User.apartment_id,
             HouseholdMember.retired_at.is_(None),
             db.or_(
                 HouseholdMember.name.ilike(pattern),
@@ -173,21 +183,23 @@ def get_users():
     for parameter, column in (
         ("hasPets", db.session.query(Pet.id).join(
             ResidentialUnit, Pet.unit_id == ResidentialUnit.id
-        ).filter(ResidentialUnit.apartment == User.apartment, Pet.retired_at.is_(None)).exists()),
+        ).filter(
+            ResidentialUnit.apartment_id == User.apartment_id, Pet.retired_at.is_(None)
+        ).exists()),
         ("hasVehicles", db.session.query(Vehicle.id).join(
             ResidentialUnit, Vehicle.unit_id == ResidentialUnit.id
         ).filter(
-            ResidentialUnit.apartment == User.apartment, Vehicle.retired_at.is_(None)
+            ResidentialUnit.apartment_id == User.apartment_id, Vehicle.retired_at.is_(None)
         ).exists()),
-        ("hasParking", db.session.query(ResidentialUnit.id).filter(
-            ResidentialUnit.apartment == User.apartment,
-            ResidentialUnit.parking_identifier.isnot(None),
-            ResidentialUnit.parking_identifier != "",
+        # Los parqueaderos y cuartos útiles se asignan al apartamento (HU-015 y HU-016).
+        ("hasParking", db.session.query(ParkingSpot.id).filter(
+            ParkingSpot.apartment_id == User.apartment_id,
+            ParkingSpot.kind == "residente",
+            ParkingSpot.retired_at.is_(None),
         ).exists()),
-        ("hasStorage", db.session.query(ResidentialUnit.id).filter(
-            ResidentialUnit.apartment == User.apartment,
-            ResidentialUnit.storage_identifier.isnot(None),
-            ResidentialUnit.storage_identifier != "",
+        ("hasStorage", db.session.query(StorageRoom.id).filter(
+            StorageRoom.apartment_id == User.apartment_id,
+            StorageRoom.retired_at.is_(None),
         ).exists()),
     ):
         value, error = parse_optional_bool(request.args.get(parameter), parameter)
@@ -241,7 +253,7 @@ def get_users():
         member_age_match = db.session.query(HouseholdMember.id).join(
             ResidentialUnit, HouseholdMember.unit_id == ResidentialUnit.id
         ).filter(
-            ResidentialUnit.apartment == User.apartment,
+            ResidentialUnit.apartment_id == User.apartment_id,
             HouseholdMember.retired_at.is_(None),
             *member_birth_date_conditions,
         ).exists()
@@ -280,17 +292,18 @@ def create_user():
 
     email = data["email"].strip().lower()
     role = _normalize_role(data.get("role"))
-    apartment = data.get("apartment")
     occupancy_type = data.get("occupancyType", "propietario")
     if "@" not in email or role not in ROLES:
         return error_response(400, "Correo o rol inválido")
     password_error = validate_strong_password(data["password"])
     if password_error:
         return error_response(400, password_error)
-    if role == "RESIDENT" and (
-        not isinstance(apartment, str) or not apartment.strip()
-    ):
+    # El residente se vincula a un apartamento que existe en la estructura (HU-017).
+    apartment = apartment_from_payload(data) if role == "RESIDENT" else None
+    if role == "RESIDENT" and apartment is None:
         return error_response(400, "El residente necesita un apartamento")
+    if role == "RESIDENT" and "occupancyType" not in data:
+        return error_response(400, OCCUPANCY_REQUIRED_MESSAGE)
     if role == "RESIDENT" and data.get("dataProcessingConsent") is not True:
         return error_response(400, "Debes registrar la autorización de tratamiento de datos del residente.")
     if "birthDate" in data:
@@ -317,8 +330,7 @@ def create_user():
         document_id=data.get("documentId", "").strip(),
         password_hash=generate_password_hash(data["password"]),
         role=role,
-        apartment=apartment.strip() if role == "RESIDENT" else None,
-        apartment_number=apartment_number_from_label(apartment) if role == "RESIDENT" else None,
+        apartment_ref=apartment,
         occupancy_type=occupancy_type,
         social_networks="",
         birth_date=data.get("birthDate"),
@@ -328,10 +340,8 @@ def create_user():
         is_active=True,
     )
     db.session.add(user)
-    if role == "RESIDENT":
-        unit = ResidentialUnit.query.filter_by(apartment=user.apartment).first()
-        if unit is None:
-            db.session.add(ResidentialUnit(apartment=user.apartment))
+    if apartment is not None:
+        ensure_unit(apartment)
     db.session.commit()
     return jsonify({"message": "Usuario creado", "user": user.to_dict()}), 201
 
@@ -417,6 +427,8 @@ def update_user(user_id):
         if role not in ROLES:
             return error_response(400, "Rol inválido")
         if role == "RESIDENT" and user.role != "RESIDENT":
+            if "occupancyType" not in data:
+                return error_response(400, OCCUPANCY_REQUIRED_MESSAGE)
             if data.get("dataProcessingConsent") is not True:
                 return error_response(
                     400,
@@ -430,21 +442,15 @@ def update_user(user_id):
         if error:
             return error_response(400, error)
         user.occupancy_type = data["occupancyType"]
-    if "apartment" in data:
-        apartment = data["apartment"]
-        if apartment is not None and not isinstance(apartment, str):
-            return error_response(400, "El apartamento debe ser texto")
-        user.apartment = apartment.strip() if apartment else None
-        user.apartment_number = apartment_number_from_label(user.apartment)
-    if user.role == "RESIDENT" and not user.apartment:
+    if "apartment" in data or "apartmentId" in data:
+        # Un valor nulo desvincula al usuario; uno que no existe en la estructura se rechaza.
+        user.apartment_ref = apartment_from_payload(data)
+    if user.role == "RESIDENT" and user.apartment_ref is None:
         return error_response(400, "El residente necesita un apartamento")
     if user.role != "RESIDENT":
-        user.apartment = None
-        user.apartment_number = None
+        user.apartment_ref = None
     else:
-        unit = ResidentialUnit.query.filter_by(apartment=user.apartment).first()
-        if unit is None:
-            db.session.add(ResidentialUnit(apartment=user.apartment))
+        ensure_unit(user.apartment_ref)
     if "isActive" in data:
         if not isinstance(data["isActive"], bool):
             return error_response(400, "isActive debe ser verdadero o falso")
@@ -455,6 +461,10 @@ def update_user(user_id):
         elif not was_active and user.is_active:
             add_audit_log("user", user.id, "reactivated")
 
+    if user.role == "RESIDENT" and user.is_active and user.apartment_ref.is_retired:
+        return error_response(
+            400, "El apartamento de este residente ya no existe: asígnale otro apartamento."
+        )
     db.session.commit()
     return jsonify({"message": "Usuario actualizado", "user": user.to_dict()})
 
@@ -517,13 +527,20 @@ def get_residents():
 @token_required
 @role_required("ADMIN")
 def get_unit_profile():
-    apartment = (request.args.get("apartment") or "").strip()
-    if not apartment:
-        return error_response(400, "El apartamento es obligatorio.")
-    unit = ResidentialUnit.query.filter_by(apartment=apartment).first()
-    if unit is None:
+    """Ficha del hogar de un apartamento, por apartmentId o por el texto «Torre 1 · Apto 101»."""
+    apartment_id = request.args.get("apartmentId")
+    if apartment_id is not None:
+        if not apartment_id.isdigit():
+            return error_response(400, "El apartamento debe ser un número.")
+        apartment = find_apartment(int(apartment_id))
+    else:
+        label = (request.args.get("apartment") or "").strip()
+        if not label:
+            return error_response(400, "El apartamento es obligatorio.")
+        apartment = apartment_by_text(label)
+    if apartment is None or apartment.unit is None:
         return error_response(404, "No se encontró el apartamento.")
-    return jsonify({"unit": unit.to_dict()})
+    return jsonify({"unit": apartment.unit.to_dict()})
 
 
 def _item_id_error(item, label, index):
@@ -623,17 +640,16 @@ def update_unit_profile():
     data, failure = json_body()
     if failure:
         return failure
-    apartment = data.get("apartment")
-    if not isinstance(apartment, str) or not apartment.strip():
+    apartment = apartment_from_payload(data)
+    if apartment is None:
         return error_response(400, "El apartamento es obligatorio.")
     for key in ("members", "pets", "vehicles"):
         if not isinstance(data.get(key), list):
             return error_response(400, f"El campo '{key}' debe ser una lista.")
     if "petInsurance" in data and not isinstance(data["petInsurance"], bool):
         return error_response(400, "El campo 'petInsurance' debe ser verdadero o falso.")
-    for key in ("parkingIdentifier", "storageIdentifier", "petInsurer"):
-        if data.get(key) is not None and not isinstance(data[key], str):
-            return error_response(400, f"El campo '{key}' debe ser texto.")
+    if data.get("petInsurer") is not None and not isinstance(data["petInsurer"], str):
+        return error_response(400, "El campo 'petInsurer' debe ser texto.")
 
     parsed_members = []
     for index, member in enumerate(data["members"]):
@@ -740,9 +756,8 @@ def update_unit_profile():
             "color": (vehicle.get("color") or "").strip() or None,
         })
 
-    unit = ResidentialUnit.query.filter_by(apartment=apartment.strip()).first()
-    if unit is None:
-        return error_response(404, "No se encontró el apartamento.")
+    unit = ensure_unit(apartment)
+    db.session.flush()
     # Solo chocan las placas vigentes de otro apartamento; las retiradas pueden volver.
     conflicts = Vehicle.query.filter(
         Vehicle.plate.in_(seen_plates),
@@ -756,8 +771,8 @@ def update_unit_profile():
             "plates": [vehicle.plate for vehicle in conflicts],
         }), 409
 
-    unit.parking_identifier = (data.get("parkingIdentifier") or "").strip() or None
-    unit.storage_identifier = (data.get("storageIdentifier") or "").strip() or None
+    # El parqueadero y el cuarto útil ya no se escriben aquí: se asignan al apartamento
+    # en la estructura de la unidad (HU-015 y HU-016), y los que lleguen se ignoran.
     unit.pet_insurance = data.get("petInsurance", False)
     unit.pet_insurer = (data.get("petInsurer") or "").strip() or None if unit.pet_insurance else None
     changes = {
@@ -794,9 +809,9 @@ def get_resident_profile():
 @role_required("RESIDENT")
 def get_resident_unit_profile():
     user = g.current_user
-    if not user.apartment:
+    if user.apartment_ref is None:
         return error_response(404, "Tu cuenta no tiene un apartamento asociado.")
-    unit = ResidentialUnit.query.filter_by(apartment=user.apartment).first()
+    unit = user.apartment_ref.unit
     if unit is None:
         return error_response(404, "No se encontró la ficha de tu apartamento.")
     return jsonify({"unit": unit.to_dict()})

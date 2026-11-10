@@ -7,6 +7,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import Pet, ResidentialUnit, User, Vehicle
+from structure_fixtures import apartment_for, parking_spot, storage_room
 from werkzeug.security import generate_password_hash
 
 
@@ -33,8 +34,7 @@ class UserProfileTests(unittest.TestCase):
             email="resident-profiles@test.local",
             password_hash=generate_password_hash("Resident123*"),
             role="RESIDENT",
-            apartment="Torre 1 · Apto 101",
-            apartment_number=101,
+            apartment_ref=apartment_for("Torre 1 · Apto 101"),
             occupancy_type="arrendatario",
             is_active=True,
         )
@@ -45,13 +45,8 @@ class UserProfileTests(unittest.TestCase):
             role="GUARD",
             is_active=True,
         )
-        db.session.add_all([
-            self.admin,
-            self.resident,
-            self.guard,
-            ResidentialUnit(apartment="Torre 1 · Apto 101"),
-            ResidentialUnit(apartment="Torre 2 · Apto 202"),
-        ])
+        apartment_for("Torre 2 · Apto 202")
+        db.session.add_all([self.admin, self.resident, self.guard])
         db.session.commit()
         self.client = self.app.test_client()
 
@@ -103,6 +98,8 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_admin_must_record_consent_when_creating_resident(self):
+        apartment_for("Torre 3 · Apto 303")
+        db.session.commit()
         body = {
             "name": "Nuevo",
             "lastName": "Residente",
@@ -123,10 +120,12 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual(new_user.apartment_number, 303)
         self.assertTrue(new_user.data_processing_consent)
         self.assertIsNotNone(new_user.data_processing_consent_at)
-        self.assertIsNotNone(ResidentialUnit.query.filter_by(apartment=new_user.apartment).first())
+        self.assertIsNotNone(ResidentialUnit.query.filter_by(apartment_id=new_user.apartment_id).first())
 
     def test_promoting_account_to_resident_requires_consent(self):
-        body = {"role": "RESIDENT", "apartment": "Torre 4 · Apto 404"}
+        apartment_for("Torre 4 · Apto 404")
+        db.session.commit()
+        body = {"role": "RESIDENT", "apartment": "Torre 4 · Apto 404", "occupancyType": "arrendatario"}
         missing = self.client.put(
             f"/api/users/{self.guard.id}", headers=self.headers(self.admin), json=body
         )
@@ -141,7 +140,7 @@ class UserProfileTests(unittest.TestCase):
         self.assertTrue(self.guard.data_processing_consent)
 
     def test_household_presence_filter_is_applied_on_the_server(self):
-        unit = ResidentialUnit.query.filter_by(apartment=self.resident.apartment).one()
+        unit = ResidentialUnit.query.filter_by(apartment_id=self.resident.apartment_id).one()
         db.session.add(Pet(
             unit_id=unit.id,
             name="Luna",
@@ -158,13 +157,17 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual([user["id"] for user in response.json["users"]], [self.resident.id])
 
     def test_unit_profile_saves_household_and_normalizes_plate(self):
+        # El parqueadero y el cuarto útil salen de la estructura, no de lo que llegue en la ficha.
+        parking_spot("P-12", apartment=self.resident.apartment_ref)
+        storage_room("CU-3", apartment=self.resident.apartment_ref)
+        db.session.commit()
         response = self.client.put(
             "/api/admin/units",
             headers=self.headers(self.admin),
             json={
                 "apartment": self.resident.apartment,
-                "parkingIdentifier": "P-12",
-                "storageIdentifier": "CU-3",
+                "parkingIdentifier": "IGNORADO",
+                "storageIdentifier": "IGNORADO",
                 "petInsurance": True,
                 "petInsurer": "Aseguradora",
                 "members": [{
@@ -195,6 +198,7 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual(Vehicle.query.one().plate, "ABC123")
         self.assertEqual(len(response.json["unit"]["members"]), 1)
         self.assertEqual(response.json["unit"]["parkingIdentifier"], "P-12")
+        self.assertEqual(response.json["unit"]["storageIdentifier"], "CU-3")
         member_search = self.client.get(
             "/api/users?search=12345",
             headers=self.headers(self.admin),
@@ -225,7 +229,7 @@ class UserProfileTests(unittest.TestCase):
 
     def test_vehicle_plate_cannot_be_reused_in_another_unit(self):
         db.session.add(Vehicle(
-            unit_id=ResidentialUnit.query.filter_by(apartment=self.resident.apartment).one().id,
+            unit_id=ResidentialUnit.query.filter_by(apartment_id=self.resident.apartment_id).one().id,
             plate="ABC123",
             vehicle_type="carro",
             make_model="Marca Modelo",
@@ -234,7 +238,7 @@ class UserProfileTests(unittest.TestCase):
         ))
         db.session.commit()
         self.assertEqual(Vehicle.query.filter_by(plate="ABC123").count(), 1)
-        target_unit = ResidentialUnit.query.filter_by(apartment="Torre 2 · Apto 202").one()
+        target_unit = apartment_for("Torre 2 · Apto 202").unit
         self.assertNotEqual(Vehicle.query.one().unit_id, target_unit.id)
         response = self.client.put(
             "/api/admin/units",

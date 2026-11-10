@@ -15,7 +15,17 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import is_production
 from extensions import db
-from models import Announcement, CommonArea, PackageItem, User
+from models import (
+    Announcement,
+    Apartment,
+    CommonArea,
+    PackageItem,
+    ParkingSpot,
+    ResidentialUnit,
+    StorageRoom,
+    Tower,
+    User,
+)
 from time_utils import utc_now
 from validators import validate_strong_password
 
@@ -113,6 +123,35 @@ def sync_demo_passwords():
         db.session.commit()
 
 
+def _create_demo_structure():
+    """Crea dos torres con cuatro apartamentos cada una y parqueaderos y un cuarto de ejemplo.
+
+    Devuelve los apartamentos por (torre, código) para vincular a los residentes.
+    """
+    apartments = {}
+    for tower_name in ("Torre 1", "Torre 2"):
+        tower = Tower(name=tower_name, floors=10)
+        db.session.add(tower)
+        for floor in (1, 2):
+            for number in (1, 2):
+                code = f"{floor}{number:02d}"
+                apartments[(tower_name, code)] = Apartment(
+                    tower=tower, code=code, floor=floor, number=int(code), unit=ResidentialUnit()
+                )
+    db.session.add_all(apartments.values())
+    db.session.add_all([
+        ParkingSpot(code="V-01", kind="visitante", location="Frente a la portería"),
+        ParkingSpot(code="V-02", kind="visitante", location="Frente a la portería"),
+        ParkingSpot(code="V-03", kind="visitante", location="Junto a la zona BBQ"),
+        ParkingSpot(
+            code="P-101", kind="residente", location="Sótano 1",
+            apartment=apartments[("Torre 1", "101")],
+        ),
+        StorageRoom(code="C-101", apartment=apartments[("Torre 1", "101")]),
+    ])
+    return apartments
+
+
 def seed_if_empty():
     """Crea las cuentas y los datos de prueba si la base no tiene usuarios."""
     if User.query.first() is not None:
@@ -121,6 +160,7 @@ def seed_if_empty():
     if passwords is None:
         return
 
+    apartments = _create_demo_structure()
     admin = User(
         name="Administración",
         last_name="Domux",
@@ -143,7 +183,7 @@ def seed_if_empty():
         email="maria@domux.com",
         password_hash=generate_password_hash(passwords["SEED_RESIDENT_PASSWORD"]),
         role="RESIDENT",
-        apartment="Torre 1 · Apto 101",
+        apartment_ref=apartments[("Torre 1", "101")],
         phone="3000000001",
         document_id="1000000001",
         occupancy_type="propietario",
@@ -154,7 +194,7 @@ def seed_if_empty():
         email="carlos@domux.com",
         password_hash=generate_password_hash(passwords["SEED_RESIDENT_PASSWORD"]),
         role="RESIDENT",
-        apartment="Torre 2 · Apto 202",
+        apartment_ref=apartments[("Torre 2", "202")],
         phone="3000000002",
         document_id="1000000002",
         occupancy_type="arrendatario",
@@ -202,4 +242,6 @@ def seed_if_empty():
     ])
     db.session.commit()
 
-    logger.info("Datos de prueba creados: administración, portería y dos residentes.")
+    logger.info(
+        "Datos de prueba creados: administración, portería, dos residentes y la estructura de ejemplo."
+    )

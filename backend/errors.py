@@ -31,7 +31,25 @@ def error_response(status_code, message=None):
     }), status_code
 
 
+class ApiError(ValueError):
+    """Un error que la API responde tal cual: un mensaje claro y su código HTTP.
+
+    Los servicios lo lanzan cuando un dato no es válido o choca con otro (400,
+    404, 409...) y no necesitan conocer Flask. Hereda de ValueError para que el
+    importador del censo lo cuente como un error de esa fila.
+    """
+
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+
+
 def register_error_handlers(app):
+    @app.errorhandler(ApiError)
+    def handle_api_error(error):
+        return error_response(error.status, error.message)
+
     @app.errorhandler(HTTPException)
     def handle_http_error(error):
         logger.warning("HTTP %s %s: %s", error.code, request.method, safe_path(request.path))

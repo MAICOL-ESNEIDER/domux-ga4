@@ -11,13 +11,14 @@ from config import cors_origins
 from errors import error_response, register_error_handlers
 from extensions import db, migrations
 from logging_config import configure_logging
-from models import Pqrs, PqrsMessage, ResidentialUnit, User
+from models import Apartment, Pqrs, PqrsMessage, ResidentialUnit, User
 from routes.admin import bp as admin_bp
 from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
 from routes.security import bp as security_bp
+from routes.structure import bp as structure_bp
 from seed import seed_if_empty, sync_demo_passwords
-from validators import apartment_number_from_label, validate_no_empty_strings
+from validators import OCCUPANCY_TYPES, validate_no_empty_strings
 
 load_dotenv()
 
@@ -245,19 +246,22 @@ def migrate_security_columns():
 
 
 def migrate_resident_profiles():
-    """Backfill apartment numbers and create unit records without deleting data."""
+    """Deja al día los datos de los residentes sin borrar nada.
+
+    Todo residente con apartamento debe tener su tipo de ocupación (RN-007) y
+    todo apartamento vigente su ficha del hogar. El texto del apartamento de las
+    bases viejas ya lo pasó a la estructura la migración 0006.
+    """
     residents = User.query.filter(
         User.role == "RESIDENT",
-        User.apartment.isnot(None),
+        User.apartment_id.isnot(None),
     ).all()
     for resident in residents:
-        if resident.occupancy_type not in ("propietario", "arrendatario", "residente"):
+        if resident.occupancy_type not in OCCUPANCY_TYPES:
             resident.occupancy_type = "residente"
-        if resident.apartment_number is None:
-            resident.apartment_number = apartment_number_from_label(resident.apartment)
-        unit = ResidentialUnit.query.filter_by(apartment=resident.apartment).first()
-        if unit is None:
-            db.session.add(ResidentialUnit(apartment=resident.apartment))
+    for apartment in Apartment.query.filter(Apartment.retired_at.is_(None)).all():
+        if apartment.unit is None:
+            apartment.unit = ResidentialUnit()
     db.session.commit()
 
 
@@ -327,6 +331,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(community_bp)
     app.register_blueprint(security_bp)
+    app.register_blueprint(structure_bp)
     register_error_handlers(app)
 
     @app.before_request

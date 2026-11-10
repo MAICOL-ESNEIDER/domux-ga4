@@ -7,6 +7,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import AuditLog, CommonArea, Notification, Reservation, ReservationMessage, User
+from structure_fixtures import apartment_for
 from validators import VALID_TIME_SLOTS
 from werkzeug.security import generate_password_hash
 
@@ -34,7 +35,7 @@ class ReservationWorkflowTests(unittest.TestCase):
             email="resident-reservations@test.local",
             password_hash=generate_password_hash("Resident123*"),
             role="RESIDENT",
-            apartment="Apto 101",
+            apartment_ref=apartment_for("Apto 101"),
             is_active=True,
         )
         self.other_resident = User(
@@ -42,7 +43,7 @@ class ReservationWorkflowTests(unittest.TestCase):
             email="other-reservations@test.local",
             password_hash=generate_password_hash("Other123*"),
             role="RESIDENT",
-            apartment="Apto 202",
+            apartment_ref=apartment_for("Apto 202"),
             is_active=True,
         )
         self.guard = User(

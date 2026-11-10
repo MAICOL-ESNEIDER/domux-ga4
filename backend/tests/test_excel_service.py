@@ -13,10 +13,10 @@ from extensions import db
 from models import (
     AuditLog,
     CommonArea,
+    ParkingSpot,
     Pqrs,
     PqrsMessage,
     Reservation,
-    ResidentialUnit,
     User,
     Vehicle,
 )
@@ -27,6 +27,7 @@ from services.excel_service import (
     generate_legal_report_xlsx,
     import_census_from_bytes,
 )
+from structure_fixtures import apartment_for, parking_spot
 from werkzeug.security import generate_password_hash
 
 
@@ -55,16 +56,12 @@ class ExcelServiceTests(unittest.TestCase):
             document_id="123456789",
             password_hash=generate_password_hash("Resident123*"),
             role="RESIDENT",
-            apartment="Torre 1 Apto 101",
+            apartment_ref=apartment_for("Torre 1 Apto 101"),
             is_active=True,
         )
         self.area = CommonArea(name="Salón social")
-        db.session.add_all([
-            self.admin,
-            self.resident,
-            self.area,
-            ResidentialUnit(apartment=self.resident.apartment),
-        ])
+        apartment_for("Torre 2 Apto 202")  # la plantilla del censo trae un residente en cada torre
+        db.session.add_all([self.admin, self.resident, self.area])
         db.session.commit()
         self.client = self.app.test_client()
 
@@ -123,17 +120,16 @@ class ExcelServiceTests(unittest.TestCase):
         imported = User.query.filter_by(email="maria.perez@example.com").one()
         self.assertTrue(imported.data_processing_consent)
         self.assertEqual(imported.birth_date, "1990-05-14")
-        self.assertEqual(
-            ResidentialUnit.query.filter_by(apartment="Torre 1 Apto 101").one().parking_identifier,
-            "P-101",
-        )
+        # El parqueadero del censo se crea y queda asignado al apartamento (HU-015).
+        spot = ParkingSpot.query.filter_by(code="P-101").one()
+        self.assertEqual(spot.apartment.label, "Torre 1 · Apto 101")
+        self.assertEqual(spot.kind, "residente")
         self.assertEqual(Vehicle.query.filter_by(plate="ABC123").count(), 1)
         self.assertEqual(AuditLog.query.filter_by(entity_type="census").count(), 1)
 
     def test_census_csv_aliases_update_by_identity_without_clearing_missing_fields(self):
         self.resident.parental_consent = True
-        unit = ResidentialUnit.query.filter_by(apartment=self.resident.apartment).first()
-        unit.parking_identifier = "P-OLD"
+        parking_spot("P-OLD", apartment=self.resident.apartment_ref)
         db.session.commit()
         csv_bytes = (
             "Apto,Nombre,Email,Identificación\n"
@@ -147,7 +143,8 @@ class ExcelServiceTests(unittest.TestCase):
         self.assertEqual(result["errors"], [])
         self.assertEqual(self.resident.name, "Residente Actual")
         self.assertTrue(self.resident.parental_consent)
-        self.assertEqual(unit.parking_identifier, "P-OLD")
+        # Una columna ausente no quita lo que el apartamento ya tenía.
+        self.assertEqual(ParkingSpot.query.filter_by(code="P-OLD").one().apartment.label, "Torre 1 · Apto 101")
 
     def test_census_import_returns_row_warnings_as_strings(self):
         csv_bytes = (
