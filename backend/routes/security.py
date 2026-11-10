@@ -16,6 +16,7 @@ from models import (
     VisitQrPass,
 )
 from routes.common import json_body
+from services.alert_service import run_alerts
 from services.notification_service import notify_user
 from validators import (
     VALID_PACKAGE_STATUSES,
@@ -750,6 +751,9 @@ def exit_visit_qr(token):
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_notifications():
+    # Las alertas pendientes (tiempo máximo de parqueo, visitas largas) se generan
+    # al consultar: no hay un reloj que las dispare (ver services/alert_service.py).
+    run_alerts()
     notifications = Notification.query.filter_by(
         user_id=g.current_user.id
     ).order_by(Notification.created_at.desc()).all()

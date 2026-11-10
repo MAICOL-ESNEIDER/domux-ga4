@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from errors import ApiError, error_response
 from extensions import db
-from validators import validate_no_empty_strings
+from validators import parse_optional_bool, validate_no_empty_strings
 
 
 def _body_problem(data):
@@ -41,6 +41,17 @@ def json_object(required=False):
     if required and not data:
         raise ApiError("Debes proporcionar al menos un dato para actualizar.")
     return data
+
+
+def bool_arg(name):
+    """Lee un filtro verdadero/falso de la URL (true, false, 1, 0, si, no); sin él, None.
+
+    Un valor que no se entiende lanza un ApiError 400.
+    """
+    value, error = parse_optional_bool(request.args.get(name), name)
+    if error:
+        raise ApiError(error)
+    return value
 
 
 def page_args(default_size=25, max_size=100):

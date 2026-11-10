@@ -1,11 +1,12 @@
 """SQLAlchemy models and Android-compatible JSON serializers."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import Index, false, select, text
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr
 
+from config import visitor_parking_max_days
 from extensions import db
 from time_utils import colombia_today, to_colombia, utc_now
 
@@ -13,6 +14,9 @@ ROLES = ("ADMIN", "RESIDENT", "GUARD")
 
 #: Tipos de parqueadero de la unidad (HU-015).
 PARKING_KINDS = ("residente", "visitante")
+
+#: Movimientos de un vehículo de residente por la portería (HU-040).
+MOVEMENT_TYPES = ("entrada", "salida")
 
 #: Lo que va entre la torre y el código en el texto de un apartamento: «Torre 1 · Apto 101».
 APARTMENT_LABEL_SEPARATOR = " · Apto "
@@ -1008,6 +1012,160 @@ class VisitEvent(db.Model):
             "actorName": self.actor.full_name if self.actor else None,
             "returningToday": self.returning_today,
             "createdAt": _fmt(self.created_at),
+        }
+
+
+class VisitorVehicleEntry(db.Model):
+    """Entrada de un vehículo visitante a la unidad, con su parqueadero (HU-035 a HU-041, DAT-07).
+
+    Hay una fila por cada vez que un vehículo entra. Queda abierta (exited_at vacío)
+    hasta que el guardia registra su salida y el parqueadero vuelve a quedar libre
+    (RN-014). Nunca se borra (ADR-013): a los 5 años pasa al archivo histórico (DAT-07).
+
+    Los dos índices únicos parciales son la última defensa contra el doble registro:
+    una placa no puede tener dos entradas abiertas y un parqueadero no puede tener dos
+    vehículos adentro (RN-013), aunque dos guardias lo intenten al mismo tiempo.
+    """
+
+    __tablename__ = "visitor_vehicle_entries"
+    __table_args__ = (
+        Index(
+            "uq_visitor_vehicle_entries_open_plate",
+            "plate",
+            unique=True,
+            sqlite_where=text("exited_at IS NULL"),
+            postgresql_where=text("exited_at IS NULL"),
+        ),
+        Index(
+            "uq_visitor_vehicle_entries_open_spot",
+            "spot_id",
+            unique=True,
+            sqlite_where=text("exited_at IS NULL"),
+            postgresql_where=text("exited_at IS NULL"),
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    plate = db.Column(db.String(10), nullable=False, index=True)
+    visit_id = db.Column(
+        db.Integer,
+        db.ForeignKey("visits.id", name="fk_visitor_vehicle_entries_visit_id_visits"),
+        nullable=False,
+        index=True,
+    )
+    #: Apartamento al que visita, tomado de la visita; así el historial no depende de ella.
+    apartment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("apartments.id", name="fk_visitor_vehicle_entries_apartment_id_apartments"),
+        nullable=True,
+        index=True,
+    )
+    #: Vacío cuando no había parqueaderos libres y el guardia registró la entrada igual.
+    spot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("parking_spots.id", name="fk_visitor_vehicle_entries_spot_id_parking_spots"),
+        nullable=True,
+    )
+    entered_at = db.Column(db.DateTime, nullable=False, default=utc_now, index=True)
+    exited_at = db.Column(db.DateTime, nullable=True)
+    registered_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_visitor_vehicle_entries_registered_by_users"),
+        nullable=False,
+    )
+    exited_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_visitor_vehicle_entries_exited_by_id_users"),
+        nullable=True,
+    )
+    #: Cuándo se avisó a los guardias que pasó el tiempo máximo (RN-015); evita avisar dos veces.
+    overdue_alerted_at = db.Column(db.DateTime, nullable=True)
+
+    visit = db.relationship("Visit")
+    apartment = db.relationship("Apartment", lazy="joined")
+    spot = db.relationship("ParkingSpot", lazy="joined")
+    guard = db.relationship("User", foreign_keys=[registered_by])
+    exited_by = db.relationship("User", foreign_keys=[exited_by_id])
+
+    @property
+    def is_inside(self):
+        return self.exited_at is None
+
+    def parked_minutes(self, now=None):
+        """Minutos que lleva (o llevó) el vehículo en la unidad."""
+        end = self.exited_at or now or utc_now()
+        return max(0, int((end - self.entered_at).total_seconds() // 60))
+
+    def deadline(self):
+        """Cuándo vence el tiempo máximo de parqueo (RN-015): 3 días o el plazo de la unidad."""
+        return self.entered_at + timedelta(days=visitor_parking_max_days())
+
+    def is_overdue(self, now=None):
+        """Un vehículo que sigue adentro y ya pasó el tiempo máximo (RN-015)."""
+        return self.is_inside and (now or utc_now()) >= self.deadline()
+
+    def to_dict(self, now=None):
+        now = now or utc_now()
+        visit = self.visit
+        return {
+            "id": self.id,
+            "plate": self.plate,
+            "visitId": self.visit_id,
+            "visitorName": visit.visitor_name if visit else None,
+            "residentName": visit.resident.full_name if visit and visit.resident else None,
+            "apartmentId": self.apartment_id,
+            "apartment": self.apartment.label if self.apartment else None,
+            "spotId": self.spot_id,
+            "spotCode": self.spot.code if self.spot else None,
+            "spotLocation": self.spot.location if self.spot else None,
+            "enteredAt": _fmt(self.entered_at),
+            "exitedAt": _fmt(self.exited_at),
+            "isInside": self.is_inside,
+            "parkedMinutes": self.parked_minutes(now),
+            "maxDays": visitor_parking_max_days(),
+            "isOverdue": self.is_overdue(now),
+            "registeredByName": self.guard.full_name if self.guard else None,
+            "exitedByName": self.exited_by.full_name if self.exited_by else None,
+        }
+
+
+class VehicleMovement(db.Model):
+    """Entrada o salida de un vehículo de residente por la portería (HU-040, DAT-05).
+
+    El guardia la registra con un toque y la hora la pone el servidor. Si el
+    vehículo está adentro se deduce del último movimiento. La placa se copia aquí
+    para que el historial siga siendo legible aunque el vehículo se retire de la ficha.
+    """
+
+    __tablename__ = "vehicle_movements"
+    __table_args__ = (Index("ix_vehicle_movements_vehicle_id_id", "vehicle_id", "id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    vehicle_id = db.Column(
+        db.Integer,
+        db.ForeignKey("vehicles.id", name="fk_vehicle_movements_vehicle_id_vehicles"),
+        nullable=False,
+    )
+    plate = db.Column(db.String(10), nullable=False)
+    movement_type = db.Column(db.String(10), nullable=False)
+    registered_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_vehicle_movements_registered_by_users"),
+        nullable=False,
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now, index=True)
+
+    vehicle = db.relationship("Vehicle")
+    guard = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "vehicleId": self.vehicle_id,
+            "plate": self.plate,
+            "type": self.movement_type,
+            "createdAt": _fmt(self.created_at),
+            "registeredByName": self.guard.full_name if self.guard else None,
         }
 
 

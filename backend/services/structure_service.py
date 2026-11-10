@@ -480,6 +480,8 @@ def update_parking(spot, data, actor):
     if "apartmentId" in data:
         apartment = _optional_apartment(data["apartmentId"])
     _check_parking_assignment(kind, apartment)
+    if kind != spot.kind and spot.occupied:
+        raise ApiError(f"El parqueadero {spot.code} está ocupado en este momento: no cambia de tipo.", 409)
     spot.code, spot.kind, spot.location, spot.apartment = code, kind, location, apartment
     add_audit_log(
         "parking_spot", spot.id, "updated",

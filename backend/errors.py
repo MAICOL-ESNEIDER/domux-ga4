@@ -24,11 +24,19 @@ DEFAULT_MESSAGES = {
 }
 
 
-def error_response(status_code, message=None):
-    return jsonify({
+def error_response(status_code, message=None, **details):
+    """Respuesta de error: el mensaje, el código y, si hacen falta, datos extra.
+
+    Los datos extra (``details``) acompañan al error para que la app pueda
+    actuar: por ejemplo, el parqueadero libre que se sugiere cuando el elegido
+    ya estaba ocupado.
+    """
+    body = {
         "error": message or DEFAULT_MESSAGES.get(status_code, "Error en la solicitud"),
         "status": status_code,
-    }), status_code
+    }
+    body.update(details)
+    return jsonify(body), status_code
 
 
 class ApiError(ValueError):
@@ -36,19 +44,21 @@ class ApiError(ValueError):
 
     Los servicios lo lanzan cuando un dato no es válido o choca con otro (400,
     404, 409...) y no necesitan conocer Flask. Hereda de ValueError para que el
-    importador del censo lo cuente como un error de esa fila.
+    importador del censo lo cuente como un error de esa fila. Los argumentos con
+    nombre se suman al cuerpo de la respuesta (ver error_response).
     """
 
-    def __init__(self, message, status=400):
+    def __init__(self, message, status=400, **details):
         super().__init__(message)
         self.message = message
         self.status = status
+        self.details = details
 
 
 def register_error_handlers(app):
     @app.errorhandler(ApiError)
     def handle_api_error(error):
-        return error_response(error.status, error.message)
+        return error_response(error.status, error.message, **error.details)
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):

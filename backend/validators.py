@@ -165,10 +165,15 @@ def apartment_number_from_label(value):
     return int(candidate) if candidate else None
 
 
+def normalize_plate(value):
+    """Deja una placa en mayúsculas y sin espacios ni guiones: «abc-123» pasa a «ABC123»."""
+    return re.sub(r"[\s-]", "", value).upper() if isinstance(value, str) else value
+
+
 def validate_colombian_plate(value):
     if not isinstance(value, str):
         return "La placa debe ser texto."
-    normalized = re.sub(r"[\s-]", "", value).upper()
+    normalized = normalize_plate(value)
     if not re.fullmatch(r"[A-Z]{3}\d{3}|[A-Z]{3}\d{2}[A-Z]", normalized):
         return "La placa debe tener formato colombiano, por ejemplo ABC123 o ABC12D."
     return None

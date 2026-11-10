@@ -12,9 +12,8 @@ from auth import role_required, token_required
 from errors import ApiError
 from extensions import db
 from models import Apartment, ParkingSpot, StorageRoom, Tower
-from routes.common import json_object, paginated, save_changes
+from routes.common import bool_arg, json_object, paginated, save_changes
 from services import structure_service as structure
-from validators import parse_optional_bool
 
 bp = Blueprint("structure", __name__, url_prefix="/api/admin")
 
@@ -32,13 +31,6 @@ def _active(model, item_id):
     if item is None or item.is_retired:
         raise ApiError(NOT_FOUND[model], 404)
     return item
-
-
-def _bool_arg(name):
-    value, error = parse_optional_bool(request.args.get(name), name)
-    if error:
-        raise ApiError(error)
-    return value
 
 
 # --- Torres (HU-013) --------------------------------------------------------
@@ -149,8 +141,8 @@ def list_parking_spots():
         raise ApiError("El filtro 'type' debe ser 'residente' o 'visitante'.")
     query = structure.parking_query(
         kind=kind,
-        assigned=_bool_arg("assigned"),
-        occupied=_bool_arg("occupied"),
+        assigned=bool_arg("assigned"),
+        occupied=bool_arg("occupied"),
         search=(request.args.get("search") or "").strip(),
     )
     return paginated(query, "parkingSpots", default_size=50)
@@ -190,7 +182,7 @@ def retire_parking_spot(spot_id):
 @role_required("ADMIN")
 def list_storage_rooms():
     query = structure.storage_rooms_query(
-        assigned=_bool_arg("assigned"),
+        assigned=bool_arg("assigned"),
         search=(request.args.get("search") or "").strip(),
     )
     return paginated(query, "storageRooms", default_size=50)

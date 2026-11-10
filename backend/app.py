@@ -17,6 +17,7 @@ from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
 from routes.security import bp as security_bp
 from routes.structure import bp as structure_bp
+from routes.vehicles import bp as vehicles_bp
 from seed import seed_if_empty, sync_demo_passwords
 from validators import OCCUPANCY_TYPES, validate_no_empty_strings
 
@@ -332,6 +333,7 @@ def create_app():
     app.register_blueprint(community_bp)
     app.register_blueprint(security_bp)
     app.register_blueprint(structure_bp)
+    app.register_blueprint(vehicles_bp)
     register_error_handlers(app)
 
     @app.before_request
