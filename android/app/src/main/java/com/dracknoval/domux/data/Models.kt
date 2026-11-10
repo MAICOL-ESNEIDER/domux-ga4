@@ -83,6 +83,10 @@ data class HouseholdMemberData(
     val otherRelationship: String? = null
 )
 
+/** Nombre y apellido del integrante; si no tiene apellido, solo el nombre. */
+val HouseholdMemberData.fullName: String
+    get() = listOfNotNull(name, lastName?.takeIf(String::isNotBlank)).joinToString(" ")
+
 data class PetData(
     val id: Int? = null,
     val name: String,

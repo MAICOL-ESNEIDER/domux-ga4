@@ -187,8 +187,7 @@ def _retire_announcement(announcement_id):
         return error_response(404, "Anuncio no encontrado")
     if announcement.is_retired:
         return error_response(409, "El anuncio ya estaba retirado.")
-    announcement.retired_at = datetime.utcnow()
-    announcement.retired_by_id = g.current_user.id
+    announcement.retire(g.current_user)
     add_audit_log("announcement", announcement.id, "retired", {"title": announcement.title})
     db.session.commit()
     return jsonify({

@@ -32,6 +32,7 @@ import com.dracknoval.domux.data.ResidentialUnitData
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.UserData
+import com.dracknoval.domux.data.fullName
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -147,7 +148,7 @@ fun ResidentProfileScreen(navController: NavController) {
             profile.members.forEach { member ->
                 DomuxCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("${member.name} ${member.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleSmall)
+                        Text(member.fullName, style = MaterialTheme.typography.titleSmall)
                         Text("Parentesco: ${member.otherRelationship ?: member.relationship}")
                         Text("Fecha de nacimiento: ${member.birthDate}")
                     }

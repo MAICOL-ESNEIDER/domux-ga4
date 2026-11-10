@@ -35,6 +35,7 @@ import com.dracknoval.domux.data.PetData
 import com.dracknoval.domux.data.ResidentialUnitData
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.SaveResidentialUnitRequest
+import com.dracknoval.domux.data.fullName
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.VehicleData
 import com.dracknoval.domux.data.mensajeDeError
@@ -176,7 +177,7 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             }, modifier = Modifier.fillMaxWidth()) { Text("Agregar integrante") }
             members.forEachIndexed { index, member ->
                 TextButton(onClick = { members.removeAt(index) }) {
-                    Text("Quitar ${member.name} ${member.lastName} · ${member.relationship}")
+                    Text("Quitar ${member.fullName} · ${member.relationship}")
                 }
             }
 
@@ -285,7 +286,7 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 Text("Cuarto útil: ${profile.storageIdentifier ?: "No registrado"}")
                 Text("Seguro de mascotas: ${if (profile.petInsurance) profile.petInsurer ?: "Sí" else "No"}")
                 Text("Plan funerario: ${if (profile.funeralPlan) profile.funeralProvider ?: "Sí" else "No"}")
-                profile.members.forEach { Text("${it.name} ${it.lastName} · ${it.relationship} · ${it.birthDate}") }
+                profile.members.forEach { Text("${it.fullName} · ${it.relationship} · ${it.birthDate}") }
                 profile.pets.forEach { Text("${it.name}: ${it.species}, ${it.breed}, ${it.ageYears} años") }
                 profile.vehicles.forEach { Text("${it.type}: ${it.plate} · ${it.makeModel} · ${it.year}") }
             }

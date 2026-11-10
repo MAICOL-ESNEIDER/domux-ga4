@@ -17,6 +17,7 @@ from models import (
     User,
     Vehicle,
 )
+from services.audit_service import add_audit_log
 from services.excel_service import (
     MIME_XLSX,
     generate_census_template_xlsx,
@@ -131,6 +132,7 @@ def get_users():
             ResidentialUnit, HouseholdMember.unit_id == ResidentialUnit.id
         ).filter(
             ResidentialUnit.apartment == User.apartment,
+            HouseholdMember.retired_at.is_(None),
             db.or_(
                 HouseholdMember.name.ilike(pattern),
                 HouseholdMember.last_name.ilike(pattern),
@@ -177,10 +179,12 @@ def get_users():
     for parameter, column in (
         ("hasPets", db.session.query(Pet.id).join(
             ResidentialUnit, Pet.unit_id == ResidentialUnit.id
-        ).filter(ResidentialUnit.apartment == User.apartment).exists()),
+        ).filter(ResidentialUnit.apartment == User.apartment, Pet.retired_at.is_(None)).exists()),
         ("hasVehicles", db.session.query(Vehicle.id).join(
             ResidentialUnit, Vehicle.unit_id == ResidentialUnit.id
-        ).filter(ResidentialUnit.apartment == User.apartment).exists()),
+        ).filter(
+            ResidentialUnit.apartment == User.apartment, Vehicle.retired_at.is_(None)
+        ).exists()),
         ("hasParking", db.session.query(ResidentialUnit.id).filter(
             ResidentialUnit.apartment == User.apartment,
             ResidentialUnit.parking_identifier.isnot(None),
@@ -244,6 +248,7 @@ def get_users():
             ResidentialUnit, HouseholdMember.unit_id == ResidentialUnit.id
         ).filter(
             ResidentialUnit.apartment == User.apartment,
+            HouseholdMember.retired_at.is_(None),
             *member_birth_date_conditions,
         ).exists()
         query = query.filter(
@@ -493,10 +498,60 @@ def get_unit_profile():
     return jsonify({"unit": unit.to_dict()})
 
 
+def _item_id_error(item, label, index):
+    """Revisa el id opcional de un elemento de la ficha; devuelve el error o None."""
+    item_id = item.get("id")
+    if item_id is None or (isinstance(item_id, int) and not isinstance(item_id, bool)):
+        return None
+    return f"El id de {label} #{index + 1} no es válido."
+
+
+def _sync_household_items(model, unit, current, incoming, natural_key=None):
+    """Aplica una lista de la ficha del hogar sin borrar nada (TT-032, DEC-090).
+
+    current son los registros vigentes del apartamento e incoming la lista que
+    envió la app. Lo que llega con el id de un registro vigente (o sin id, pero
+    con el mismo documento o la misma placa) se mantiene y se actualiza; lo
+    nuevo se agrega; y lo vigente que ya no llega se retira con la fecha y
+    quién lo hizo. Devuelve cuántos se agregaron, se mantuvieron y se retiraron.
+    """
+    pending = {item.id: item for item in current}
+    by_key = {getattr(item, natural_key): item for item in current} if natural_key else {}
+    kept, added = [], []
+    for fields in incoming:
+        fields = dict(fields)
+        item = pending.pop(fields.pop("id", None), None)
+        if item is None and natural_key:
+            match = by_key.get(fields[natural_key])
+            if match is not None and match.id in pending:
+                item = pending.pop(match.id)
+        if item is None:
+            added.append(fields)
+        else:
+            kept.append((item, fields))
+
+    # Primero se retira lo que salió de la lista: así una placa que pasa a otro
+    # registro no choca con el registro que se va.
+    for item in pending.values():
+        item.retire(g.current_user)
+    db.session.flush()
+    for item, fields in kept:
+        for name, value in fields.items():
+            setattr(item, name, value)
+    for fields in added:
+        db.session.add(model(unit=unit, **fields))
+    return {"added": len(added), "kept": len(kept), "retired": len(pending)}
+
+
 @bp.put("/admin/units")
 @token_required
 @role_required("ADMIN")
 def update_unit_profile():
+    """Guarda la ficha del hogar de un apartamento (API-HOG-02).
+
+    Nada se borra: lo que se quita de la ficha queda retirado (TT-032) y el
+    cambio se anota en el registro de auditoría.
+    """
     data, failure = _json_body()
     if failure:
         return failure
@@ -524,6 +579,8 @@ def update_unit_profile():
         )
         if required:
             return error_response(400, f"Miembro #{index + 1}: {required}")
+        if error := _item_id_error(member, "el miembro", index):
+            return error_response(400, error)
         try:
             birth_date = date.fromisoformat(member["birthDate"])
         except ValueError:
@@ -542,6 +599,7 @@ def update_unit_profile():
             if member.get(field) is not None and not isinstance(member[field], str):
                 return error_response(400, f"El campo '{field}' del miembro debe ser texto.")
         parsed_members.append({
+            "id": member.get("id"),
             "name": member["name"].strip(),
             "last_name": (member.get("lastName") or "").strip(),
             "document_id": member["documentId"].strip(),
@@ -560,10 +618,13 @@ def update_unit_profile():
         )
         if required:
             return error_response(400, f"Mascota #{index + 1}: {required}")
+        if error := _item_id_error(pet, "la mascota", index):
+            return error_response(400, error)
         age = pet.get("ageYears")
         if not isinstance(age, int) or isinstance(age, bool) or not 0 <= age <= 100:
             return error_response(400, f"La edad de la mascota #{index + 1} debe estar entre 0 y 100.")
         parsed_pets.append({
+            "id": pet.get("id"),
             "name": pet["name"].strip(),
             "species": pet["species"].strip(),
             "breed": pet["breed"].strip(),
@@ -582,6 +643,8 @@ def update_unit_profile():
         )
         if required:
             return error_response(400, f"Vehículo #{index + 1}: {required}")
+        if error := _item_id_error(vehicle, "el vehículo", index):
+            return error_response(400, error)
         plate = vehicle["plate"].replace("-", "").replace(" ", "").upper()
         if error := validate_colombian_plate(plate):
             return error_response(400, error)
@@ -597,6 +660,7 @@ def update_unit_profile():
             if vehicle.get(field) is not None and not isinstance(vehicle[field], str):
                 return error_response(400, f"El campo '{field}' del vehículo debe ser texto.")
         parsed_vehicles.append({
+            "id": vehicle.get("id"),
             "plate": plate,
             "vehicle_type": vehicle["type"],
             "make_model": vehicle["makeModel"].strip(),
@@ -608,9 +672,11 @@ def update_unit_profile():
     unit = ResidentialUnit.query.filter_by(apartment=apartment.strip()).first()
     if unit is None:
         return error_response(404, "No se encontró el apartamento.")
+    # Solo chocan las placas vigentes de otro apartamento; las retiradas pueden volver.
     conflicts = Vehicle.query.filter(
         Vehicle.plate.in_(seen_plates),
         Vehicle.unit_id != unit.id,
+        Vehicle.retired_at.is_(None),
     ).all() if seen_plates else []
     if conflicts:
         return jsonify({
@@ -625,13 +691,18 @@ def update_unit_profile():
     unit.pet_insurer = (data.get("petInsurer") or "").strip() or None if unit.pet_insurance else None
     unit.funeral_plan = data.get("funeralPlan", False)
     unit.funeral_provider = (data.get("funeralProvider") or "").strip() or None if unit.funeral_plan else None
-    unit.members.clear()
-    unit.pets.clear()
-    unit.vehicles.clear()
-    db.session.flush()
-    unit.members.extend(HouseholdMember(unit=unit, **member) for member in parsed_members)
-    unit.pets.extend(Pet(unit=unit, **pet) for pet in parsed_pets)
-    unit.vehicles.extend(Vehicle(unit=unit, **vehicle) for vehicle in parsed_vehicles)
+    changes = {
+        "members": _sync_household_items(
+            HouseholdMember, unit, unit.active_members, parsed_members, "document_id"
+        ),
+        "pets": _sync_household_items(Pet, unit, unit.active_pets, parsed_pets),
+        "vehicles": _sync_household_items(
+            Vehicle, unit, unit.active_vehicles, parsed_vehicles, "plate"
+        ),
+    }
+    add_audit_log("residential_unit", unit.id, "household_updated", {
+        "apartment": unit.apartment, **changes,
+    })
     try:
         db.session.commit()
     except IntegrityError:

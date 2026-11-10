@@ -285,8 +285,9 @@ def _upsert_census_row(row):
             raise ValueError("Mascota_Edad debe ser un número entero.") from error
         if age_years < 0:
             raise ValueError("Mascota_Edad no puede ser negativa.")
+        # Solo cuentan las mascotas vigentes; una retirada se vuelve a agregar (TT-032).
         existing_pet = Pet.query.filter_by(
-            unit_id=unit.id, name=pet_name, species=pet_species, breed=pet_breed
+            unit_id=unit.id, name=pet_name, species=pet_species, breed=pet_breed, retired_at=None
         ).first()
         if existing_pet is None:
             db.session.add(Pet(
@@ -314,8 +315,9 @@ def _upsert_census_row(row):
             raise ValueError("Vehiculo_Anio debe ser un año numérico.") from error
         if not 1900 <= year <= date.today().year + 1:
             raise ValueError("Vehiculo_Anio está fuera de rango.")
-        existing_vehicle = Vehicle.query.filter_by(plate=re.sub(r"[\s-]", "", plate)).first()
         normalized_plate = re.sub(r"[\s-]", "", plate)
+        # Solo cuentan los vehículos vigentes: una placa retirada puede volver (IDX-013).
+        existing_vehicle = Vehicle.query.filter_by(plate=normalized_plate, retired_at=None).first()
         if existing_vehicle is None:
             db.session.add(Vehicle(
                 unit_id=unit.id,

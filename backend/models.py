@@ -3,6 +3,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import Index, text
+from sqlalchemy.orm import declared_attr
 
 from extensions import db
 
@@ -11,6 +12,33 @@ ROLES = ("ADMIN", "RESIDENT", "GUARD")
 
 def _fmt(value):
     return value.strftime("%Y-%m-%d %H:%M") if value else None
+
+
+class RetirableMixin:
+    """Retiro lógico (DEC-090 y ADR-013): la fila nunca se borra, se marca.
+
+    retired_at guarda cuándo se retiró y retired_by_id quién lo hizo. Mientras
+    los dos estén vacíos, el registro está vigente.
+    """
+
+    retired_at = db.Column(db.DateTime, nullable=True)
+
+    @declared_attr
+    def retired_by_id(cls):
+        return db.Column(
+            db.Integer,
+            db.ForeignKey("users.id", name=f"fk_{cls.__tablename__}_retired_by_id_users"),
+            nullable=True,
+        )
+
+    @property
+    def is_retired(self):
+        return self.retired_at is not None
+
+    def retire(self, user):
+        """Marca el registro como retirado por el usuario indicado."""
+        self.retired_at = datetime.utcnow()
+        self.retired_by_id = user.id
 
 
 class User(db.Model):
@@ -113,16 +141,25 @@ class ResidentialUnit(db.Model):
     funeral_plan = db.Column(db.Boolean, nullable=False, default=False)
     funeral_provider = db.Column(db.String(120), nullable=True)
 
+    # Incluyen también lo retirado: es el historial de la ficha (TT-032). Sin
+    # «delete-orphan», quitar algo de la lista nunca lo borra de la base.
     members = db.relationship(
-        "HouseholdMember", back_populates="unit", cascade="all, delete-orphan",
-        order_by="HouseholdMember.id",
+        "HouseholdMember", back_populates="unit", order_by="HouseholdMember.id"
     )
-    pets = db.relationship(
-        "Pet", back_populates="unit", cascade="all, delete-orphan", order_by="Pet.id"
-    )
-    vehicles = db.relationship(
-        "Vehicle", back_populates="unit", cascade="all, delete-orphan", order_by="Vehicle.id"
-    )
+    pets = db.relationship("Pet", back_populates="unit", order_by="Pet.id")
+    vehicles = db.relationship("Vehicle", back_populates="unit", order_by="Vehicle.id")
+
+    @property
+    def active_members(self):
+        return [member for member in self.members if not member.is_retired]
+
+    @property
+    def active_pets(self):
+        return [pet for pet in self.pets if not pet.is_retired]
+
+    @property
+    def active_vehicles(self):
+        return [vehicle for vehicle in self.vehicles if not vehicle.is_retired]
 
     def to_dict(self):
         residents = User.query.filter_by(apartment=self.apartment, role="RESIDENT").order_by(
@@ -145,13 +182,15 @@ class ResidentialUnit(db.Model):
             "petInsurer": self.pet_insurer,
             "funeralPlan": self.funeral_plan,
             "funeralProvider": self.funeral_provider,
-            "members": [member.to_dict() for member in self.members],
-            "pets": [pet.to_dict() for pet in self.pets],
-            "vehicles": [vehicle.to_dict() for vehicle in self.vehicles],
+            "members": [member.to_dict() for member in self.active_members],
+            "pets": [pet.to_dict() for pet in self.active_pets],
+            "vehicles": [vehicle.to_dict() for vehicle in self.active_vehicles],
         }
 
 
-class HouseholdMember(db.Model):
+class HouseholdMember(RetirableMixin, db.Model):
+    """Integrante del hogar; quitarlo de la ficha lo retira (TT-032)."""
+
     __tablename__ = "household_members"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -170,7 +209,9 @@ class HouseholdMember(db.Model):
         return {
             "id": self.id,
             "name": self.name,
-            "lastName": self.last_name,
+            # Vacío sale como null: la app lo devuelve tal cual y el servidor
+            # no acepta textos vacíos al guardar la ficha.
+            "lastName": self.last_name or None,
             "documentId": self.document_id,
             "birthDate": self.birth_date,
             "phone": self.phone,
@@ -179,7 +220,9 @@ class HouseholdMember(db.Model):
         }
 
 
-class Pet(db.Model):
+class Pet(RetirableMixin, db.Model):
+    """Mascota del apartamento; quitarla de la ficha la retira (TT-032)."""
+
     __tablename__ = "pets"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -201,12 +244,27 @@ class Pet(db.Model):
         }
 
 
-class Vehicle(db.Model):
+class Vehicle(RetirableMixin, db.Model):
+    """Vehículo del apartamento; quitarlo de la ficha lo retira (TT-032).
+
+    La placa solo es única entre los vehículos vigentes (IDX-013): una placa
+    retirada puede volver a registrarse en este u otro apartamento.
+    """
+
     __tablename__ = "vehicles"
+    __table_args__ = (
+        Index(
+            "uq_vehicles_active_plate",
+            "plate",
+            unique=True,
+            sqlite_where=text("retired_at IS NULL"),
+            postgresql_where=text("retired_at IS NULL"),
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     unit_id = db.Column(db.Integer, db.ForeignKey("residential_units.id"), nullable=False, index=True)
-    plate = db.Column(db.String(10), nullable=False, unique=True, index=True)
+    plate = db.Column(db.String(10), nullable=False, index=True)
     vehicle_type = db.Column(db.String(10), nullable=False)
     make_model = db.Column(db.String(120), nullable=False)
     year = db.Column(db.Integer, nullable=False)
@@ -227,11 +285,11 @@ class Vehicle(db.Model):
         }
 
 
-class Announcement(db.Model):
+class Announcement(RetirableMixin, db.Model):
     """Comunicado de la administración para los residentes.
 
-    Un comunicado nunca se borra (DEC-090 y ADR-013): al retirarlo se guarda
-    cuándo y quién lo hizo, deja de verse en la app y sigue en la base.
+    Un comunicado nunca se borra (TT-029): al retirarlo deja de verse en la
+    app, pero sigue en la base con la fecha y quién lo retiró.
     """
 
     __tablename__ = "announcements"
@@ -245,20 +303,8 @@ class Announcement(db.Model):
     media_type = db.Column(db.String(20), nullable=True)
     author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    # Retiro lógico (TT-029): vacíos mientras el comunicado está publicado.
-    retired_at = db.Column(db.DateTime, nullable=True)
-    retired_by_id = db.Column(
-        db.Integer,
-        db.ForeignKey("users.id", name="fk_announcements_retired_by_id_users"),
-        nullable=True,
-    )
 
     author = db.relationship("User", foreign_keys=[author_id])
-    retired_by = db.relationship("User", foreign_keys=[retired_by_id])
-
-    @property
-    def is_retired(self):
-        return self.retired_at is not None
 
     def to_dict(self):
         return {
