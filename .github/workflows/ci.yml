@@ -1,0 +1,97 @@
+# Pipeline de integración continua de DOMUX (TT-021).
+# Con cada cambio que se sube: prueba el servidor en SQLite y en PostgreSQL,
+# mide la cobertura, revisa las librerías y arma el APK de la app para probarlo.
+name: Pruebas y APK
+
+on:
+  push:
+    branches: [release/v1.0-reducida, develop, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  servidor:
+    name: Servidor (${{ matrix.base }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        base: [sqlite, postgresql]
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: domux
+          POSTGRES_DB: domux_pruebas
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U domux"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+      - name: Errores de código (Ruff)
+        run: ruff check . --select F,E9 --exclude migrations
+      - name: Pruebas con cobertura
+        env:
+          TEST_DATABASE_URL: ${{ matrix.base == 'postgresql' && 'postgresql://domux@localhost:5432/domux_pruebas' || '' }}
+        run: |
+          coverage run -m unittest discover -s tests
+          coverage report
+      - name: Librerías con fallas conocidas
+        if: matrix.base == 'sqlite'
+        run: pip-audit -r requirements.txt
+      - name: Reporte de estilo (informativo)
+        if: matrix.base == 'sqlite'
+        run: ruff check . --exit-zero --statistics --exclude migrations
+
+  app:
+    name: App Android (APK)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Configuración de Firebase (si existe el secreto)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          else
+            echo "Sin google-services.json: el APK se arma sin avisos al celular."
+          fi
+      - name: Armar el APK (servidor de pruebas en Render)
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleProdDebug --no-daemon
+      - uses: actions/upload-artifact@v7
+        with:
+          name: domux-apk-${{ github.run_number }}
+          path: android/app/build/outputs/apk/prod/debug/*.apk
+          retention-days: 14

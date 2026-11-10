@@ -1,0 +1,14 @@
+# Cobertura de las pruebas del servidor (DEC-107): cuánto código recorren.
+[run]
+source = .
+omit =
+    tests/*
+    migrations/*
+    venv/*
+    .venv/*
+
+[report]
+# Si baja de 70 %, el pipeline marca error.
+fail_under = 70
+show_missing = True
+skip_empty = True
