@@ -494,22 +494,29 @@ def reset_user_password(user_id):
 @token_required
 @role_required("ADMIN", "GUARD")
 def get_residents():
+    """Busca residentes activos para elegirlos en un formulario.
+
+    Portería solo recibe nombre, teléfono y apartamento, y no busca por correo
+    (SEC-015): es lo que necesita para avisar o entregar.
+    """
+    is_guard = g.current_user.role == "GUARD"
     query = User.query.filter_by(role="RESIDENT").filter(User.is_active.is_(True))
     search = (request.args.get("search") or "").strip()
     if search:
         pattern = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                (User.name + " " + User.last_name).ilike(pattern),
-                User.name.ilike(pattern),
-                User.last_name.ilike(pattern),
-                User.document_id.ilike(pattern),
-                User.apartment.ilike(pattern),
-                User.email.ilike(pattern),
-            ),
-        )
+        fields = [
+            (User.name + " " + User.last_name).ilike(pattern),
+            User.name.ilike(pattern),
+            User.last_name.ilike(pattern),
+            User.document_id.ilike(pattern),
+            User.apartment.ilike(pattern),
+        ]
+        if not is_guard:
+            fields.append(User.email.ilike(pattern))
+        query = query.filter(db.or_(*fields))
     residents = query.order_by(User.name, User.last_name).limit(30).all()
-    return jsonify({"residents": [resident.to_resident_summary() for resident in residents]})
+    summary = User.to_guard_summary if is_guard else User.to_resident_summary
+    return jsonify({"residents": [summary(resident) for resident in residents]})
 
 
 @bp.get("/admin/units")

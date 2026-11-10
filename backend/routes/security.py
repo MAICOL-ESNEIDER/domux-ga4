@@ -73,6 +73,7 @@ def _cleanup_expired_packages():
 
 @bp.post("/push-tokens")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def register_push_token():
     data, failure = _json_body()
     if failure:
@@ -110,6 +111,7 @@ def register_push_token():
 
 @bp.delete("/push-tokens")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def delete_push_token():
     data, failure = _json_body()
     if failure:
@@ -127,6 +129,7 @@ def delete_push_token():
 
 @bp.get("/packages")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def get_packages():
     _cleanup_expired_packages()
     user = g.current_user
@@ -283,7 +286,7 @@ def restore_package(pkg_id):
 
 @bp.put("/packages/<int:pkg_id>/deliver")
 @token_required
-@role_required("GUARD")
+@role_required("GUARD", "ADMIN")
 def deliver_package(pkg_id):
     data, failure = _json_body()
     if failure:
@@ -314,6 +317,7 @@ def deliver_package(pkg_id):
 
 @bp.get("/visits")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def get_visits():
     user = g.current_user
     query = Visit.query
@@ -752,6 +756,7 @@ def exit_visit_qr(token):
 
 @bp.get("/notifications")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def get_notifications():
     notifications = Notification.query.filter_by(
         user_id=g.current_user.id
@@ -761,6 +766,7 @@ def get_notifications():
 
 @bp.put("/notifications/<int:notification_id>/read")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def mark_notification_read(notification_id):
     notification = db.session.get(Notification, notification_id)
     if notification is None:

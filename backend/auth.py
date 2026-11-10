@@ -99,13 +99,18 @@ def token_required(f):
 
 
 def role_required(*roles_permitidos):
+    """Deja pasar solo a los roles que la ruta nombra (ADR-015, mínimo privilegio).
+
+    La administración ya no pasa por todas las rutas: cada ruta dice
+    explícitamente qué roles la usan, y cualquier otro recibe 403.
+    """
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
             user = getattr(g, "current_user", None)
             if user is None:
                 return error_response(401, "Autenticación requerida")
-            if user.role != "ADMIN" and user.role not in roles_permitidos:
+            if user.role not in roles_permitidos:
                 return error_response(403, "No tienes permiso para hacer esta acción")
             return f(*args, **kwargs)
 

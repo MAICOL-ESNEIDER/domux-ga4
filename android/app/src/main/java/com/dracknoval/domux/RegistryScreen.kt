@@ -86,6 +86,7 @@ private suspend fun runRegistryAction(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegistryScreen(navController: NavController) {
+    // Paquetes: portería y administración. Visitas y QR: solo portería (ADR-015).
     val canRegister = Session.isGuard || Session.isAdmin
     val scope = rememberCoroutineScope()
     var packages by remember { mutableStateOf<List<PackageItem>>(emptyList()) }
@@ -241,10 +242,11 @@ fun RegistryScreen(navController: NavController) {
         add("Entregados" to "entregado")
         if (canRegister) add("Papelera" to "papelera")
     }
-    val tabs = if (Session.isResident) {
-        listOf("Mis paquetes", "Mis visitas", "Código QR")
-    } else {
-        listOf("Paquetes", "Registrar paquete", "Visitas", "Registrar visita / QR")
+    val tabs = when {
+        Session.isResident -> listOf("Mis paquetes", "Mis visitas", "Código QR")
+        Session.isGuard -> listOf("Paquetes", "Registrar paquete", "Visitas", "Registrar visita / QR")
+        // La administración consulta las visitas, pero no las registra (ADR-015).
+        else -> listOf("Paquetes", "Registrar paquete", "Visitas")
     }
     val title = when {
         Session.isResident -> "Mis paquetes y visitas"
@@ -442,7 +444,7 @@ fun RegistryScreen(navController: NavController) {
                     )
                 }
 
-                canRegister && selectedTab == 3 -> {
+                Session.isGuard && selectedTab == 3 -> {
                     RegistrationAndQrSection(
                         modifier = Modifier.weight(1f),
                         resident = selectedVisitResident,

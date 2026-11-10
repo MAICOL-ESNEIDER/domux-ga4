@@ -128,6 +128,7 @@ def _resident_for_write(data):
 
 @bp.get("/announcements")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def get_announcements():
     """Lista los comunicados publicados, del más nuevo al más antiguo.
 
@@ -218,6 +219,7 @@ def delete_announcement(announcement_id):
 
 @bp.get("/pqrs")
 @token_required
+@role_required("ADMIN", "RESIDENT")
 def get_pqrs():
     user = g.current_user
     query = Pqrs.query.join(User, Pqrs.resident_id == User.id)
@@ -266,6 +268,7 @@ def get_pqrs():
 
 @bp.post("/pqrs")
 @token_required
+@role_required("RESIDENT", "ADMIN")
 def create_pqrs():
     data, failure = _json_body()
     if failure:
@@ -573,6 +576,7 @@ def respond_pqrs_batch():
 
 @bp.get("/common-areas")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def get_common_areas():
     areas = CommonArea.query.order_by(CommonArea.name).all()
     return jsonify({"areas": [area.to_dict() for area in areas]})
@@ -580,6 +584,7 @@ def get_common_areas():
 
 @bp.get("/reservations")
 @token_required
+@role_required("ADMIN", "RESIDENT")
 def get_reservations():
     user = g.current_user
     if user.role == "ADMIN":
@@ -601,6 +606,7 @@ def get_reservations():
 
 @bp.get("/reservations/availability")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def get_reservation_availability():
     common_area_id = request.args.get("commonAreaId", type=int)
     date = request.args.get("date")
@@ -621,6 +627,7 @@ def get_reservation_availability():
 
 @bp.get("/reservations/calendar")
 @token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
 def get_reservation_calendar():
     common_area_id = request.args.get("commonAreaId", type=int)
     year = request.args.get("year", type=int)
@@ -823,7 +830,7 @@ def update_reservation_status(res_id):
 
 @bp.post("/reservations/<int:res_id>/messages")
 @token_required
-@role_required("RESIDENT")
+@role_required("RESIDENT", "ADMIN")
 def add_reservation_message(res_id):
     data, failure = _json_body()
     if failure:

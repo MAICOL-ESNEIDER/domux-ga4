@@ -113,6 +113,16 @@ class User(db.Model):
             "createdAt": _fmt(self.created_at),
         }
 
+    def to_guard_summary(self):
+        """Lo que portería necesita para avisar o entregar (SEC-015 y ADR-015)."""
+        return {
+            "id": self.id,
+            "name": self.full_name,
+            "phone": self.phone or "",
+            "apartment": self.apartment,
+            "apartmentNumber": self.apartment_number,
+        }
+
     def to_resident_summary(self):
         return {
             "id": self.id,
