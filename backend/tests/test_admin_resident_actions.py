@@ -1,8 +1,7 @@
 import os
 import unittest
 
-os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
+import env_setup  # noqa: F401  (va antes de importar la app)
 
 from app import create_app
 from auth import generate_token

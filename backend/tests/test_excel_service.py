@@ -4,8 +4,7 @@ import os
 import unittest
 from datetime import date, timedelta
 
-os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
+import env_setup  # noqa: F401  (va antes de importar la app)
 
 from openpyxl import load_workbook
 

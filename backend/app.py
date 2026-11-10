@@ -6,6 +6,7 @@ from flask import Flask, request
 from flask_cors import CORS
 from sqlalchemy import inspect
 
+from config import cors_origins
 from errors import error_response, register_error_handlers
 from extensions import db
 from logging_config import configure_logging
@@ -14,7 +15,7 @@ from routes.admin import bp as admin_bp
 from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
 from routes.security import bp as security_bp
-from seed import seed_if_empty
+from seed import seed_if_empty, sync_demo_passwords
 from validators import apartment_number_from_label, validate_no_empty_strings
 
 load_dotenv()
@@ -283,7 +284,11 @@ def create_app():
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
     configure_logging(app)
-    CORS(app)
+    # Solo las páginas de CORS_ORIGINS pueden llamar a la API desde un navegador.
+    # La app Android no lo necesita y la web la sirve este mismo servidor.
+    allowed_origins = cors_origins()
+    if allowed_origins:
+        CORS(app, origins=allowed_origins)
 
     database_url = os.environ.get("DATABASE_URL", "sqlite:///domux.db")
     if database_url.startswith("postgres://"):
@@ -325,6 +330,7 @@ def create_app():
         migrate_resident_profiles()
         migrate_pqrs_conversations()
         seed_if_empty()
+        sync_demo_passwords()
 
     return app
 
@@ -334,4 +340,6 @@ app = create_app()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    # El modo de depuración solo se activa a propósito (FLASK_DEBUG=1): con él
+    # encendido, cualquiera en la misma red podría ejecutar código en el equipo.
+    app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1")

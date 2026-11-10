@@ -5,7 +5,9 @@
 # Esta es la "segunda capa de seguridad" de la que habla la GA3: aunque la app
 # oculte botones, el backend vuelve a comprobar todo.
 
+import logging
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -13,16 +15,43 @@ import jwt
 from dotenv import load_dotenv
 from flask import request, g
 
+from config import MIN_JWT_SECRET_LENGTH, is_production
 from errors import error_response
 from extensions import db
 from models import User
 
 load_dotenv()
 
-JWT_SECRET = os.environ.get(
-    "JWT_SECRET",
-    "domux-super-secret-jwt-key-2026",
-)
+logger = logging.getLogger(__name__)
+
+
+def load_jwt_secret() -> str:
+    """Devuelve la clave que firma los tokens de sesión.
+
+    En producción es obligatoria: sin ella el servidor no arranca, porque con una
+    clave conocida cualquiera podría fabricar tokens válidos (SEC-003). En
+    desarrollo, si falta, se crea una al azar que dura mientras el servidor esté
+    encendido; al reiniciarlo hay que volver a iniciar sesión.
+    """
+    secret = os.environ.get("JWT_SECRET", "")
+    if not secret:
+        if is_production():
+            raise RuntimeError(
+                "Falta la variable JWT_SECRET: el servidor no arranca sin ella."
+            )
+        logger.warning(
+            "JWT_SECRET no está definida: se usa una clave temporal de desarrollo."
+        )
+        return secrets.token_hex(32)
+    if len(secret) < MIN_JWT_SECRET_LENGTH:
+        logger.warning(
+            "JWT_SECRET tiene menos de %s caracteres: cámbiala por una más larga.",
+            MIN_JWT_SECRET_LENGTH,
+        )
+    return secret
+
+
+JWT_SECRET = load_jwt_secret()
 
 JWT_ALGORITHM = "HS256"
 JWT_EXP_HOURS = 24 * 7  # el token dura 7 días
