@@ -8,7 +8,6 @@ import logging
 import os
 import secrets
 import string
-from datetime import datetime
 from pathlib import Path
 
 from flask import current_app
@@ -17,6 +16,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from config import is_production
 from extensions import db
 from models import Announcement, CommonArea, PackageItem, User
+from time_utils import utc_now
 from validators import validate_strong_password
 
 logger = logging.getLogger(__name__)
@@ -195,7 +195,7 @@ def seed_if_empty():
             registered_by=guardia.id,
             description="Paquete de prueba entregado",
             status="entregado",
-            delivered_at=datetime.utcnow(),
+            delivered_at=utc_now(),
             delivered_to=residente1.full_name,
             delivered_by_id=guardia.id,
         ),

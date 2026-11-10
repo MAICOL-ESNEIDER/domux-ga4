@@ -1,5 +1,5 @@
 import base64
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -40,6 +40,7 @@ from validators import (
     validate_time,
     validate_time_slot,
 )
+from time_utils import colombia_today, utc_now
 
 bp = Blueprint("community", __name__, url_prefix="/api")
 
@@ -48,7 +49,7 @@ bp = Blueprint("community", __name__, url_prefix="/api")
 @token_required
 @role_required("ADMIN")
 def archive_history():
-    today = date.today().isoformat()
+    today = colombia_today().isoformat()
     pqrs_items = Pqrs.query.filter(
         Pqrs.status == "resuelta",
         Pqrs.is_archived.is_(False),
@@ -60,7 +61,7 @@ def archive_history():
             Reservation.date < today,
         ),
     ).all()
-    archived_at = datetime.utcnow()
+    archived_at = utc_now()
     for pqrs in pqrs_items:
         pqrs.is_archived = True
         pqrs.archived_at = archived_at
@@ -88,7 +89,7 @@ def archive_history():
         ),
         "archivedPqrsCount": archived_pqrs,
         "archivedReservationsCount": archived_reservations,
-        "fileName": f"Archivo_Historico_DOMUX_{date.today().isoformat()}.xlsx",
+        "fileName": f"Archivo_Historico_DOMUX_{colombia_today().isoformat()}.xlsx",
         "mimeType": MIME_XLSX,
         "base64": base64.b64encode(workbook_bytes).decode("ascii"),
     })
@@ -366,7 +367,7 @@ def respond_pqrs(pqrs_id):
     pqrs.status = data["status"]
     pqrs.admin_response = response_text.strip()
     if previous_status != pqrs.status:
-        pqrs.updated_at = datetime.utcnow()
+        pqrs.updated_at = utc_now()
     pqrs.conversation.append(PqrsMessage(
         author_id=g.current_user.id,
         author_role="ADMIN",
@@ -421,7 +422,7 @@ def add_pqrs_message(pqrs_id):
     was_resolved = pqrs.status == "resuelta"
     if was_resolved:
         pqrs.status = "abierta"
-        pqrs.updated_at = datetime.utcnow()
+        pqrs.updated_at = utc_now()
     pqrs.conversation.append(PqrsMessage(
         author_id=g.current_user.id,
         author_role="RESIDENT",
@@ -483,7 +484,7 @@ def rate_pqrs(pqrs_id):
         db.session.add(rated_this_cycle)
     rated_this_cycle.rating = rating
     rated_this_cycle.comment = comment.strip() if comment and comment.strip() else None
-    rated_this_cycle.created_at = datetime.utcnow()
+    rated_this_cycle.created_at = utc_now()
     db.session.commit()
     return jsonify({"message": "Calificación guardada", "pqrs": pqrs.to_dict()})
 
@@ -533,7 +534,7 @@ def respond_pqrs_batch():
         pqrs.status = status
         pqrs.admin_response = message.strip()
         if previous_status != status:
-            pqrs.updated_at = datetime.utcnow()
+            pqrs.updated_at = utc_now()
         pqrs.conversation.append(PqrsMessage(
             author_id=g.current_user.id,
             author_role="ADMIN",
@@ -894,7 +895,7 @@ def cancel_reservation(res_id):
         return error_response(403, "Esa reserva no es tuya")
     if reservation.status not in ("pendiente", "activa", "aprobada"):
         return error_response(400, "Solo se pueden cancelar reservas pendientes o aprobadas.")
-    if g.current_user.role == "RESIDENT" and reservation.date <= datetime.utcnow().date().isoformat():
+    if g.current_user.role == "RESIDENT" and reservation.date <= colombia_today().isoformat():
         return error_response(400, "Solo puedes cancelar la reserva antes del día reservado.")
     previous_status = reservation.status
     reservation.status = "cancelada"

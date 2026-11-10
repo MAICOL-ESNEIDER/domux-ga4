@@ -38,6 +38,7 @@ from validators import (
     validate_colombian_plate,
     validate_iso_date,
 )
+from time_utils import colombia_today, utc_now
 
 bp = Blueprint("admin", __name__, url_prefix="/api")
 
@@ -109,7 +110,7 @@ def get_legal_report():
     workbook_bytes, counts = generate_legal_report_xlsx()
     return jsonify({
         "message": "Reporte legal generado exitosamente.",
-        "fileName": f"Reporte_Legal_DOMUX_{date.today().isoformat()}.xlsx",
+        "fileName": f"Reporte_Legal_DOMUX_{colombia_today().isoformat()}.xlsx",
         "mimeType": MIME_XLSX,
         "base64": _encode_base64(workbook_bytes),
         **counts,
@@ -224,7 +225,7 @@ def get_users():
             or (minimum_age is not None and maximum_age is not None and minimum_age > maximum_age)
         ):
             return error_response(400, "El rango de edad es inválido.")
-        today = date.today()
+        today = colombia_today()
 
         def years_before(years):
             try:
@@ -304,7 +305,7 @@ def create_user():
     if "birthDate" in data:
         if error := validate_iso_date(data["birthDate"]):
             return error_response(400, error)
-        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > date.today():
+        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > colombia_today():
             return error_response(400, "La fecha de nacimiento no puede ser futura.")
     parental_consent = data.get("parentalConsent", False)
     if not isinstance(parental_consent, bool):
@@ -332,7 +333,7 @@ def create_user():
         birth_date=data.get("birthDate"),
         parental_consent=parental_consent,
         data_processing_consent=role == "RESIDENT",
-        data_processing_consent_at=datetime.utcnow() if role == "RESIDENT" else None,
+        data_processing_consent_at=utc_now() if role == "RESIDENT" else None,
         is_active=True,
     )
     db.session.add(user)
@@ -354,9 +355,9 @@ def _close_access_of_deactivated_user(user):
     passes = VisitQrPass.query.filter(
         VisitQrPass.resident_id == user.id,
         VisitQrPass.revoked.is_(False),
-        VisitQrPass.valid_until >= date.today().isoformat(),
+        VisitQrPass.valid_until >= colombia_today().isoformat(),
     ).all()
-    revoked_at = datetime.utcnow()
+    revoked_at = utc_now()
     for qr_pass in passes:
         qr_pass.revoked = True
         qr_pass.revoked_at = revoked_at
@@ -384,7 +385,7 @@ def update_user(user_id):
     if "birthDate" in data:
         if error := validate_iso_date(data["birthDate"]):
             return error_response(400, error)
-        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > date.today():
+        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > colombia_today():
             return error_response(400, "La fecha de nacimiento no puede ser futura.")
         user.birth_date = data["birthDate"]
     if "parentalConsent" in data:
@@ -431,7 +432,7 @@ def update_user(user_id):
                     "Debes registrar la autorización de tratamiento de datos del residente.",
                 )
             user.data_processing_consent = True
-            user.data_processing_consent_at = datetime.utcnow()
+            user.data_processing_consent_at = utc_now()
         user.role = role
     if "occupancyType" in data:
         error = validate_occupancy_type(data["occupancyType"])
@@ -619,7 +620,7 @@ def update_unit_profile():
             birth_date = date.fromisoformat(member["birthDate"])
         except ValueError:
             return error_response(400, f"La fecha de nacimiento del miembro #{index + 1} no es válida.")
-        if birth_date.isoformat() != member["birthDate"] or birth_date > date.today():
+        if birth_date.isoformat() != member["birthDate"] or birth_date > colombia_today():
             return error_response(400, f"La fecha de nacimiento del miembro #{index + 1} no es válida.")
         relationship = member["relationship"]
         if relationship not in HOUSEHOLD_RELATIONSHIPS:
@@ -688,7 +689,7 @@ def update_unit_profile():
         if vehicle["type"] not in ("carro", "moto"):
             return error_response(400, f"El tipo del vehículo #{index + 1} debe ser carro o moto.")
         year = vehicle.get("year")
-        if not isinstance(year, int) or isinstance(year, bool) or not 1950 <= year <= date.today().year + 1:
+        if not isinstance(year, int) or isinstance(year, bool) or not 1950 <= year <= colombia_today().year + 1:
             return error_response(400, f"El año del vehículo #{index + 1} no es válido.")
         for field in ("color",):
             if vehicle.get(field) is not None and not isinstance(vehicle[field], str):

@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from google.auth.exceptions import DefaultCredentialsError
@@ -10,6 +10,7 @@ import env_setup  # noqa: F401  (va antes de importar la app)
 from app import create_app
 from auth import generate_token
 from extensions import db
+from time_utils import utc_now
 from models import DevicePushToken, Notification, PackageItem, User, Visit, VisitQrPass
 from services import notification_service
 from werkzeug.security import generate_password_hash
@@ -267,14 +268,14 @@ class SecurityWorkflowTests(unittest.TestCase):
             registered_by=self.guard.id,
             description="Entrega antigua",
             status="entregado",
-            delivered_at=datetime.utcnow() - timedelta(days=8),
+            delivered_at=utc_now() - timedelta(days=8),
         )
         expired_trash = PackageItem(
             resident_id=self.other_resident.id,
             registered_by=self.guard.id,
             description="Papelera antigua",
             is_deleted=True,
-            deleted_at=datetime.utcnow() - timedelta(days=31),
+            deleted_at=utc_now() - timedelta(days=31),
         )
         db.session.add_all([expired_delivery, expired_trash])
         db.session.commit()

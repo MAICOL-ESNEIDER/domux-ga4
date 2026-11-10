@@ -1,5 +1,5 @@
 import secrets
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from flask import Blueprint, g, jsonify, request
 
@@ -24,6 +24,7 @@ from validators import (
     validate_no_empty_strings,
     validate_time,
 )
+from time_utils import colombia_today, to_colombia, utc_now
 
 bp = Blueprint("security", __name__, url_prefix="/api")
 VISIT_TYPES = ("visitante", "domiciliario", "contratista")
@@ -58,7 +59,7 @@ def _cleanup_expired_packages():
     restaurar. Ningún paquete se borra (DEC-090), para responder si alguien
     reclama un pedido perdido; los más viejos los guarda el archivo histórico.
     """
-    now = datetime.utcnow()
+    now = utc_now()
     expired_packages = PackageItem.query.filter(
         PackageItem.status == "entregado",
         PackageItem.is_deleted.is_(False),
@@ -261,7 +262,7 @@ def delete_package(pkg_id):
             "siempre: se pueden restaurar.",
         )
     package.is_deleted = True
-    package.deleted_at = datetime.utcnow()
+    package.deleted_at = utc_now()
     package.deleted_by_id = g.current_user.id
     db.session.commit()
     return jsonify({
@@ -301,7 +302,7 @@ def deliver_package(pkg_id):
         return error_response(400, "Escribe el nombre de quien recibe el paquete.")
     if package.status != "entregado":
         package.status = "entregado"
-        package.delivered_at = datetime.utcnow()
+        package.delivered_at = utc_now()
         package.delivered_to = receiver.strip()
         package.delivered_by_id = g.current_user.id
         notify_user(
@@ -474,10 +475,11 @@ def register_visit_entry(visit_id):
     if visit.entered_at and not visit.exited_at:
         return error_response(409, "Este visitante ya aparece dentro de la unidad.")
     if visit.exited_at and (
-        not visit.exit_returning or visit.exited_at.date() < datetime.utcnow().date()
+        # «Vuelve hoy» se mide con el día de Colombia, no con el de UTC (TT-031).
+        not visit.exit_returning or to_colombia(visit.exited_at).date() < colombia_today()
     ):
         return error_response(400, "El registro indica salida definitiva; crea una nueva solicitud de ingreso.")
-    visit.entered_at = datetime.utcnow()
+    visit.entered_at = utc_now()
     visit.exited_at = None
     visit.exit_returning = False
     method = visit.authorization_method or "app"
@@ -512,7 +514,7 @@ def register_visit_exit(visit_id):
         return error_response(404, "Visita no encontrada.")
     if visit.entered_at is None or visit.exited_at is not None:
         return error_response(400, "El visitante no figura actualmente dentro.")
-    visit.exited_at = datetime.utcnow()
+    visit.exited_at = utc_now()
     visit.exit_returning = returning
     method = visit.authorization_method or "app"
     visit.events.append(VisitEvent(
@@ -546,7 +548,7 @@ def create_visit_qr_pass():
         valid_until = date.fromisoformat(data.get("validUntil", ""))
     except (TypeError, ValueError):
         return error_response(400, "Indica fechas válidas para el QR.")
-    today = date.today()
+    today = colombia_today()
     if valid_from < today or valid_until < valid_from:
         return error_response(400, "El período del QR debe ser actual o futuro.")
     if (valid_until - valid_from).days >= 30:
@@ -601,7 +603,7 @@ def revoke_visit_qr_pass(pass_id):
     if qr_pass.resident_id != g.current_user.id:
         return error_response(403, "Solo puedes revocar tus propios códigos QR.")
     qr_pass.revoked = True
-    qr_pass.revoked_at = datetime.utcnow()
+    qr_pass.revoked_at = utc_now()
     db.session.commit()
     return jsonify({"message": "Código QR revocado."})
 
@@ -611,7 +613,7 @@ def _qr_pass_for_guard(token):
     # El QR de un residente desactivado tampoco sirve, aunque no esté anulado (TT-027).
     if qr_pass is None or qr_pass.revoked or not qr_pass.resident.is_active:
         return None, error_response(404, "Código QR inválido o revocado.")
-    today = date.today().isoformat()
+    today = colombia_today().isoformat()
     if not qr_pass.valid_from <= today <= qr_pass.valid_until:
         return None, error_response(400, "El código QR está fuera de su período de vigencia.")
     return qr_pass, None
@@ -624,7 +626,7 @@ def inspect_visit_qr(token):
     qr_pass = VisitQrPass.query.filter_by(token=token).first()
     if qr_pass is None:
         return error_response(404, "Código QR no encontrado.")
-    today = date.today().isoformat()
+    today = colombia_today().isoformat()
     return jsonify({
         "qrPass": qr_pass.to_dict(),
         "residentName": qr_pass.resident.full_name,
@@ -709,7 +711,7 @@ def enter_visit_qr(token):
                 actor_id=g.current_user.id,
             ))
     visit.authorization_method = "qr"
-    visit.entered_at = datetime.utcnow()
+    visit.entered_at = utc_now()
     visit.exited_at = None
     visit.exit_returning = False
     visit.events.append(VisitEvent(
@@ -742,7 +744,7 @@ def exit_visit_qr(token):
         return error_response(404, "El visitante no pertenece a este código QR.")
     if visit.entered_at is None or visit.exited_at is not None:
         return error_response(400, "El visitante no figura actualmente dentro.")
-    visit.exited_at = datetime.utcnow()
+    visit.exited_at = utc_now()
     visit.exit_returning = returning
     visit.events.append(VisitEvent(
         event_type="salida",

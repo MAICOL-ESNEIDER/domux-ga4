@@ -11,3 +11,5 @@ SQLAlchemy==2.0.57
 psycopg2-binary==2.9.13
 firebase-admin==7.7.0
 openpyxl==3.1.5
+# Zonas horarias para la hora de Colombia en Windows, que no las trae (TT-031).
+tzdata==2026.6

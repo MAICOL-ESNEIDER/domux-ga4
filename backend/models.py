@@ -1,17 +1,19 @@
 """SQLAlchemy models and Android-compatible JSON serializers."""
 
-from datetime import date, datetime
+from datetime import date
 
 from sqlalchemy import Index, text
 from sqlalchemy.orm import declared_attr
 
 from extensions import db
+from time_utils import colombia_today, to_colombia, utc_now
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
 
 
 def _fmt(value):
-    return value.strftime("%Y-%m-%d %H:%M") if value else None
+    """Muestra una hora guardada en UTC en la hora de Colombia (ADR-011, TT-031)."""
+    return to_colombia(value).strftime("%Y-%m-%d %H:%M") if value else None
 
 
 class RetirableMixin:
@@ -37,7 +39,7 @@ class RetirableMixin:
 
     def retire(self, user):
         """Marca el registro como retirado por el usuario indicado."""
-        self.retired_at = datetime.utcnow()
+        self.retired_at = utc_now()
         self.retired_by_id = user.id
 
 
@@ -61,7 +63,7 @@ class User(db.Model):
     data_processing_consent = db.Column(db.Boolean, nullable=False, default=False)
     data_processing_consent_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     @property
     def full_name(self):
@@ -79,7 +81,7 @@ class User(db.Model):
             return None
         if birth_date.isoformat() != self.birth_date:
             return None
-        today = date.today()
+        today = colombia_today()
         return today.year - birth_date.year - (
             (today.month, today.day) < (birth_date.month, birth_date.day)
         )
@@ -312,7 +314,7 @@ class Announcement(RetirableMixin, db.Model):
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
     author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     author = db.relationship("User", foreign_keys=[author_id])
 
@@ -349,8 +351,8 @@ class Pqrs(db.Model):
     media_type = db.Column(db.String(20), nullable=True)
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
     archived_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     conversation = db.relationship(
@@ -405,7 +407,7 @@ class PqrsMessage(db.Model):
     message = db.Column(db.Text, nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     pqrs = db.relationship("Pqrs", back_populates="conversation")
     author = db.relationship("User")
@@ -431,7 +433,7 @@ class PqrsSatisfaction(db.Model):
     pqrs_id = db.Column(db.Integer, db.ForeignKey("pqrs.id"), nullable=False, index=True)
     rating = db.Column(db.Integer, nullable=False)
     comment = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     pqrs = db.relationship("Pqrs", back_populates="satisfaction_ratings")
 
@@ -452,7 +454,7 @@ class DevicePushToken(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     token = db.Column(db.String(255), nullable=False, unique=True, index=True)
     device_id = db.Column(db.String(120), nullable=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
 
     user = db.relationship("User")
 
@@ -490,7 +492,7 @@ class Reservation(db.Model):
     status = db.Column(db.String(20), default="pendiente")
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
     archived_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     common_area = db.relationship("CommonArea")
@@ -534,7 +536,7 @@ class ReservationMessage(db.Model):
     message = db.Column(db.Text, nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     reservation = db.relationship("Reservation", back_populates="messages")
     author = db.relationship("User")
@@ -565,7 +567,7 @@ class PackageItem(db.Model):
     media_type = db.Column(db.String(20), nullable=True)
     event_date = db.Column(db.String(20), nullable=True)
     event_time = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
     delivered_at = db.Column(db.DateTime, nullable=True)
     delivered_to = db.Column(db.String(120), nullable=True)
     delivered_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -618,7 +620,7 @@ class Visit(db.Model):
     exited_at = db.Column(db.DateTime, nullable=True)
     exit_returning = db.Column(db.Boolean, default=False, nullable=False)
     qr_pass_id = db.Column(db.Integer, db.ForeignKey("visit_qr_passes.id"), nullable=True, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
@@ -666,7 +668,7 @@ class VisitQrPass(db.Model):
     max_people = db.Column(db.Integer, nullable=False)
     revoked = db.Column(db.Boolean, default=False, nullable=False)
     revoked_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     resident = db.relationship("User")
     visits = db.relationship("Visit", back_populates="qr_pass")
@@ -698,7 +700,7 @@ class VisitEvent(db.Model):
     method = db.Column(db.String(20), nullable=False)
     actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     returning_today = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     visit = db.relationship("Visit", back_populates="events")
     actor = db.relationship("User")
@@ -723,7 +725,7 @@ class Notification(db.Model):
     message = db.Column(db.Text, nullable=False)
     type = db.Column(db.String(30), default="general")
     is_read = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     user = db.relationship("User")
 
@@ -749,7 +751,7 @@ class AuditLog(db.Model):
     actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     actor_role = db.Column(db.String(20), nullable=True)
     details = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     actor = db.relationship("User")
 

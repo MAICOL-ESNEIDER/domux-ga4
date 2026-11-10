@@ -26,6 +26,7 @@ from models import (
     User,
     Vehicle,
 )
+from time_utils import colombia_today, to_colombia, utc_now
 from validators import apartment_number_from_label, validate_colombian_plate
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -201,7 +202,7 @@ def _upsert_census_row(row):
             parsed_birth_date = date.fromisoformat(birth_date)
         except ValueError as error:
             raise ValueError("Fecha_Nacimiento debe tener formato YYYY-MM-DD.") from error
-        if parsed_birth_date.isoformat() != birth_date or parsed_birth_date > date.today():
+        if parsed_birth_date.isoformat() != birth_date or parsed_birth_date > colombia_today():
             raise ValueError("Fecha_Nacimiento no es válida.")
     occupancy_type = row.get("occupancy_type", "").strip().lower() or "propietario"
     if occupancy_type not in ("propietario", "arrendatario", "residente"):
@@ -251,7 +252,7 @@ def _upsert_census_row(row):
         user.parental_consent = _parse_bool(row["parental_consent"])
     user.data_processing_consent = True
     if user.data_processing_consent_at is None:
-        user.data_processing_consent_at = datetime.utcnow()
+        user.data_processing_consent_at = utc_now()
     db.session.flush()
 
     unit = ResidentialUnit.query.filter_by(apartment=apartment).first()
@@ -313,7 +314,7 @@ def _upsert_census_row(row):
             year = int(float(vehicle_year))
         except ValueError as error:
             raise ValueError("Vehiculo_Anio debe ser un año numérico.") from error
-        if not 1900 <= year <= date.today().year + 1:
+        if not 1900 <= year <= colombia_today().year + 1:
             raise ValueError("Vehiculo_Anio está fuera de rango.")
         normalized_plate = re.sub(r"[\s-]", "", plate)
         # Solo cuentan los vehículos vigentes: una placa retirada puede volver (IDX-013).
@@ -394,7 +395,8 @@ def import_census_from_bytes(
 
 
 def _format_datetime(value):
-    return value.isoformat(sep=" ") if value else None
+    """Fecha y hora en hora de Colombia, como en la app (ADR-011)."""
+    return to_colombia(value).strftime("%Y-%m-%d %H:%M:%S") if value else None
 
 
 def _style_sheet(worksheet):
@@ -537,7 +539,7 @@ def generate_legal_report_xlsx(
         workbook,
         "Logs_Auditoria",
         (
-            "ID Log", "Fecha/Hora UTC", "Entidad", "ID Entidad", "Acción",
+            "ID Log", "Fecha/Hora", "Entidad", "ID Entidad", "Acción",
             "Usuario Ejecutor", "Rol", "Detalles",
         ),
         [
