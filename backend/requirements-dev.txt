@@ -1,0 +1,5 @@
+# Herramientas solo para desarrollo y para el pipeline; no se instalan en Render.
+-r requirements.txt
+coverage==7.10.7
+ruff==0.14.5
+pip-audit==2.9.0
