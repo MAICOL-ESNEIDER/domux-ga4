@@ -1,11 +1,20 @@
 import logging
 import os
+import re
 
 from flask import request
 
 
 #: Marca de la salida de consola que agrega DOMUX, para no duplicarla.
 _HANDLER_NAME = "domux-consola"
+
+#: Rutas que llevan un secreto en la URL: el token del QR de visitas.
+_SECRET_IN_PATH = re.compile(r"(/api/visits/qr/)[^/]+")
+
+
+def safe_path(path):
+    """Ruta para los registros, con el token del QR oculto (SEC-012 y DT-011)."""
+    return _SECRET_IN_PATH.sub(r"\1***", path)
 
 
 def configure_logging(app):
@@ -32,14 +41,14 @@ def configure_logging(app):
 
     @app.before_request
     def log_request_start():
-        app.logger.info("request_start method=%s path=%s", request.method, request.path)
+        app.logger.info("request_start method=%s path=%s", request.method, safe_path(request.path))
 
     @app.after_request
     def log_request_end(response):
         app.logger.info(
             "request_end method=%s path=%s status=%s",
             request.method,
-            request.path,
+            safe_path(request.path),
             response.status_code,
         )
         return response
