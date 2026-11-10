@@ -34,7 +34,7 @@ android {
 
         // URL base del backend. Cambia aquí o sobreescribe en distintos builds si lo necesitas.
         // Por defecto apunta al servicio desplegado en Render; para desarrollo local usa 10.0.2.2:5000.
-        buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
+        buildConfigField("String", "BASE_URL", "\"https://domux-ga4.onrender.com/\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -63,7 +63,7 @@ android {
         create("prod") {
             dimension = "environment"
             // URL por defecto apuntando al servicio desplegado en Render
-            buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
+            buildConfigField("String", "BASE_URL", "\"https://domux-ga4.onrender.com/\"")
         }
     }
 
