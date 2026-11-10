@@ -167,7 +167,6 @@ class UserProfileTests(unittest.TestCase):
                 "storageIdentifier": "CU-3",
                 "petInsurance": True,
                 "petInsurer": "Aseguradora",
-                "funeralPlan": False,
                 "members": [{
                     "name": "Ana",
                     "lastName": "Residente",

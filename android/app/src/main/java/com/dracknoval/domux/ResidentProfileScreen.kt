@@ -33,6 +33,7 @@ import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.data.fullName
+import com.dracknoval.domux.data.healthSummary
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -144,7 +145,6 @@ fun ResidentProfileScreen(navController: NavController) {
             Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
             Text("Cuarto útil: ${profile.storageIdentifier ?: "No registrado"}")
             Text("Seguro de mascotas: ${if (profile.petInsurance) profile.petInsurer ?: "Sí" else "No"}")
-            Text("Plan funerario: ${if (profile.funeralPlan) profile.funeralProvider ?: "Sí" else "No"}")
             profile.members.forEach { member ->
                 DomuxCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
@@ -155,7 +155,7 @@ fun ResidentProfileScreen(navController: NavController) {
                 }
             }
             profile.pets.forEach { pet ->
-                Text("Mascota: ${pet.name} · ${pet.species} · ${pet.breed} · ${pet.ageYears} años")
+                Text("Mascota: ${pet.name} · ${pet.species} · ${pet.breed} · ${pet.ageYears} años · ${pet.healthSummary}")
             }
             profile.vehicles.forEach { vehicle ->
                 Text("Vehículo: ${vehicle.type} ${vehicle.plate} · ${vehicle.makeModel} · ${vehicle.year}")

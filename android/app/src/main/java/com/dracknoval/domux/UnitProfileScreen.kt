@@ -36,6 +36,7 @@ import com.dracknoval.domux.data.ResidentialUnitData
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.SaveResidentialUnitRequest
 import com.dracknoval.domux.data.fullName
+import com.dracknoval.domux.data.healthSummary
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.VehicleData
 import com.dracknoval.domux.data.mensajeDeError
@@ -59,8 +60,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
     var storage by remember { mutableStateOf("") }
     var petInsurance by remember { mutableStateOf(false) }
     var petInsurer by remember { mutableStateOf("") }
-    var funeralPlan by remember { mutableStateOf(false) }
-    var funeralProvider by remember { mutableStateOf("") }
     val members = remember { mutableStateListOf<HouseholdMemberData>() }
     val pets = remember { mutableStateListOf<PetData>() }
     val vehicles = remember { mutableStateListOf<VehicleData>() }
@@ -82,8 +81,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             storage = result.storageIdentifier.orEmpty()
             petInsurance = result.petInsurance
             petInsurer = result.petInsurer.orEmpty()
-            funeralPlan = result.funeralPlan
-            funeralProvider = result.funeralProvider.orEmpty()
             members.clear(); members.addAll(result.members)
             pets.clear(); pets.addAll(result.pets)
             vehicles.clear(); vehicles.addAll(result.vehicles)
@@ -124,11 +121,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 Text("Tiene seguro de mascotas", Modifier.padding(top = 12.dp))
             }
             if (petInsurance) OutlinedTextField(petInsurer, { petInsurer = it }, label = { Text("Aseguradora (opcional)") }, modifier = Modifier.fillMaxWidth())
-            Row {
-                Checkbox(funeralPlan, { funeralPlan = it })
-                Text("Tiene plan funerario", Modifier.padding(top = 12.dp))
-            }
-            if (funeralPlan) OutlinedTextField(funeralProvider, { funeralProvider = it }, label = { Text("Entidad (opcional)") }, modifier = Modifier.fillMaxWidth())
 
             Text("Integrantes del hogar", style = MaterialTheme.typography.titleMedium)
             var memberName by remember { mutableStateOf("") }
@@ -186,6 +178,11 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             var petSpecies by remember { mutableStateOf("") }
             var petBreed by remember { mutableStateOf("") }
             var petAge by remember { mutableStateOf("") }
+            // Vacunación y desparasitación (RN-028): si está al día, se pide la fecha de la última.
+            var petVaccines by remember { mutableStateOf(false) }
+            var petVaccinationDate by remember { mutableStateOf("") }
+            var petDeworming by remember { mutableStateOf(false) }
+            var petDewormingDate by remember { mutableStateOf("") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(petName, { petName = it }, label = { Text("Nombre") }, modifier = Modifier.weight(1f))
                 OutlinedTextField(petSpecies, { petSpecies = it }, label = { Text("Especie") }, modifier = Modifier.weight(1f))
@@ -194,17 +191,41 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 OutlinedTextField(petBreed, { petBreed = it }, label = { Text("Raza") }, modifier = Modifier.weight(1f))
                 OutlinedTextField(petAge, { petAge = it.filter(Char::isDigit) }, label = { Text("Edad") }, modifier = Modifier.weight(1f))
             }
+            Row {
+                Checkbox(petVaccines, { petVaccines = it })
+                Text("Vacunación al día", Modifier.padding(top = 12.dp))
+            }
+            OutlinedTextField(petVaccinationDate, { petVaccinationDate = it }, label = { Text("Última vacuna AAAA-MM-DD") }, modifier = Modifier.fillMaxWidth())
+            Row {
+                Checkbox(petDeworming, { petDeworming = it })
+                Text("Desparasitación al día", Modifier.padding(top = 12.dp))
+            }
+            OutlinedTextField(petDewormingDate, { petDewormingDate = it }, label = { Text("Última desparasitación AAAA-MM-DD") }, modifier = Modifier.fillMaxWidth())
             Button(onClick = {
                 val age = petAge.toIntOrNull()
+                val datePattern = Regex("\\d{4}-\\d{2}-\\d{2}")
+                val vaccinationDate = petVaccinationDate.trim().takeIf(String::isNotEmpty)
+                val dewormingDate = petDewormingDate.trim().takeIf(String::isNotEmpty)
                 if (petName.isBlank() || petSpecies.isBlank() || petBreed.isBlank() || age == null || age > 100) {
                     message = "Completa nombre, especie, raza y una edad válida."
+                } else if (listOfNotNull(vaccinationDate, dewormingDate).any { !it.matches(datePattern) }) {
+                    message = "Escribe las fechas de la mascota como AAAA-MM-DD."
+                } else if ((petVaccines && vaccinationDate == null) || (petDeworming && dewormingDate == null)) {
+                    message = "Si está al día, escribe la fecha de la última vacuna o desparasitación."
                 } else {
-                    pets.add(PetData(name = petName.trim(), species = petSpecies.trim(), breed = petBreed.trim(), ageYears = age))
+                    pets.add(PetData(
+                        name = petName.trim(), species = petSpecies.trim(), breed = petBreed.trim(), ageYears = age,
+                        vaccinesUpToDate = petVaccines, lastVaccinationDate = vaccinationDate,
+                        dewormingUpToDate = petDeworming, lastDewormingDate = dewormingDate
+                    ))
                     petName = ""; petSpecies = ""; petBreed = ""; petAge = ""
+                    petVaccines = false; petVaccinationDate = ""; petDeworming = false; petDewormingDate = ""
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text("Agregar mascota") }
             pets.forEachIndexed { index, pet ->
-                TextButton(onClick = { pets.removeAt(index) }) { Text("Quitar ${pet.name} · ${pet.species}") }
+                TextButton(onClick = { pets.removeAt(index) }) {
+                    Text("Quitar ${pet.name} · ${pet.species} · ${pet.healthSummary}")
+                }
             }
 
             Text("Vehículos", style = MaterialTheme.typography.titleMedium)
@@ -258,8 +279,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                                     storageIdentifier = storage.trim().takeIf(String::isNotEmpty),
                                     petInsurance = petInsurance,
                                     petInsurer = petInsurer.trim().takeIf(String::isNotEmpty),
-                                    funeralPlan = funeralPlan,
-                                    funeralProvider = funeralProvider.trim().takeIf(String::isNotEmpty),
                                     members = members.toList(),
                                     pets = pets.toList(),
                                     vehicles = vehicles.toList()
@@ -267,7 +286,14 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                             )
                             if (response.isSuccessful) {
                                 message = "Ficha del hogar guardada."
-                                response.body()?.unit?.let { unit = it }
+                                // Se recargan las listas con los ids que dio el servidor, para
+                                // que el próximo guardado no retire y vuelva a crear lo mismo.
+                                response.body()?.unit?.let { saved ->
+                                    unit = saved
+                                    members.clear(); members.addAll(saved.members)
+                                    pets.clear(); pets.addAll(saved.pets)
+                                    vehicles.clear(); vehicles.addAll(saved.vehicles)
+                                }
                             } else message = mensajeDeError(response.code(), response.errorBody()?.string())
                         } catch (exception: Exception) {
                             if (exception is CancellationException) throw exception
@@ -285,9 +311,8 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
                 Text("Cuarto útil: ${profile.storageIdentifier ?: "No registrado"}")
                 Text("Seguro de mascotas: ${if (profile.petInsurance) profile.petInsurer ?: "Sí" else "No"}")
-                Text("Plan funerario: ${if (profile.funeralPlan) profile.funeralProvider ?: "Sí" else "No"}")
                 profile.members.forEach { Text("${it.fullName} · ${it.relationship} · ${it.birthDate}") }
-                profile.pets.forEach { Text("${it.name}: ${it.species}, ${it.breed}, ${it.ageYears} años") }
+                profile.pets.forEach { Text("${it.name}: ${it.species}, ${it.breed}, ${it.ageYears} años · ${it.healthSummary}") }
                 profile.vehicles.forEach { Text("${it.type}: ${it.plate} · ${it.makeModel} · ${it.year}") }
             }
         }

@@ -44,8 +44,6 @@ CENSUS_HEADERS = (
     "Cuarto_Util",
     "Seguro_Mascotas",
     "Aseguradora_Mascotas",
-    "Plan_Funerario",
-    "Entidad_Funeraria",
     "Mascota_Nombre",
     "Mascota_Especie",
     "Mascota_Raza",
@@ -85,8 +83,6 @@ _COLUMN_ALIASES = {
     "cuartoutil": "storage_identifier",
     "seguromascotas": "pet_insurance",
     "aseguradoramascotas": "pet_insurer",
-    "planfunerario": "funeral_plan",
-    "entidadfuneraria": "funeral_provider",
     "mascotanombre": "pet_name",
     "mascotaespecie": "pet_species",
     "mascotaraza": "pet_breed",
@@ -264,14 +260,11 @@ def _upsert_census_row(row):
         ("parking_identifier", "parking_identifier"),
         ("storage_identifier", "storage_identifier"),
         ("pet_insurer", "pet_insurer"),
-        ("funeral_provider", "funeral_provider"),
     ):
         if column in row:
             setattr(unit, attribute, row[column].strip() or None)
     if "pet_insurance" in row:
         unit.pet_insurance = _parse_bool(row["pet_insurance"])
-    if "funeral_plan" in row:
-        unit.funeral_plan = _parse_bool(row["funeral_plan"])
 
     pet_name = row.get("pet_name", "").strip()
     pet_species = row.get("pet_species", "").strip()
@@ -435,14 +428,14 @@ def generate_census_template_xlsx() -> bytes:
     worksheet.append((
         "Torre 1 Apto 101", "María", "Pérez", "maria.perez@example.com",
         "3001234567", "1234567890", "1990-05-14", "propietario", "No",
-        "P-101", "CU-101", "Sí", "Aseguradora Ejemplo", "No", "",
+        "P-101", "CU-101", "Sí", "Aseguradora Ejemplo",
         "Luna", "Perro", "Criollo", 3, "ABC123", "carro",
         "Toyota Corolla", 2021, "Blanco",
     ))
     worksheet.append((
         "Torre 2 Apto 202", "Carlos", "Gómez", "carlos.gomez@example.com",
         "3107654321", "9876543210", "1985-09-22", "arrendatario", "Sí",
-        "P-202", "CU-202", "No", "", "Sí", "Funeraria Ejemplo",
+        "P-202", "CU-202", "No", "",
         "", "", "", "", "XYZ789", "moto", "Honda CB", 2020, "Negro",
     ))
     _style_sheet(worksheet)

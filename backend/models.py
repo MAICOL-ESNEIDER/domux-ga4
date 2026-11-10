@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from sqlalchemy import Index, text
+from sqlalchemy import Index, false, text
 from sqlalchemy.orm import declared_attr
 
 from extensions import db
@@ -150,8 +150,7 @@ class ResidentialUnit(db.Model):
     storage_identifier = db.Column(db.String(80), nullable=True)
     pet_insurance = db.Column(db.Boolean, nullable=False, default=False)
     pet_insurer = db.Column(db.String(120), nullable=True)
-    funeral_plan = db.Column(db.Boolean, nullable=False, default=False)
-    funeral_provider = db.Column(db.String(120), nullable=True)
+    # El plan funerario ya no se registra (DEC-015, DEF-013): se quitó en la migración 0004.
 
     # Incluyen también lo retirado: es el historial de la ficha (TT-032). Sin
     # «delete-orphan», quitar algo de la lista nunca lo borra de la base.
@@ -192,8 +191,6 @@ class ResidentialUnit(db.Model):
             "storageIdentifier": self.storage_identifier,
             "petInsurance": self.pet_insurance,
             "petInsurer": self.pet_insurer,
-            "funeralPlan": self.funeral_plan,
-            "funeralProvider": self.funeral_provider,
             "members": [member.to_dict() for member in self.active_members],
             "pets": [pet.to_dict() for pet in self.active_pets],
             "vehicles": [vehicle.to_dict() for vehicle in self.active_vehicles],
@@ -233,7 +230,11 @@ class HouseholdMember(RetirableMixin, db.Model):
 
 
 class Pet(RetirableMixin, db.Model):
-    """Mascota del apartamento; quitarla de la ficha la retira (TT-032)."""
+    """Mascota del apartamento; quitarla de la ficha la retira (TT-032).
+
+    Guarda si tiene la vacunación y la desparasitación al día y la fecha de la
+    última de cada una (RN-028, HU-021). Las fechas van como texto AAAA-MM-DD.
+    """
 
     __tablename__ = "pets"
 
@@ -243,6 +244,10 @@ class Pet(RetirableMixin, db.Model):
     species = db.Column(db.String(60), nullable=False)
     breed = db.Column(db.String(100), nullable=False)
     age_years = db.Column(db.Integer, nullable=False)
+    vaccines_up_to_date = db.Column(db.Boolean, nullable=False, default=False, server_default=false())
+    last_vaccination_date = db.Column(db.String(10), nullable=True)
+    deworming_up_to_date = db.Column(db.Boolean, nullable=False, default=False, server_default=false())
+    last_deworming_date = db.Column(db.String(10), nullable=True)
 
     unit = db.relationship("ResidentialUnit", back_populates="pets")
 
@@ -253,6 +258,10 @@ class Pet(RetirableMixin, db.Model):
             "species": self.species,
             "breed": self.breed,
             "ageYears": self.age_years,
+            "vaccinesUpToDate": bool(self.vaccines_up_to_date),
+            "lastVaccinationDate": self.last_vaccination_date,
+            "dewormingUpToDate": bool(self.deworming_up_to_date),
+            "lastDewormingDate": self.last_deworming_date,
         }
 
 

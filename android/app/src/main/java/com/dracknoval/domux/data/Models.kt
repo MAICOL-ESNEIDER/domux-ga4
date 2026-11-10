@@ -92,8 +92,21 @@ data class PetData(
     val name: String,
     val species: String,
     val breed: String,
-    val ageYears: Int
+    val ageYears: Int,
+    // Vacunación y desparasitación al día, con la fecha de la última (RN-028).
+    val vaccinesUpToDate: Boolean = false,
+    val lastVaccinationDate: String? = null,
+    val dewormingUpToDate: Boolean = false,
+    val lastDewormingDate: String? = null
 )
+
+/** Resumen de la salud de la mascota para mostrarlo en una línea. */
+val PetData.healthSummary: String
+    get() {
+        val vaccines = if (vaccinesUpToDate) "vacunas al día" else "vacunas pendientes"
+        val deworming = if (dewormingUpToDate) "desparasitación al día" else "desparasitación pendiente"
+        return "$vaccines · $deworming"
+    }
 
 data class VehicleData(
     val id: Int? = null,
@@ -119,8 +132,6 @@ data class ResidentialUnitData(
     val storageIdentifier: String? = null,
     val petInsurance: Boolean = false,
     val petInsurer: String? = null,
-    val funeralPlan: Boolean = false,
-    val funeralProvider: String? = null,
     val members: List<HouseholdMemberData> = emptyList(),
     val pets: List<PetData> = emptyList(),
     val vehicles: List<VehicleData> = emptyList()
@@ -133,8 +144,6 @@ data class SaveResidentialUnitRequest(
     val storageIdentifier: String? = null,
     val petInsurance: Boolean = false,
     val petInsurer: String? = null,
-    val funeralPlan: Boolean = false,
-    val funeralProvider: String? = null,
     val members: List<HouseholdMemberData> = emptyList(),
     val pets: List<PetData> = emptyList(),
     val vehicles: List<VehicleData> = emptyList()

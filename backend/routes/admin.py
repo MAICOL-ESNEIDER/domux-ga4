@@ -541,7 +541,47 @@ def _item_id_error(item, label, index):
     return f"El id de {label} #{index + 1} no es válido."
 
 
-def _sync_household_items(model, unit, current, incoming, natural_key=None):
+#: Salud de cada mascota (RN-028): nombre, llave del JSON y columna del «al día»
+#: y de la fecha de la última aplicación.
+PET_HEALTH_FIELDS = (
+    ("vacunación", "vaccinesUpToDate", "vaccines_up_to_date",
+     "lastVaccinationDate", "last_vaccination_date"),
+    ("desparasitación", "dewormingUpToDate", "deworming_up_to_date",
+     "lastDewormingDate", "last_deworming_date"),
+)
+
+
+def _pet_health_fields(pet, index):
+    """Lee la vacunación y la desparasitación de una mascota (RN-028, HU-021).
+
+    Cada una dice si está al día y la fecha de la última (AAAA-MM-DD, no futura).
+    Si está al día, la fecha es obligatoria. Devuelve (campos, error).
+    """
+    fields = {}
+    for label, flag_key, flag_column, date_key, date_column in PET_HEALTH_FIELDS:
+        up_to_date = pet.get(flag_key, False)
+        if not isinstance(up_to_date, bool):
+            return None, f"Mascota #{index + 1}: indica si la {label} está al día (sí o no)."
+        last_date = pet.get(date_key)
+        if last_date is not None:
+            if validate_iso_date(last_date) or last_date > colombia_today().isoformat():
+                return None, f"Mascota #{index + 1}: la fecha de la última {label} no es válida."
+        elif up_to_date:
+            return None, f"Mascota #{index + 1}: escribe la fecha de la última {label}."
+        fields[flag_column] = up_to_date
+        fields[date_column] = last_date
+    return fields, None
+
+
+def _natural_key(source, names):
+    """Lo que identifica un registro que llega sin id: documento, placa o nombre y especie."""
+    def value(name):
+        raw = source[name] if isinstance(source, dict) else getattr(source, name)
+        return str(raw).strip().lower()
+    return tuple(value(name) for name in names)
+
+
+def _sync_household_items(model, unit, current, incoming, natural_key=()):
     """Aplica una lista de la ficha del hogar sin borrar nada (TT-032, DEC-090).
 
     current son los registros vigentes del apartamento e incoming la lista que
@@ -551,13 +591,13 @@ def _sync_household_items(model, unit, current, incoming, natural_key=None):
     quién lo hizo. Devuelve cuántos se agregaron, se mantuvieron y se retiraron.
     """
     pending = {item.id: item for item in current}
-    by_key = {getattr(item, natural_key): item for item in current} if natural_key else {}
+    by_key = {_natural_key(item, natural_key): item for item in current} if natural_key else {}
     kept, added = [], []
     for fields in incoming:
         fields = dict(fields)
         item = pending.pop(fields.pop("id", None), None)
         if item is None and natural_key:
-            match = by_key.get(fields[natural_key])
+            match = by_key.get(_natural_key(fields, natural_key))
             if match is not None and match.id in pending:
                 item = pending.pop(match.id)
         if item is None:
@@ -596,10 +636,9 @@ def update_unit_profile():
     for key in ("members", "pets", "vehicles"):
         if not isinstance(data.get(key), list):
             return error_response(400, f"El campo '{key}' debe ser una lista.")
-    for key in ("petInsurance", "funeralPlan"):
-        if key in data and not isinstance(data[key], bool):
-            return error_response(400, f"El campo '{key}' debe ser verdadero o falso.")
-    for key in ("parkingIdentifier", "storageIdentifier", "petInsurer", "funeralProvider"):
+    if "petInsurance" in data and not isinstance(data["petInsurance"], bool):
+        return error_response(400, "El campo 'petInsurance' debe ser verdadero o falso.")
+    for key in ("parkingIdentifier", "storageIdentifier", "petInsurer"):
         if data.get(key) is not None and not isinstance(data[key], str):
             return error_response(400, f"El campo '{key}' debe ser texto.")
 
@@ -658,12 +697,16 @@ def update_unit_profile():
         age = pet.get("ageYears")
         if not isinstance(age, int) or isinstance(age, bool) or not 0 <= age <= 100:
             return error_response(400, f"La edad de la mascota #{index + 1} debe estar entre 0 y 100.")
+        health, error = _pet_health_fields(pet, index)
+        if error:
+            return error_response(400, error)
         parsed_pets.append({
             "id": pet.get("id"),
             "name": pet["name"].strip(),
             "species": pet["species"].strip(),
             "breed": pet["breed"].strip(),
             "age_years": age,
+            **health,
         })
 
     parsed_vehicles = []
@@ -724,15 +767,15 @@ def update_unit_profile():
     unit.storage_identifier = (data.get("storageIdentifier") or "").strip() or None
     unit.pet_insurance = data.get("petInsurance", False)
     unit.pet_insurer = (data.get("petInsurer") or "").strip() or None if unit.pet_insurance else None
-    unit.funeral_plan = data.get("funeralPlan", False)
-    unit.funeral_provider = (data.get("funeralProvider") or "").strip() or None if unit.funeral_plan else None
     changes = {
         "members": _sync_household_items(
-            HouseholdMember, unit, unit.active_members, parsed_members, "document_id"
+            HouseholdMember, unit, unit.active_members, parsed_members, ("document_id",)
         ),
-        "pets": _sync_household_items(Pet, unit, unit.active_pets, parsed_pets),
+        "pets": _sync_household_items(
+            Pet, unit, unit.active_pets, parsed_pets, ("name", "species")
+        ),
         "vehicles": _sync_household_items(
-            Vehicle, unit, unit.active_vehicles, parsed_vehicles, "plate"
+            Vehicle, unit, unit.active_vehicles, parsed_vehicles, ("plate",)
         ),
     }
     add_audit_log("residential_unit", unit.id, "household_updated", {
