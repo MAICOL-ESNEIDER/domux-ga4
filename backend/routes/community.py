@@ -17,6 +17,7 @@ from models import (
     ReservationMessage,
     User,
 )
+from routes.common import json_body
 from services.audit_service import add_audit_log
 from services.notification_service import notify_residents, notify_user
 from services.excel_service import (
@@ -36,7 +37,6 @@ from validators import (
     validate_future_or_today_date,
     validate_iso_date,
     validate_media_fields,
-    validate_no_empty_strings,
     validate_time,
     validate_time_slot,
 )
@@ -95,16 +95,6 @@ def archive_history():
     })
 
 
-def _json_body():
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return None, error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
-    message = validate_no_empty_strings(data)
-    if message:
-        return None, error_response(400, message)
-    return data, None
-
-
 def _media_and_event_error(data, date_key, time_key):
     error = validate_media_fields(data)
     if error:
@@ -147,7 +137,7 @@ def get_announcements():
 @token_required
 @role_required("ADMIN")
 def create_announcement():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     validation_error = require_non_empty_fields(
@@ -271,7 +261,7 @@ def get_pqrs():
 @token_required
 @role_required("RESIDENT", "ADMIN")
 def create_pqrs():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     validation_error = require_non_empty_fields(
@@ -347,7 +337,7 @@ def create_pqrs():
 @token_required
 @role_required("ADMIN")
 def respond_pqrs(pqrs_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     if "status" not in data or data["status"] not in VALID_PQRS_STATUSES:
@@ -402,7 +392,7 @@ def respond_pqrs(pqrs_id):
 @token_required
 @role_required("RESIDENT")
 def add_pqrs_message(pqrs_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     if error := validate_media_fields(data):
@@ -455,7 +445,7 @@ def add_pqrs_message(pqrs_id):
 @token_required
 @role_required("RESIDENT")
 def rate_pqrs(pqrs_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     rating = data.get("rating")
@@ -493,7 +483,7 @@ def rate_pqrs(pqrs_id):
 @token_required
 @role_required("ADMIN")
 def respond_pqrs_batch():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     ids = data.get("pqrsIds")
@@ -662,7 +652,7 @@ def get_reservation_calendar():
 @token_required
 @role_required("RESIDENT", "ADMIN")
 def create_reservation():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     if g.current_user.role not in ("RESIDENT", "ADMIN"):
@@ -779,7 +769,7 @@ def create_reservation():
 @token_required
 @role_required("ADMIN")
 def update_reservation_status(res_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     status = data.get("status")
@@ -833,7 +823,7 @@ def update_reservation_status(res_id):
 @token_required
 @role_required("RESIDENT", "ADMIN")
 def add_reservation_message(res_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     if error := validate_media_fields(data):

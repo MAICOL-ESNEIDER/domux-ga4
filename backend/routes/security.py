@@ -15,29 +15,19 @@ from models import (
     VisitEvent,
     VisitQrPass,
 )
+from routes.common import json_body
 from services.notification_service import notify_user
 from validators import (
     VALID_PACKAGE_STATUSES,
     require_non_empty_fields,
     validate_iso_date,
     validate_media_fields,
-    validate_no_empty_strings,
     validate_time,
 )
 from time_utils import colombia_today, to_colombia, utc_now
 
 bp = Blueprint("security", __name__, url_prefix="/api")
 VISIT_TYPES = ("visitante", "domiciliario", "contratista")
-
-
-def _json_body():
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return None, error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
-    message = validate_no_empty_strings(data)
-    if message:
-        return None, error_response(400, message)
-    return data, None
 
 
 def _package_metadata_error(data):
@@ -76,7 +66,7 @@ def _cleanup_expired_packages():
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def register_push_token():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     token = data.get("token")
@@ -114,7 +104,7 @@ def register_push_token():
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def delete_push_token():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     token = data.get("token")
@@ -174,7 +164,7 @@ def get_packages():
 @token_required
 @role_required("GUARD", "ADMIN")
 def register_package():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     status = data.get("status", "pendiente")
@@ -220,7 +210,7 @@ def register_package():
 @token_required
 @role_required("GUARD", "ADMIN")
 def update_package_status(pkg_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     status = data.get("status")
@@ -289,7 +279,7 @@ def restore_package(pkg_id):
 @token_required
 @role_required("GUARD", "ADMIN")
 def deliver_package(pkg_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     package = db.session.get(PackageItem, pkg_id)
@@ -350,7 +340,7 @@ def get_visits():
 @token_required
 @role_required("GUARD")
 def register_visit():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     validation_error = require_non_empty_fields(
@@ -417,7 +407,7 @@ def register_visit():
 def decide_visit(visit_id):
     if g.current_user.role != "RESIDENT":
         return error_response(403, "Solo un residente puede autorizar esta visita.")
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     decision = data.get("decision")
@@ -503,7 +493,7 @@ def register_visit_entry(visit_id):
 @token_required
 @role_required("GUARD")
 def register_visit_exit(visit_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     returning = data.get("returningToday", False)
@@ -540,7 +530,7 @@ def register_visit_exit(visit_id):
 def create_visit_qr_pass():
     if g.current_user.role != "RESIDENT":
         return error_response(403, "Solo un residente puede crear códigos QR.")
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     try:
@@ -654,7 +644,7 @@ def inspect_visit_qr(token):
 @token_required
 @role_required("GUARD")
 def enter_visit_qr(token):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     qr_pass, failure = _qr_pass_for_guard(token)
@@ -727,7 +717,7 @@ def enter_visit_qr(token):
 @token_required
 @role_required("GUARD")
 def exit_visit_qr(token):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     visit_id = data.get("visitId")

@@ -19,6 +19,7 @@ from models import (
     Vehicle,
     VisitQrPass,
 )
+from routes.common import json_body
 from services.audit_service import add_audit_log
 from services.login_attempt_service import LOGIN, register_success
 from services.excel_service import (
@@ -33,7 +34,6 @@ from validators import (
     apartment_number_from_label,
     parse_optional_bool,
     require_non_empty_fields,
-    validate_no_empty_strings,
     validate_occupancy_type,
     validate_strong_password,
     validate_colombian_plate,
@@ -46,16 +46,6 @@ bp = Blueprint("admin", __name__, url_prefix="/api")
 
 def _encode_base64(value):
     return base64.b64encode(value).decode("ascii")
-
-
-def _json_body():
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return None, error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
-    message = validate_no_empty_strings(data)
-    if message:
-        return None, error_response(400, message)
-    return data, None
 
 
 def _normalize_role(value):
@@ -278,7 +268,7 @@ def get_users():
 @token_required
 @role_required("ADMIN")
 def create_user():
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     validation_error = require_non_empty_fields(
@@ -371,7 +361,7 @@ def _close_access_of_deactivated_user(user):
 @token_required
 @role_required("ADMIN")
 def update_user(user_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     if not data:
@@ -474,7 +464,7 @@ def update_user(user_id):
 @token_required
 @role_required("ADMIN")
 def reset_user_password(user_id):
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     validation_error = require_non_empty_fields(data, (("password", "contraseña"),))
@@ -630,7 +620,7 @@ def update_unit_profile():
     Nada se borra: lo que se quita de la ficha queda retirado (TT-032) y el
     cambio se anota en el registro de auditoría.
     """
-    data, failure = _json_body()
+    data, failure = json_body()
     if failure:
         return failure
     apartment = data.get("apartment")
