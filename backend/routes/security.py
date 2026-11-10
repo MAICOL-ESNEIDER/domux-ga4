@@ -52,22 +52,22 @@ def _package_metadata_error(data):
 
 
 def _cleanup_expired_packages():
+    """Pasa a la papelera los paquetes entregados hace más de 7 días.
+
+    Solo los oculta de la lista diaria del guardia: siguen en la base y se pueden
+    restaurar. Ningún paquete se borra (DEC-090), para responder si alguien
+    reclama un pedido perdido; los más viejos los guarda el archivo histórico.
+    """
     now = datetime.utcnow()
     expired_packages = PackageItem.query.filter(
         PackageItem.status == "entregado",
         PackageItem.is_deleted.is_(False),
         PackageItem.delivered_at < now - timedelta(days=7),
     ).all()
-    expired_trash = PackageItem.query.filter(
-        PackageItem.is_deleted.is_(True),
-        PackageItem.deleted_at < now - timedelta(days=30),
-    ).all()
     for package in expired_packages:
         package.is_deleted = True
         package.deleted_at = now
-    for package in expired_trash:
-        db.session.delete(package)
-    if expired_packages or expired_trash:
+    if expired_packages:
         db.session.commit()
 
 
@@ -242,14 +242,21 @@ def update_package_status(pkg_id):
 @token_required
 @role_required("GUARD", "ADMIN")
 def delete_package(pkg_id):
+    """Envía un paquete a la papelera (retiro lógico).
+
+    El paquete no se borra de la base (DEC-090): queda en la papelera, se puede
+    restaurar y lo guarda el archivo histórico. Por eso no existe borrar para
+    siempre, ni siquiera desde la papelera.
+    """
     package = db.session.get(PackageItem, pkg_id)
     if package is None:
         return error_response(404, "Paquete no encontrado")
-    force = (request.args.get("force") or "").lower() == "true"
-    if package.is_deleted or force:
-        db.session.delete(package)
-        db.session.commit()
-        return jsonify({"message": "Paquete eliminado permanentemente."})
+    if package.is_deleted:
+        return error_response(
+            409,
+            "El paquete ya está en la papelera. Los paquetes no se eliminan para "
+            "siempre: se pueden restaurar.",
+        )
     package.is_deleted = True
     package.deleted_at = datetime.utcnow()
     package.deleted_by_id = g.current_user.id

@@ -259,8 +259,7 @@ interface ApiService {
     @DELETE("api/packages/{id}")
     suspend fun deletePackage(
         @Header("Authorization") auth: String,
-        @Path("id") id: Int,
-        @Query("force") force: Boolean = false
+        @Path("id") id: Int
     ): Response<GenericMessageResponse>
 
     @PUT("api/packages/{id}/restore")

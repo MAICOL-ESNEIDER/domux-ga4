@@ -306,7 +306,7 @@ fun RegistryScreen(navController: NavController) {
                                 scope.launch {
                                     runRegistryAction({ message = "No se pudo mover el paquete: $it" }) {
                                         val response = RetrofitClient.api.deletePackage(
-                                            Session.bearer(), item.id, force = false
+                                            Session.bearer(), item.id
                                         )
                                         message = if (response.isSuccessful) {
                                             response.body()?.message ?: "Paquete movido a la papelera."
@@ -324,21 +324,6 @@ fun RegistryScreen(navController: NavController) {
                                         response.body()?.message ?: "Paquete restaurado."
                                     } else mensajeDeError(response.code(), response.errorBody()?.string())
                                     if (response.isSuccessful) load()
-                                }
-                            }
-                        },
-                        onDeletePermanently = { item ->
-                            confirmation = "¿Eliminar permanentemente este paquete? Esta acción no se puede deshacer." to {
-                                scope.launch {
-                                    runRegistryAction({ message = "No se pudo eliminar el paquete: $it" }) {
-                                        val response = RetrofitClient.api.deletePackage(
-                                            Session.bearer(), item.id, force = true
-                                        )
-                                        message = if (response.isSuccessful) {
-                                            response.body()?.message ?: "Paquete eliminado permanentemente."
-                                        } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                        if (response.isSuccessful) load()
-                                    }
                                 }
                             }
                         }
@@ -621,8 +606,7 @@ fun RegistryScreen(navController: NavController) {
                         onDeliver = {},
                         onStatusChange = { _, _ -> },
                         onMoveToTrash = {},
-                        onRestore = {},
-                        onDeletePermanently = {}
+                        onRestore = {}
                     )
                 }
 
@@ -836,8 +820,7 @@ private fun PackageListSection(
     onDeliver: (PackageItem) -> Unit,
     onStatusChange: (PackageItem, String) -> Unit,
     onMoveToTrash: (PackageItem) -> Unit,
-    onRestore: (PackageItem) -> Unit,
-    onDeletePermanently: (PackageItem) -> Unit
+    onRestore: (PackageItem) -> Unit
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -900,8 +883,7 @@ private fun PackageListSection(
                     onDeliver = { onDeliver(item) },
                     onStatusChange = { onStatusChange(item, it) },
                     onMoveToTrash = { onMoveToTrash(item) },
-                    onRestore = { onRestore(item) },
-                    onDeletePermanently = { onDeletePermanently(item) }
+                    onRestore = { onRestore(item) }
                 )
             }
         }
@@ -915,8 +897,7 @@ private fun PackageRegistryCard(
     onDeliver: () -> Unit,
     onStatusChange: (String) -> Unit,
     onMoveToTrash: () -> Unit,
-    onRestore: () -> Unit,
-    onDeletePermanently: () -> Unit
+    onRestore: () -> Unit
 ) {
     DomuxCard(Modifier.fillMaxWidth()) {
         Column(
@@ -955,10 +936,8 @@ private fun PackageRegistryCard(
             }
             if (canRegister) {
                 if (item.isDeleted) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        TextButton(onClick = onRestore) { Text("Restaurar") }
-                        TextButton(onClick = onDeletePermanently) { Text("Eliminar definitivo") }
-                    }
+                    // Los paquetes nunca se borran para siempre (DEC-090): solo se restauran.
+                    TextButton(onClick = onRestore) { Text("Restaurar") }
                 } else {
                     if (item.status == "por_llegar") {
                         TextButton(onClick = { onStatusChange("pendiente") }) {

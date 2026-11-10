@@ -192,7 +192,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(admin_list.status_code, 200)
         self.assertEqual(len(admin_list.get_json()["residents"]), 2)
 
-    def test_package_registration_status_trash_restore_and_purge(self):
+    def test_package_registration_status_trash_and_restore_never_delete(self):
         registration = self.client.post(
             "/api/packages",
             headers=self.auth(self.admin),
@@ -247,14 +247,21 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(restored.status_code, 200)
         self.assertFalse(restored.get_json()["packageItem"]["isDeleted"])
 
+        # Nada se borra (DEC-090): ni con force=true ni desde la papelera.
         forced_delete = self.client.delete(
             f"/api/packages/{package_id}?force=true",
             headers=self.auth(self.admin),
         )
         self.assertEqual(forced_delete.status_code, 200)
-        self.assertIsNone(db.session.get(PackageItem, package_id))
+        self.assertTrue(forced_delete.get_json()["packageItem"]["isDeleted"])
+        delete_again = self.client.delete(
+            f"/api/packages/{package_id}",
+            headers=self.auth(self.admin),
+        )
+        self.assertEqual(delete_again.status_code, 409)
+        self.assertIsNotNone(db.session.get(PackageItem, package_id))
 
-    def test_package_listing_automatically_trashes_and_purges_expired_items(self):
+    def test_package_listing_trashes_old_deliveries_and_keeps_old_trash(self):
         expired_delivery = PackageItem(
             resident_id=self.resident.id,
             registered_by=self.guard.id,
@@ -281,11 +288,12 @@ class SecurityWorkflowTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            [item["id"] for item in response.get_json()["packages"]],
-            [expired_delivery_id],
+            sorted(item["id"] for item in response.get_json()["packages"]),
+            sorted([expired_delivery_id, expired_trash_id]),
         )
         self.assertTrue(db.session.get(PackageItem, expired_delivery_id).is_deleted)
-        self.assertIsNone(db.session.get(PackageItem, expired_trash_id))
+        # La papelera vieja ya no se purga: el paquete sigue en la base.
+        self.assertIsNotNone(db.session.get(PackageItem, expired_trash_id))
 
 
     def test_qr_limits_new_people_allows_same_day_reentry_and_revokes(self):
