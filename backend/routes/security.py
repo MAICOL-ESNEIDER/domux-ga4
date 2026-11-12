@@ -3,6 +3,8 @@ from datetime import date, timedelta
 
 from flask import Blueprint, g, jsonify, request
 
+from sqlalchemy.orm import contains_eager, selectinload
+
 from auth import role_required, token_required
 from errors import error_response
 from extensions import db
@@ -16,7 +18,7 @@ from models import (
     VisitQrPass,
 )
 from routes.common import bool_arg, int_arg, json_body, paginated
-from services import visit_service
+from services import package_service, visit_service
 from services.alert_service import run_alerts
 from services.notification_service import notify_user
 from validators import (
@@ -126,7 +128,17 @@ def delete_push_token():
 def get_packages():
     _cleanup_expired_packages()
     user = g.current_user
-    query = PackageItem.query.join(User, PackageItem.resident_id == User.id)
+    # Con el residente en la misma consulta y lo demás por lotes, la lista no hace
+    # una consulta por paquete al armar cada respuesta.
+    query = (
+        PackageItem.query.join(User, PackageItem.resident_id == User.id)
+        .options(
+            contains_eager(PackageItem.resident),
+            selectinload(PackageItem.guard),
+            selectinload(PackageItem.delivered_by),
+            selectinload(PackageItem.pickup_codes),
+        )
+    )
     if user.role == "RESIDENT":
         query = query.filter(PackageItem.resident_id == user.id)
         requested_resident_id = request.args.get("residentId", type=int)
@@ -154,6 +166,8 @@ def get_packages():
             (User.name + " " + User.last_name).ilike(pattern),
             PackageItem.description.ilike(pattern),
             PackageItem.delivered_to.ilike(pattern),
+            PackageItem.carrier.ilike(pattern),
+            PackageItem.tracking_number.ilike(pattern),
             User.name.ilike(pattern),
             User.last_name.ilike(pattern),
             User.apartment.ilike(pattern),
@@ -180,6 +194,7 @@ def register_package():
         return error_response(400, validation_error)
     if error := _package_metadata_error(data):
         return error_response(400, error)
+    carrier, tracking_number = package_service.clean_shipping(data)
     resident_id = data.get("residentId")
     if not isinstance(resident_id, int) or isinstance(resident_id, bool):
         return error_response(400, "Selecciona un residente válido")
@@ -191,17 +206,22 @@ def register_package():
         resident_id=resident.id,
         registered_by=g.current_user.id,
         description=data["description"].strip(),
+        carrier=carrier,
+        tracking_number=tracking_number,
         status=status,
+        # Las horas sin reclamar se cuentan desde que llega a la portería (RN-018).
+        arrived_at=utc_now() if status == "pendiente" else None,
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
         event_date=data.get("eventDate"),
         event_time=data.get("eventTime"),
     )
     db.session.add(package)
+    from_carrier = f" de {carrier}" if carrier else ""
     notify_user(
         resident.id,
         "Paquete registrado",
-        f"Se registró un paquete para {resident.apartment or 'tu cuenta'}.",
+        f"Se registró un paquete{from_carrier} para {resident.apartment or 'tu cuenta'}.",
         "package",
     )
     db.session.commit()
@@ -221,8 +241,12 @@ def update_package_status(pkg_id):
     package = db.session.get(PackageItem, pkg_id)
     if package is None:
         return error_response(404, "Paquete no encontrado")
+    if package.status == "entregado":
+        return error_response(409, "Este paquete ya fue entregado: su estado no se puede cambiar.")
     if package.status != status:
         package.status = status
+        # Al llegar a la portería empieza a contar el tiempo sin reclamar (RN-018).
+        package.arrived_at = utc_now() if status == "pendiente" else None
         if status == "pendiente":
             notify_user(
                 package.resident_id,
@@ -292,20 +316,65 @@ def deliver_package(pkg_id):
         return error_response(400, "El nombre de quien recibe debe ser texto.")
     if not isinstance(receiver, str) or not receiver.strip():
         return error_response(400, "Escribe el nombre de quien recibe el paquete.")
+    pickup_code = data.get("pickupCode")
     if package.status != "entregado":
+        # Con código (QR o PIN) se valida antes de entregar; sin él, el guardia entrega
+        # como siempre y el código que hubiera queda anulado (RN-016, HU-048).
+        if pickup_code is not None:
+            package_service.check_pickup_code(package, pickup_code, g.current_user)
+        else:
+            package_service.close_active_code(package)
         package.status = "entregado"
         package.delivered_at = utc_now()
         package.delivered_to = receiver.strip()
         package.delivered_by_id = g.current_user.id
+        with_code = " con tu código de entrega" if pickup_code is not None else ""
         notify_user(
             package.resident_id,
             "Paquete entregado",
             f"Tu paquete ({package.description or 'sin descripción'}) fue entregado "
-            f"a {package.delivered_to}.",
+            f"a {package.delivered_to}{with_code}.",
             "package",
         )
         db.session.commit()
     return jsonify({"message": "Paquete marcado como entregado", "packageItem": package.to_dict()})
+
+
+@bp.post("/packages/<int:pkg_id>/pickup-code")
+@token_required
+@role_required("RESIDENT")
+def create_package_pickup_code(pkg_id):
+    """El residente genera el código para que otra persona recoja su paquete (HU-048).
+
+    La respuesta trae el QR y el PIN de 6 dígitos; el PIN no se vuelve a mostrar:
+    si se pierde, se genera un código nuevo y el anterior queda anulado.
+    """
+    package = db.session.get(PackageItem, pkg_id)
+    if package is None:
+        return error_response(404, "Paquete no encontrado")
+    code, pin = package_service.create_pickup_code(package, g.current_user)
+    db.session.commit()
+    return jsonify({
+        "message": "Código de entrega generado. Compártelo solo con quien va a recoger el paquete.",
+        "pickupCode": {"qrData": f"{package_service.QR_PREFIX}{code.token}", "pin": pin},
+        "packageItem": package.to_dict(),
+    }), 201
+
+
+@bp.post("/packages/pickup-lookup")
+@token_required
+@role_required("GUARD", "ADMIN")
+def lookup_package_pickup_code():
+    """El guardia escanea el QR de un código de entrega y ve de qué paquete es (HU-048).
+
+    El código viaja en el cuerpo y no en la dirección, para que no quede en los
+    registros del servidor.
+    """
+    data, failure = json_body()
+    if failure:
+        return failure
+    package = package_service.package_for_pickup_token(data.get("code"))
+    return jsonify({"packageItem": package.to_dict()})
 
 
 @bp.get("/visits")

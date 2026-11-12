@@ -15,6 +15,10 @@ ROLES = ("ADMIN", "RESIDENT", "GUARD")
 #: Tipos de parqueadero de la unidad (HU-015).
 PARKING_KINDS = ("residente", "visitante")
 
+#: Horas sin reclamar para resaltar un paquete en naranja y en rojo (RN-018, HU-049).
+UNCLAIMED_ORANGE_HOURS = 48
+UNCLAIMED_RED_HOURS = 72
+
 #: Movimientos de un vehículo de residente por la portería (HU-040).
 MOVEMENT_TYPES = ("entrada", "salida")
 
@@ -855,18 +859,29 @@ class ReservationMessage(db.Model):
 
 
 class PackageItem(db.Model):
+    """Paquete que llega a la portería para un residente (HU-042 a HU-049).
+
+    arrived_at es cuándo llegó a la portería (al registrarlo, o al pasarlo de
+    «por llegar» a «en portería»): desde ahí se cuentan las horas sin reclamar
+    que resaltan en naranja y en rojo (RN-018). carrier y tracking_number son la
+    transportadora y el número de guía (HU-047).
+    """
+
     __tablename__ = "packages"
 
     id = db.Column(db.Integer, primary_key=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     registered_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     description = db.Column(db.String(200), nullable=True)
+    carrier = db.Column(db.String(60), nullable=True)
+    tracking_number = db.Column(db.String(60), nullable=True)
     status = db.Column(db.String(20), default="pendiente")
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
     event_date = db.Column(db.String(20), nullable=True)
     event_time = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now)
+    arrived_at = db.Column(db.DateTime, nullable=True)
     delivered_at = db.Column(db.DateTime, nullable=True)
     delivered_to = db.Column(db.String(120), nullable=True)
     delivered_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -877,12 +892,45 @@ class PackageItem(db.Model):
     resident = db.relationship("User", foreign_keys=[resident_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
     delivered_by = db.relationship("User", foreign_keys=[delivered_by_id])
+    pickup_codes = db.relationship(
+        "PackagePickupCode", back_populates="package", order_by="PackagePickupCode.id"
+    )
+
+    @property
+    def active_pickup_code(self):
+        """El código de entrega vigente (no usado ni anulado), o None."""
+        return next((code for code in self.pickup_codes if code.is_active), None)
+
+    def waiting_minutes(self, now=None):
+        """Minutos que lleva en portería sin reclamar; None si no está esperando a su dueño."""
+        if self.status != "pendiente" or self.is_deleted or self.arrived_at is None:
+            return None
+        return max(0, int(((now or utc_now()) - self.arrived_at).total_seconds() // 60))
+
+    def claim_alert(self, now=None):
+        """«rojo» con más de 72 horas sin reclamar, «naranja» con más de 48, o None (RN-018)."""
+        minutes = self.waiting_minutes(now)
+        if minutes is None:
+            return None
+        if minutes > UNCLAIMED_RED_HOURS * 60:
+            return "rojo"
+        if minutes > UNCLAIMED_ORANGE_HOURS * 60:
+            return "naranja"
+        return None
 
     def to_dict(self):
+        now = utc_now()
+        waiting = self.waiting_minutes(now)
         return {
             "id": self.id,
             "residentId": self.resident_id,
             "description": self.description or "",
+            "carrier": self.carrier,
+            "trackingNumber": self.tracking_number,
+            "arrivedAt": _fmt(self.arrived_at),
+            "hoursWaiting": None if waiting is None else waiting // 60,
+            "claimAlert": self.claim_alert(now),
+            "hasPickupCode": self.active_pickup_code is not None,
             "status": self.status or "pendiente",
             "mediaUrl": self.media_url,
             "mediaType": self.media_type,
@@ -898,6 +946,53 @@ class PackageItem(db.Model):
             "apartment": self.resident.apartment if self.resident else None,
             "registeredByName": self.guard.full_name if self.guard else None,
         }
+
+
+class PackagePickupCode(db.Model):
+    """Código para que otra persona recoja un paquete: un QR y un PIN de 6 dígitos (HU-048, RN-016).
+
+    Lo genera el residente dueño del paquete. El QR (token) se guarda tal cual,
+    como el de las visitas; el PIN se guarda con hash y solo se muestra al
+    generarlo. Hay un solo código vigente por paquete: generar uno nuevo anula el
+    anterior (revoked_at), y los que se usaron o se anularon quedan como historial,
+    nunca se borran (ADR-013). Tras 5 intentos fallidos el código se anula.
+    """
+
+    __tablename__ = "package_pickup_codes"
+    __table_args__ = (
+        Index(
+            "uq_package_pickup_codes_active",
+            "package_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL AND used_at IS NULL"),
+            postgresql_where=text("revoked_at IS NULL AND used_at IS NULL"),
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    package_id = db.Column(
+        db.Integer,
+        db.ForeignKey("packages.id", name="fk_package_pickup_codes_package_id_packages"),
+        nullable=False,
+        index=True,
+    )
+    token = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    pin_hash = db.Column(db.String(255), nullable=False)
+    created_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_package_pickup_codes_created_by_id_users"),
+        nullable=False,
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    used_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    failed_attempts = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+
+    package = db.relationship("PackageItem", back_populates="pickup_codes")
+
+    @property
+    def is_active(self):
+        return self.used_at is None and self.revoked_at is None
 
 
 class Visit(db.Model):
