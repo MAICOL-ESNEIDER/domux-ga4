@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
 import com.journeyapps.barcodescanner.BarcodeEncoder
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 // Piezas que comparten las pantallas de portería: paquetes, visitas y vehículos.
 
@@ -90,7 +91,7 @@ fun QrImage(bitmap: Bitmap?, description: String, modifier: Modifier = Modifier,
     if (bitmap == null) {
         Text(
             "No se pudo generar la imagen del QR.",
-            color = Color(0xFFF87171),
+            color = DomuxColor.Bad,
             style = MaterialTheme.typography.bodySmall
         )
         return

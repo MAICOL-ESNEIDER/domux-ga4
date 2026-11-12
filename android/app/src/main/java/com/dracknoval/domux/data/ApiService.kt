@@ -464,6 +464,50 @@ interface ApiService {
         @Path("id") id: Int
     ): Response<NotificationResponse>
 
+    // --- Listas livianas para el inicio de cada rol (sin fotos ni conversaciones) ---
+
+    // Lo pendiente de hoy para la administración: contadores, PQRS urgentes y reservas por aprobar (HU-081).
+    @GET("api/admin/summary")
+    suspend fun getAdminSummary(@Header("Authorization") auth: String): Response<AdminSummaryResponse>
+
+    // Visitas en lista liviana: «pendiente» de hoy (esperando autorización) o las que están dentro.
+    @GET("api/visits")
+    suspend fun getVisitsSummary(
+        @Header("Authorization") auth: String,
+        @Query("status") status: String? = null,
+        @Query("from") dateFrom: String? = null,
+        @Query("inside") inside: String? = null,
+        @Query("pageSize") pageSize: Int = 5,
+        @Query("view") view: String = "summary"
+    ): Response<VisitsListResponse>
+
+    // Paquetes en lista liviana (sin la foto): «pendiente» son los que esperan en portería.
+    @GET("api/packages")
+    suspend fun getPackagesSummary(
+        @Header("Authorization") auth: String,
+        @Query("status") status: String? = null,
+        @Query("pageSize") pageSize: Int = 5,
+        @Query("view") view: String = "summary"
+    ): Response<PackagesListResponse>
+
+    // Comunicados en lista liviana (sin foto, video, audio ni PDF): los que el residente no ha leído.
+    @GET("api/announcements")
+    suspend fun getAnnouncementsSummary(
+        @Header("Authorization") auth: String,
+        @Query("unread") unread: String? = null,
+        @Query("pageSize") pageSize: Int = 3,
+        @Query("view") view: String = "summary"
+    ): Response<AnnouncementsListResponse>
+
+    // Reservas en lista liviana desde una fecha (las próximas del residente).
+    @GET("api/reservations")
+    suspend fun getReservationsSummary(
+        @Header("Authorization") auth: String,
+        @Query("dateFrom") dateFrom: String? = null,
+        @Query("pageSize") pageSize: Int = 10,
+        @Query("view") view: String = "summary"
+    ): Response<ReservationsListResponse>
+
     // Marca como leídas todas las notificaciones de quien consulta, en una sola llamada (HU-064).
     @PUT("api/notifications/read-all")
     suspend fun markAllNotificationsRead(@Header("Authorization") auth: String): Response<ReadAllNotificationsResponse>

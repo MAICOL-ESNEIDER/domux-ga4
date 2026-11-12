@@ -90,7 +90,16 @@ class MainActivity : ComponentActivity() {
                                 entry.arguments?.getInt("residentId")?.takeIf { it > 0 }
                             )
                         }
-                        composable("registry") { RegistryScreen(navController) }
+                        // «tab» abre portería en una pestaña: «paquetes» o «visitas» (los botones del guardia).
+                        composable(
+                            "registry?tab={tab}",
+                            arguments = listOf(navArgument("tab") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            })
+                        ) { entry ->
+                            RegistryScreen(navController, initialTab = entry.arguments?.getString("tab").orEmpty())
+                        }
                         composable("vehicles") { VehiclesScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
                         composable("structure") { StructureScreen(navController) }
@@ -105,6 +114,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("notifications") { NotificationsScreen(navController) }
+                        composable("more") { MoreScreen(navController) }
                     }
                 }
             }

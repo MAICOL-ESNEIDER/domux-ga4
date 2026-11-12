@@ -47,6 +47,7 @@ import androidx.navigation.NavController
 import com.dracknoval.domux.data.Announcement
 import com.dracknoval.domux.data.CreateAnnouncementRequest
 import com.dracknoval.domux.data.Session
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 private const val TAB_CURRENT = "Vigentes"
 private const val TAB_ARCHIVED = "Archivados"
@@ -290,10 +291,10 @@ private fun AnnouncementCard(
 @Composable
 private fun CategoryChip(label: String, urgent: Boolean) {
     Surface(
-        color = if (urgent) Color(0xFF450A0A) else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (urgent) Color(0xFFF87171) else MaterialTheme.colorScheme.secondary,
+        color = if (urgent) DomuxColor.BadBackground else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (urgent) DomuxColor.Bad else MaterialTheme.colorScheme.secondary,
         shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, if (urgent) Color(0xFF7F1D1D) else MaterialTheme.colorScheme.outline)
+        border = BorderStroke(1.dp, if (urgent) DomuxColor.BadLine else DomuxColor.Line)
     ) {
         Text(
             label,
@@ -482,40 +483,40 @@ private fun RetireAnnouncementButton(enabled: Boolean, onClick: () -> Unit) {
         modifier = Modifier.semantics { contentDescription = "Retirar comunicado" },
         onClick = onClick,
         enabled = enabled,
-        color = Color(0xFF450A0A),
-        contentColor = Color(0xFFF87171),
+        color = DomuxColor.BadBackground,
+        contentColor = DomuxColor.Bad,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0xFF7F1D1D))
+        border = BorderStroke(1.dp, DomuxColor.BadLine)
     ) {
         Canvas(Modifier.padding(10.dp).size(20.dp)) {
             val strokeWidth = 1.8.dp.toPx()
             drawRoundRect(
-                color = Color(0xFFF87171),
+                color = DomuxColor.Bad,
                 topLeft = Offset(size.width * 0.25f, size.height * 0.3f),
                 size = Size(size.width * 0.5f, size.height * 0.58f),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
                 style = Stroke(strokeWidth)
             )
             drawLine(
-                color = Color(0xFFF87171),
+                color = DomuxColor.Bad,
                 start = Offset(size.width * 0.17f, size.height * 0.22f),
                 end = Offset(size.width * 0.83f, size.height * 0.22f),
                 strokeWidth = strokeWidth
             )
             drawLine(
-                color = Color(0xFFF87171),
+                color = DomuxColor.Bad,
                 start = Offset(size.width * 0.38f, size.height * 0.12f),
                 end = Offset(size.width * 0.62f, size.height * 0.12f),
                 strokeWidth = strokeWidth
             )
             drawLine(
-                color = Color(0xFFF87171),
+                color = DomuxColor.Bad,
                 start = Offset(size.width * 0.43f, size.height * 0.43f),
                 end = Offset(size.width * 0.43f, size.height * 0.72f),
                 strokeWidth = strokeWidth
             )
             drawLine(
-                color = Color(0xFFF87171),
+                color = DomuxColor.Bad,
                 start = Offset(size.width * 0.57f, size.height * 0.43f),
                 end = Offset(size.width * 0.57f, size.height * 0.72f),
                 strokeWidth = strokeWidth

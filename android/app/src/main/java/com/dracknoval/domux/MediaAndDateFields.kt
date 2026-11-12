@@ -35,6 +35,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 /**
  * Botón que abre el calendario del celular y devuelve la fecha como AAAA-MM-DD, para que nadie
@@ -178,8 +179,8 @@ fun ExcelFilePickerButton(
 fun DomuxCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E33)),
-        border = BorderStroke(1.dp, Color(0xFF1E334D)),
+        colors = CardDefaults.cardColors(containerColor = DomuxColor.Card),
+        border = BorderStroke(1.dp, DomuxColor.Line),
         content = content
     )
 }

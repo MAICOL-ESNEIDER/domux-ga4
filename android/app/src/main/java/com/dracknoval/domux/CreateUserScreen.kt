@@ -34,6 +34,7 @@ import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 private fun nextFilter(value: Boolean?): Boolean? = when (value) {
     null -> true
@@ -641,7 +642,7 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
             if (message.isNotBlank()) {
                 Text(
                     message,
-                    color = if (messageIsError) MaterialTheme.colorScheme.error else Color(0xFF34D399)
+                    color = if (messageIsError) MaterialTheme.colorScheme.error else DomuxColor.Ok
                 )
             }
         }

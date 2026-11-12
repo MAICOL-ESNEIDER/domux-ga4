@@ -77,6 +77,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.util.Locale
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 /*
  * Adjuntar como en WhatsApp: tomar una foto o grabar un video o un audio en el momento, o elegir de
@@ -513,7 +514,7 @@ private fun AudioRecorderDialog(
                         Box(
                             Modifier
                                 .size(12.dp)
-                                .background(Color(0xFFEF4444), CircleShape)
+                                .background(DomuxColor.BadNoticeLine, CircleShape)
                         )
                         Text(
                             "${clockText(elapsed * 1000)} de ${clockText(MAX_AUDIO_SECONDS * 1000)}",

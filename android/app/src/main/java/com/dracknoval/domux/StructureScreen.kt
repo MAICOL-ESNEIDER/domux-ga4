@@ -23,6 +23,7 @@ import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.StorageRoomData
 import com.dracknoval.domux.data.TowerData
 import kotlinx.coroutines.delay
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 // Qué ventana está abierta. «editing» vacío significa que se está creando uno nuevo.
 private data class TowerForm(val editing: TowerData?)
@@ -34,7 +35,7 @@ private enum class RetireKind { TOWER, APARTMENT, PARKING, STORAGE }
 
 private data class RetireRequest(val kind: RetireKind, val id: Int, val name: String)
 
-private val dangerColor = Color(0xFFF87171)
+private val dangerColor = DomuxColor.Bad
 
 private fun plural(count: Int, one: String, many: String): String =
     "$count ${if (count == 1) one else many}"

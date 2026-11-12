@@ -36,6 +36,7 @@ import com.dracknoval.domux.data.PickupCodeData
 import com.dracknoval.domux.data.RegisterPackageRequest
 import com.dracknoval.domux.data.ResidentSummary
 import kotlinx.coroutines.delay
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 // Pantallas de paquetes: lista, registro, entrega con código y código de entrega del residente
 // (HU-047, HU-048 y HU-049). Reciben el estado ya listo y avisan con lambdas; la lógica está
@@ -329,7 +330,7 @@ fun DeliveryDialog(
                     )
                 }
                 if (!error.isNullOrBlank()) {
-                    Text("⚠ $error", color = Color(0xFFF87171), style = MaterialTheme.typography.bodySmall)
+                    Text("⚠ $error", color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
@@ -373,7 +374,7 @@ fun PickupCodeDialog(item: PackageItem, code: PickupCodeData, onDismiss: () -> U
                     style = MaterialTheme.typography.bodySmall
                 )
                 shareError?.let {
-                    Text("⚠ $it", color = Color(0xFFF87171), style = MaterialTheme.typography.bodySmall)
+                    Text("⚠ $it", color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = {

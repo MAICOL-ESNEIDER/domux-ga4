@@ -38,13 +38,29 @@ import com.journeyapps.barcodescanner.ScanOptions
 @Composable
 fun RegistryScreen(
     navController: NavController,
+    initialTab: String = "",
     packagesVm: PackagesViewModel = viewModel(),
     visitsVm: VisitsViewModel = viewModel()
 ) {
     val canRegister = Session.isGuard || Session.isAdmin
     val packages by packagesVm.state.collectAsState()
     val visits by visitsVm.state.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    // El menú y los botones del inicio de portería abren directo una pestaña.
+    var selectedTab by remember(initialTab) {
+        mutableIntStateOf(
+            when (initialTab) {
+                "visitas" -> if (Session.isResident) 1 else 2
+                "qr" -> when {
+                    Session.isResident -> 2
+                    Session.isGuard -> 4
+                    else -> 0
+                }
+                "registrar-paquete" -> if (Session.isResident) 0 else 1
+                "registrar-visita" -> if (Session.isGuard) 3 else 0
+                else -> 0
+            }
+        )
+    }
     // Cambio de guardia con PIN (HU-010): guardName es quien tiene el turno ahora.
     var showGuardShift by remember { mutableStateOf(false) }
     var guardName by remember { mutableStateOf(Session.userName.orEmpty()) }

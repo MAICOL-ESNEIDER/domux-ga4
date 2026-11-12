@@ -72,6 +72,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 /**
  * Visor de los adjuntos que llegan del servidor (fotos, videos, audios y documentos PDF de PQRS,
@@ -279,7 +280,7 @@ private fun FullScreenViewer(onClose: () -> Unit, content: @Composable BoxScope.
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
                     .size(48.dp)
-                    .background(Color(0x99000000), CircleShape)
+                    .background(DomuxColor.Scrim, CircleShape)
             ) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = "Cerrar", tint = Color.White)
             }
@@ -306,7 +307,7 @@ private fun VideoAttachment(dataUrl: String) {
         Box(
             Modifier
                 .size(56.dp)
-                .background(Color(0xBF07111F), CircleShape),
+                .background(DomuxColor.Overlay, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(painterResource(R.drawable.ic_play), contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))

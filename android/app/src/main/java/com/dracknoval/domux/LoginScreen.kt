@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 /**
  * Inicio de sesión (HU-001). La pantalla solo dibuja: la revisión de los campos y la llamada al
@@ -81,17 +82,17 @@ fun LoginScreen(
         DomuxBrandMark(size = 64.dp)
         Spacer(Modifier.height(14.dp))
         Text("DOMUX", fontSize = 27.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
-        Text("Residential Security OS", color = Color(0xFF94A3B8), fontSize = 13.sp)
+        Text("Residential Security OS", color = DomuxColor.TextMuted, fontSize = 13.sp)
         Spacer(Modifier.height(22.dp))
         Surface(
-            color = Color(0xFF152C4A),
+            color = DomuxColor.Selected,
             shape = RoundedCornerShape(50),
-            border = BorderStroke(1.dp, Color(0xFF1E334D))
+            border = BorderStroke(1.dp, DomuxColor.Line)
         ) {
             Text(
                 "SISTEMA INTELIGENTE DE OPERACIÓN RESIDENCIAL",
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                color = Color(0xFF38BDF8),
+                color = DomuxColor.Primary,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.7.sp
@@ -104,7 +105,7 @@ fun LoginScreen(
                 withStyle(
                     SpanStyle(
                         brush = Brush.linearGradient(
-                            listOf(Color(0xFF22D3EE), Color(0xFF818CF8), Color(0xFFA855F7))
+                            listOf(DomuxColor.Cyan, DomuxColor.Violet, DomuxColor.Purple)
                         ),
                         fontWeight = FontWeight.Bold
                     )

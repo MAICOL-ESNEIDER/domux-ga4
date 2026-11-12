@@ -39,6 +39,7 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 // Pantallas de visitas: historial con filtros, entrada y salida con estadía prevista, registro,
 // ingreso por QR y los códigos QR del residente (HU-027 y HU-030 a HU-033). La lógica está en
@@ -804,7 +805,7 @@ fun ResidentQrSection(
                     }
                     QrImage(activeBitmap, "Código QR de visitas")
                     shareError?.let {
-                        Text("⚠ $it", color = Color(0xFFF87171), style = MaterialTheme.typography.bodySmall)
+                        Text("⚠ $it", color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
                     }
                     if (!active.revoked) {
                         Button(

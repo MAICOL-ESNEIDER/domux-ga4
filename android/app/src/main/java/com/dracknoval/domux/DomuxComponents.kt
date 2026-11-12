@@ -27,10 +27,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -38,8 +35,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +43,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBar
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -69,6 +85,7 @@ import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.dracknoval.domux.ui.theme.DomuxColor
 
 /**
  * Un adjunto que llegó del servidor, ya visible: la foto en miniatura (se abre en grande), el
@@ -97,15 +114,15 @@ fun DomuxConfirmDialog(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF091426),
-            border = BorderStroke(1.dp, Color(0xFF1E334D))
+            color = DomuxColor.Surface,
+            border = BorderStroke(1.dp, DomuxColor.Line)
         ) {
             Column(
                 modifier = Modifier.padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(title, style = MaterialTheme.typography.titleLarge)
-                Text(message, color = Color(0xFFCBD5E1), style = MaterialTheme.typography.bodyMedium)
+                Text(message, color = DomuxColor.TextSoft, style = MaterialTheme.typography.bodyMedium)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -115,8 +132,8 @@ fun DomuxConfirmDialog(
                     Button(
                         onClick = onConfirm,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (danger) Color(0xFF450A0A) else Color(0xFF152C4A),
-                            contentColor = if (danger) Color(0xFFF87171) else Color(0xFF38BDF8)
+                            containerColor = if (danger) DomuxColor.BadBackground else DomuxColor.Selected,
+                            contentColor = if (danger) DomuxColor.Bad else DomuxColor.Primary
                         )
                     ) {
                         Text(confirmLabel)
@@ -131,67 +148,16 @@ fun DomuxConfirmDialog(
  * Tarjeta de un módulo del inicio. [badge] es un número pendiente (por ejemplo, los comunicados
  * sin leer): si es mayor que cero se dibuja en la esquina de la tarjeta.
  */
-@Composable
-fun DomuxBentoCard(
-    title: String,
-    detail: String,
-    icon: String,
-    modifier: Modifier = Modifier,
-    badge: Int = 0,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        color = Color(0xFF0F1E33),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, Color(0xFF1E334D))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(Color(0xFF152C4A), RoundedCornerShape(13.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(icon, color = Color(0xFF38BDF8), fontSize = 19.sp)
-                }
-                if (badge > 0) {
-                    Surface(
-                        color = Color(0xFF450A0A),
-                        contentColor = Color(0xFFF87171),
-                        shape = CircleShape
-                    ) {
-                        Text(
-                            "${badge.coerceAtMost(99)} sin leer",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelMedium)
-                Text(detail, color = Color(0xFFF8FAFC), style = MaterialTheme.typography.titleSmall)
-            }
-        }
-    }
-}
-
+/**
+ * Estado con color, ícono y palabra (nunca solo el color): verde con chulo para lo hecho, amarillo
+ * con reloj para lo pendiente y rojo con signo de admiración para lo vencido o rechazado.
+ */
 @Composable
 fun DomuxStatusBadge(label: String, tone: DomuxBadgeTone = DomuxBadgeTone.SUCCESS) {
     val (background, foreground, outline) = when (tone) {
-        DomuxBadgeTone.SUCCESS -> Triple(Color(0xFF064E3B), Color(0xFF34D399), Color(0xFF065F46))
-        DomuxBadgeTone.PROGRESS -> Triple(Color(0xFF451A03), Color(0xFFFBBF24), Color(0xFF78350F))
-        DomuxBadgeTone.ALERT -> Triple(Color(0xFF450A0A), Color(0xFFF87171), Color(0xFF7F1D1D))
+        DomuxBadgeTone.SUCCESS -> Triple(DomuxColor.OkBackground, DomuxColor.Ok, DomuxColor.OkLine)
+        DomuxBadgeTone.PROGRESS -> Triple(DomuxColor.WarnBackground, DomuxColor.Warn, DomuxColor.WarnLine)
+        DomuxBadgeTone.ALERT -> Triple(DomuxColor.BadBackground, DomuxColor.Bad, DomuxColor.BadLine)
     }
     Surface(
         color = background,
@@ -199,11 +165,22 @@ fun DomuxStatusBadge(label: String, tone: DomuxBadgeTone = DomuxBadgeTone.SUCCES
         shape = CircleShape,
         border = BorderStroke(1.dp, outline)
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), fontSize = 11.sp)
+        Row(
+            modifier = Modifier.padding(start = 8.dp, end = 11.dp, top = 5.dp, bottom = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(painterResource(tone.icon), contentDescription = null, modifier = Modifier.size(14.dp))
+            Text(label, fontSize = 12.sp)
+        }
     }
 }
 
-enum class DomuxBadgeTone { SUCCESS, PROGRESS, ALERT }
+enum class DomuxBadgeTone(val icon: Int) {
+    SUCCESS(R.drawable.ic_check),
+    PROGRESS(R.drawable.ic_schedule),
+    ALERT(R.drawable.ic_warning)
+}
 
 @Composable
 fun DomuxBrandMark(size: Dp = 54.dp) {
@@ -215,7 +192,7 @@ fun DomuxBrandMark(size: Dp = 54.dp) {
         Box(
             modifier = Modifier.background(
                 Brush.linearGradient(
-                    listOf(Color(0xFF22D3EE), Color(0xFF818CF8), Color(0xFFA855F7))
+                    listOf(DomuxColor.Cyan, DomuxColor.Violet, DomuxColor.Purple)
                 )
             ),
             contentAlignment = Alignment.Center
@@ -261,12 +238,15 @@ fun DomuxMessageBanner(
 ) {
         if (message.isBlank()) return
 
-        val background = if (isError) Color(0xFF450A0A) else Color(0xFF052E16)
-        val foreground = if (isError) Color(0xFFF87171) else Color(0xFF34D399)
-        val outline = if (isError) Color(0xFFEF4444) else Color(0xFF10B981)
+        val background = if (isError) DomuxColor.BadBackground else DomuxColor.OkNotice
+        val foreground = if (isError) DomuxColor.Bad else DomuxColor.Ok
+        val outline = if (isError) DomuxColor.BadNoticeLine else DomuxColor.OkNoticeLine
 
         Surface(
-            modifier = modifier.fillMaxWidth(),
+            // El lector de pantalla lo anuncia apenas aparece; un error interrumpe, un acierto espera su turno.
+            modifier = modifier
+                .fillMaxWidth()
+                .semantics { liveRegion = if (isError) LiveRegionMode.Assertive else LiveRegionMode.Polite },
             color = background,
             contentColor = foreground,
             shape = RoundedCornerShape(16.dp),
@@ -276,15 +256,27 @@ fun DomuxMessageBanner(
                 modifier = Modifier.padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    painterResource(if (isError) R.drawable.ic_warning else R.drawable.ic_check_circle),
+                    contentDescription = if (isError) "Error:" else "Listo:",
+                    tint = foreground,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(10.dp))
                 Text(
-                    "${if (isError) "⚠" else "✓"} $message",
+                    message,
                     modifier = Modifier.weight(1f),
                     color = foreground,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 if (onDismiss != null) {
-                    TextButton(onClick = onDismiss) {
-                        Text("✕", color = foreground)
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            painterResource(R.drawable.ic_close),
+                            contentDescription = "Cerrar el aviso",
+                            tint = foreground,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
@@ -295,9 +287,9 @@ fun DomuxMessageBanner(
 fun DomuxSectionTabs(tabs: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = Color(0xFF091426),
+            color = DomuxColor.Surface,
             shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, Color(0xFF1E334D))
+            border = BorderStroke(1.dp, DomuxColor.Line)
         ) {
             Row(
                 modifier = Modifier
@@ -308,21 +300,26 @@ fun DomuxSectionTabs(tabs: List<String>, selectedIndex: Int, onSelect: (Int) -> 
                 tabs.forEachIndexed { index, tab ->
                     val selected = index == selectedIndex
                     Surface(
-                        modifier = Modifier.clickable { onSelect(index) },
-                        color = if (selected) Color(0xFF152C4A) else Color.Transparent,
-                        contentColor = if (selected) Color(0xFFF8FAFC) else Color(0xFF94A3B8),
+                        // Es una pestaña: el lector de pantalla dice cuál está elegida. Mide al menos 48 de alto.
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .selectable(selected = selected, role = Role.Tab) { onSelect(index) },
+                        color = if (selected) DomuxColor.Selected else Color.Transparent,
+                        contentColor = if (selected) DomuxColor.TextBright else DomuxColor.TextMuted,
                         shape = RoundedCornerShape(13.dp),
                         border = BorderStroke(
                             1.dp,
-                            if (selected) Color(0xFF38BDF8) else Color.Transparent
+                            if (selected) DomuxColor.Primary else Color.Transparent
                         )
                     ) {
-                        Text(
-                            tab,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                        )
+                        Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                tab,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
                     }
                 }
             }
@@ -371,9 +368,9 @@ fun DomuxResidentSearchField(
         if (selectedResident != null) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = Color(0xFF0F1E33),
+                color = DomuxColor.Card,
                 shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, Color(0xFF1E334D))
+                border = BorderStroke(1.dp, DomuxColor.Line)
             ) {
                 Row(
                     modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
@@ -386,17 +383,17 @@ fun DomuxResidentSearchField(
                         Text(selectedResident.name, fontWeight = FontWeight.SemiBold)
                         Text(
                             selectedResident.apartment ?: "Apartamento sin asignar",
-                            color = Color(0xFF94A3B8),
+                            color = DomuxColor.TextMuted,
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
                             selectedResident.phone?.takeIf { it.isNotBlank() } ?: "Sin teléfono",
-                            color = Color(0xFF94A3B8),
+                            color = DomuxColor.TextMuted,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                     TextButton(onClick = { onSelectResident(null) }) {
-                        Text("Cambiar", color = Color(0xFF38BDF8))
+                        Text("Cambiar", color = DomuxColor.Primary)
                     }
                 }
             }
@@ -414,27 +411,27 @@ fun DomuxResidentSearchField(
                         if (searching) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = Color(0xFF38BDF8),
+                                color = DomuxColor.Primary,
                                 strokeWidth = 2.dp
                             )
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0xFF1E334D),
-                        focusedLabelColor = Color(0xFF38BDF8),
-                        cursorColor = Color(0xFF38BDF8)
+                        focusedBorderColor = DomuxColor.Primary,
+                        unfocusedBorderColor = DomuxColor.FieldBorder,
+                        focusedLabelColor = DomuxColor.Primary,
+                        cursorColor = DomuxColor.Primary
                     )
                 )
                 searchError?.let {
-                    Text(it, color = Color(0xFFF87171), style = MaterialTheme.typography.bodySmall)
+                    Text(it, color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
                 }
                 if (results.isNotEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFF091426),
+                        color = DomuxColor.Surface,
                         shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFF1E334D))
+                        border = BorderStroke(1.dp, DomuxColor.Line)
                     ) {
                         Column(modifier = Modifier.padding(6.dp)) {
                             results.take(6).forEach { resident ->
@@ -458,7 +455,7 @@ fun DomuxResidentSearchField(
                                             listOfNotNull(resident.apartment, resident.phone?.takeIf(String::isNotBlank))
                                                 .joinToString(" · ")
                                                 .ifBlank { "Sin apartamento ni teléfono" },
-                                            color = Color(0xFF94A3B8),
+                                            color = DomuxColor.TextMuted,
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
@@ -469,7 +466,7 @@ fun DomuxResidentSearchField(
                 } else if (searchQuery.isNotBlank() && !searching && searchError == null) {
                     Text(
                         "No se encontraron residentes.",
-                        color = Color(0xFF94A3B8),
+                        color = DomuxColor.TextMuted,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -477,200 +474,128 @@ fun DomuxResidentSearchField(
         }
     }
 
+/**
+ * El marco de cada pantalla: barra de arriba con el título (y «Volver» cuando la pantalla no es
+ * del menú principal) y el menú del rol: abajo en el celular y a la izquierda en la tablet.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DomuxScreenScaffold(
-        title: String,
-        navController: NavController,
-        showBackButton: Boolean = true,
-        actions: @Composable RowScope.() -> Unit = {},
-        content: @Composable (PaddingValues) -> Unit
-    ) {
-        val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val scope = rememberCoroutineScope()
-        val context = LocalContext.current
-        var logoutError by remember { mutableStateOf<String?>(null) }
-        // Se lee para que el menú lateral se vuelva a dibujar si cambian los datos de la sesión
-        // (por ejemplo, el nombre del guardia que acaba de recibir el turno).
-        @Suppress("UNUSED_VARIABLE")
-        val sessionVersion = Session.changeCount
-        val destinations = buildList {
-            add("Inicio" to "home")
-            add("Anuncios" to "announcements")
-            add("Notificaciones" to "notifications")
-            if (Session.isAdmin) {
-                add("PQRS" to "pqrs")
-                add("Reservas" to "reservations")
-                add("Paquetería y visitas" to "registry")
-                add("Vehículos" to "vehicles")
-                add("Gestión de usuarios" to "createUser")
-                add("Estructura de la unidad" to "structure")
-            } else if (Session.isResident) {
-                add("Mi perfil" to "profile")
-                add("Mis PQRS" to "pqrs")
-                add("Reservas" to "reservations")
-                add("Paquetería y visitas" to "registry")
-            } else if (Session.isGuard) {
-                add("Paquetería y visitas" to "registry")
-                add("Vehículos" to "vehicles")
-            }
-        }
-        val currentRoute = navController.currentBackStackEntry?.destination?.route?.substringBefore("?")
+    title: String,
+    navController: NavController,
+    showBackButton: Boolean = true,
+    actions: @Composable RowScope.() -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit
+) {
+    // Se lee para que el menú se vuelva a dibujar si cambian los datos de la sesión (por ejemplo,
+    // cuando otro guardia recibe el turno).
+    @Suppress("UNUSED_VARIABLE")
+    val sessionVersion = Session.changeCount
+    val entry by navController.currentBackStackEntryAsState()
+    val destinations = mainDestinations()
+    val selected = destinations.firstOrNull { it.matches(entry) }
+    val canGoBack = showBackButton && selected == null && navController.previousBackStackEntry != null
+    // Desde 600 dp de ancho (tablet o celular acostado grande) el menú va a la izquierda.
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
 
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ModalDrawerSheet(
-                    modifier = Modifier.fillMaxSize(),
-                    drawerContainerColor = Color(0xFF07111F),
-                    drawerContentColor = Color(0xFFF8FAFC)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ComplexLogo(size = 48.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    Session.userName?.takeIf { it.isNotBlank() } ?: "Usuario",
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    when {
-                                        Session.isAdmin -> "Administrador"
-                                        Session.isResident -> "Residente"
-                                        Session.isGuard -> "Guardia"
-                                        else -> Session.role.orEmpty()
-                                    },
-                                    color = Color(0xFF94A3B8),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Session.apartment?.takeIf { it.isNotBlank() }?.let {
-                                    Text(it, color = Color(0xFF94A3B8), style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
-                    }
-                    androidx.compose.material3.HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = Color(0xFF1E334D)
+    Scaffold(
+        containerColor = DomuxColor.Background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        title,
+                        color = DomuxColor.TextBright,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() }
                     )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        destinations.forEach { (label, route) ->
-                            NavigationDrawerItem(
-                                label = { Text(label) },
-                                selected = currentRoute == route,
-                                onClick = {
-                                    scope.launch {
-                                        drawerState.close()
-                                        if (currentRoute != route) {
-                                            navController.navigate(route) { launchSingleTop = true }
-                                        }
-                                    }
-                                },
-                                colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = Color(0xFF152C4A),
-                                    selectedTextColor = Color(0xFFF8FAFC),
-                                    unselectedTextColor = Color(0xFFCBD5E1)
-                                )
-                            )
+                },
+                navigationIcon = {
+                    if (canGoBack) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Volver")
                         }
                     }
-                    logoutError?.let {
-                        Text(
-                            it,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                            color = Color(0xFFF87171),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    androidx.compose.material3.HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = Color(0xFF1E334D)
-                    )
-                    TextButton(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        onClick = {
-                            scope.launch {
-                                logoutError = null
-                                try {
-                                    PushRegistration.removeCurrentDevice(context.applicationContext)
-                                } catch (exception: Exception) {
-                                    Log.e("DomuxPush", "Could not unregister FCM token during logout.", exception)
-                                }
-                                try {
-                                    Session.clear(context)
-                                    drawerState.close()
-                                    navController.navigate("login") { popUpTo(0) }
-                                } catch (exception: Exception) {
-                                    Log.e("DomuxSession", "Could not clear the session during logout.", exception)
-                                    logoutError = "No se pudo borrar la sesión segura: ${exception.message.orEmpty()}"
-                                }
-                            }
-                        }
-                    ) {
-                        Text("Cerrar sesión", color = Color(0xFFF87171))
-                    }
-                }
+                },
+                actions = actions,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = DomuxColor.Deep,
+                    titleContentColor = DomuxColor.TextBright,
+                    navigationIconContentColor = DomuxColor.TextBright,
+                    actionIconContentColor = DomuxColor.TextBright
+                )
+            )
+        },
+        bottomBar = {
+            if (!wide) DomuxBottomBar(destinations, selected, navController)
+        }
+    ) { innerPadding ->
+        if (wide) {
+            Row(Modifier.fillMaxSize()) {
+                DomuxRail(destinations, selected, navController, Modifier.padding(top = innerPadding.calculateTopPadding()))
+                Box(Modifier.weight(1f)) { content(innerPadding) }
             }
-        ) {
-            Scaffold(
-                containerColor = Color(0xFF07111F),
-                topBar = {
-                    TopAppBar(
-                        title = { Text(title, color = Color(0xFFF8FAFC)) },
-                        navigationIcon = {
-                            Row(
-                                modifier = Modifier.padding(start = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                if (showBackButton) {
-                                    Surface(
-                                        modifier = Modifier.size(40.dp),
-                                        color = Color(0xFF091426),
-                                        shape = CircleShape,
-                                        border = BorderStroke(1.dp, Color(0xFF1E334D)),
-                                        onClick = { navController.popBackStack() }
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text("←", color = Color(0xFFF8FAFC), fontSize = 21.sp)
-                                        }
-                                    }
-                                }
-                                Surface(
-                                    modifier = Modifier.size(40.dp),
-                                    color = Color(0xFF091426),
-                                    shape = CircleShape,
-                                    border = BorderStroke(1.dp, Color(0xFF1E334D)),
-                                    onClick = { scope.launch { drawerState.open() } }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text("☰", color = Color(0xFF38BDF8), fontSize = 18.sp)
-                                    }
-                                }
-                            }
-                        },
-                        actions = actions,
-                        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color(0xFF07111F),
-                            titleContentColor = Color(0xFFF8FAFC)
-                        )
-                    )
-                }
-            ) { innerPadding ->
-                content(innerPadding)
-            }
+        } else {
+            content(innerPadding)
         }
     }
+}
+
+/** El menú de abajo del celular: cinco botones con ícono y nombre. */
+@Composable
+private fun DomuxBottomBar(
+    destinations: List<DomuxDestination>,
+    selected: DomuxDestination?,
+    navController: NavController
+) {
+    NavigationBar(containerColor = DomuxColor.Deep, tonalElevation = 0.dp) {
+        destinations.forEach { destination ->
+            NavigationBarItem(
+                selected = destination == selected,
+                onClick = { if (destination != selected) navController.openMainDestination(destination.route) },
+                icon = { Icon(painterResource(destination.icon), contentDescription = null) },
+                label = { Text(destination.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = DomuxColor.Primary,
+                    selectedTextColor = DomuxColor.TextBright,
+                    indicatorColor = DomuxColor.Selected,
+                    unselectedIconColor = DomuxColor.TextMuted,
+                    unselectedTextColor = DomuxColor.TextMuted
+                )
+            )
+        }
+    }
+}
+
+/** El menú de la tablet: los mismos botones, en una columna a la izquierda. */
+@Composable
+private fun DomuxRail(
+    destinations: List<DomuxDestination>,
+    selected: DomuxDestination?,
+    navController: NavController,
+    modifier: Modifier = Modifier
+) {
+    NavigationRail(
+        modifier = modifier.fillMaxHeight(),
+        containerColor = DomuxColor.Deep,
+        header = { ComplexLogo(size = 40.dp) }
+    ) {
+        Spacer(Modifier.height(8.dp))
+        destinations.forEach { destination ->
+            NavigationRailItem(
+                selected = destination == selected,
+                onClick = { if (destination != selected) navController.openMainDestination(destination.route) },
+                icon = { Icon(painterResource(destination.icon), contentDescription = null) },
+                label = { Text(destination.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = DomuxColor.Primary,
+                    selectedTextColor = DomuxColor.TextBright,
+                    indicatorColor = DomuxColor.Selected,
+                    unselectedIconColor = DomuxColor.TextMuted,
+                    unselectedTextColor = DomuxColor.TextMuted
+                )
+            )
+        }
+    }
+}

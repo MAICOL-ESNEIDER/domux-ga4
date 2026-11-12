@@ -449,7 +449,7 @@ data class PackageItem(
     // El residente ya generó un código de entrega que sigue vigente (HU-048).
     val hasPickupCode: Boolean = false
 )
-data class PackagesListResponse(val packages: List<PackageItem>?)
+data class PackagesListResponse(val packages: List<PackageItem>?, val total: Int = 0)
 data class RegisterPackageRequest(
     val residentId: Int,
     val description: String?,
@@ -585,6 +585,42 @@ data class NotificationItem(
 data class NotificationsListResponse(val notifications: List<NotificationItem>?)
 data class NotificationResponse(val message: String?, val notification: NotificationItem?)
 data class ReadAllNotificationsResponse(val message: String?, val updatedCount: Int?)
+
+// --- Inicio de la administración (HU-081): lo pendiente de hoy ---
+data class AdminSummaryCounts(
+    val pqrsOpen: Int = 0,
+    val pqrsOverdue: Int = 0,
+    val pqrsDueSoon: Int = 0,
+    val reservationsPending: Int = 0,
+    val packagesOver48: Int = 0,
+    val packagesOver72: Int = 0,
+    val unreadNotifications: Int = 0
+)
+data class AdminUrgentPqrs(
+    val id: Int,
+    val radicado: String?,
+    val subject: String?,
+    val category: String?,
+    val residentName: String?,
+    val apartment: String?,
+    // «verde», «amarillo» o «rojo», y cuántos días hábiles le quedan (negativo si ya venció).
+    val semaphore: String?,
+    val daysRemaining: Int?
+)
+data class AdminPendingReservation(
+    val id: Int,
+    val commonAreaName: String?,
+    val date: String?,
+    val timeSlot: String?,
+    val attendees: Int?,
+    val residentName: String?,
+    val apartment: String?
+)
+data class AdminSummaryResponse(
+    val counts: AdminSummaryCounts?,
+    val urgentPqrs: List<AdminUrgentPqrs>?,
+    val pendingReservations: List<AdminPendingReservation>?
+)
 
 // Algunos errores traen datos para actuar: el parqueadero libre que se sugiere cuando el elegido
 // ya estaba ocupado, o que ya no queda ninguno libre (HU-039).
