@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}{{ page_title or "Administración" }}{% endblock %} · DOMUX</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('web.static', filename='img/domux-logo.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('web.static', filename='domux.css') }}">
+  <noscript><link rel="stylesheet" href="{{ url_for('web.static', filename='nojs.css') }}"></noscript>
+  <script src="{{ url_for('web.static', filename='domux.js') }}" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+{% if web_user %}
+<div class="shell">
+  <nav class="sidebar" id="menu" aria-label="Menú principal">
+    <a class="brand" href="{{ url_for('web.panel') }}">
+      <img src="{{ url_for('web.static', filename='img/domux-logo.svg') }}" alt="" width="40" height="40">
+      <span class="brand-text"><strong>DOMUX</strong><small>Administración</small></span>
+    </a>
+    {% for group in menu_groups() %}
+      {% if group.title %}<p class="nav-group">{{ group.title }}</p>{% endif %}
+      <ul>
+        {% for page in group.pages %}
+        <li>
+          <a href="{{ page.url }}"{% if page.active %} aria-current="page"{% endif %}>
+            <span class="nav-icon">{{ icon(page.icon) }}</span>{{ page.label }}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+  </nav>
+
+  <div class="main">
+    <header class="topbar">
+      <button type="button" class="btn btn-quiet btn-small menu-button" data-menu-toggle
+              aria-expanded="false" aria-controls="menu">
+        {{ icon("menu") }}<span class="sr-only">Abrir o cerrar el menú</span>
+      </button>
+      <nav class="crumbs" aria-label="Ruta">
+        <a href="{{ url_for('web.panel') }}">Inicio</a>
+        {% if page_title and request.endpoint != 'web.panel' %} › <span aria-current="page">{{ page_title }}</span>{% endif %}
+      </nav>
+      <div class="who">
+        <span class="who-name">{{ web_user.full_name }} · {{ role_labels.get(web_user.role, web_user.role) }}</span>
+        <form method="post" action="{{ url_for('web.logout') }}">
+          {{ csrf_input() }}
+          <button type="submit" class="btn btn-quiet btn-small">{{ icon("logout") }} Cerrar sesión</button>
+        </form>
+      </div>
+    </header>
+    <main id="contenido" tabindex="-1">
+{% else %}
+<main id="contenido" class="auth-wrap" tabindex="-1">
+  <div class="auth-card card">
+{% endif %}
+      {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="notice notice-{{ category if category in ('success', 'error') else 'info' }}"
+           role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+      {% endfor %}
+      {% block content %}{% endblock %}
+{% if web_user %}
+    </main>
+  </div>
+</div>
+{% else %}
+  </div>
+</main>
+{% endif %}
+</body>
+</html>

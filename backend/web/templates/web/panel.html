@@ -1,0 +1,11 @@
+{% extends "web/base.html" %}
+{% set page_title = "Inicio" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Hola, {{ web_user.name }}</h1>
+    <p>Aquí vas a ver lo que hay que atender hoy.</p>
+  </div>
+</div>
+{% endblock %}

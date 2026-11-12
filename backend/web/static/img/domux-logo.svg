@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="DOMUX">
+  <defs>
+    <linearGradient id="domux-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#818CF8"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="12" fill="url(#domux-g)"/>
+  <path d="M15 12h9a12 12 0 0 1 0 24h-9z M21 18v12h3a6 6 0 0 0 0-12z" fill="#07111F" fill-rule="evenodd"/>
+</svg>

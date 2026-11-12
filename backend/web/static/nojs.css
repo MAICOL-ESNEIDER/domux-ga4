@@ -1,0 +1,11 @@
+/*
+ * Solo se carga cuando el navegador no ejecuta JavaScript (<noscript> en base.html): en pantallas
+ * angostas el menú se queda visible arriba de la página, porque sin el botón ☰ no habría cómo abrirlo.
+ */
+@media (max-width: 980px) {
+  .sidebar {
+    position: static; width: 100%; height: auto; transform: none; visibility: visible;
+    border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  .topbar .menu-button { display: none; }
+}

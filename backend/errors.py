@@ -24,6 +24,11 @@ DEFAULT_MESSAGES = {
 }
 
 
+def is_web_path(path):
+    """Dice si una ruta es de la web de administración (y no de la API)."""
+    return path == "/web" or path.startswith("/web/")
+
+
 def error_response(status_code, message=None, **details):
     """Respuesta de error: el mensaje, el código y, si hacen falta, datos extra.
 
@@ -63,9 +68,18 @@ def register_error_handlers(app):
     @app.errorhandler(HTTPException)
     def handle_http_error(error):
         logger.warning("HTTP %s %s: %s", error.code, request.method, safe_path(request.path))
+        if is_web_path(request.path):
+            # La web responde con una página, no con JSON.
+            from web.pages import render_error
+
+            return render_error(error.code, error.description)
         return error_response(error.code, DEFAULT_MESSAGES.get(error.code))
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
         logger.exception("Error no controlado en %s %s", request.method, safe_path(request.path))
+        if is_web_path(request.path):
+            from web.pages import render_error
+
+            return render_error(500)
         return error_response(500)

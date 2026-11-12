@@ -2,13 +2,13 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, redirect, request, url_for
 from flask_cors import CORS
 from flask_migrate import stamp, upgrade
 from sqlalchemy import inspect
 
 from config import cors_origins
-from errors import error_response, register_error_handlers
+from errors import error_response, is_web_path, register_error_handlers
 from extensions import db, migrations
 from logging_config import configure_logging
 from models import Apartment, Pqrs, PqrsMessage, ResidentialUnit, User
@@ -20,6 +20,7 @@ from routes.structure import bp as structure_bp
 from routes.vehicles import bp as vehicles_bp
 from seed import seed_if_empty, sync_demo_passwords
 from validators import OCCUPANCY_TYPES, validate_no_empty_strings
+from web import init_web
 
 load_dotenv()
 
@@ -335,9 +336,20 @@ def create_app():
     app.register_blueprint(structure_bp)
     app.register_blueprint(vehicles_bp)
     register_error_handlers(app)
+    # La web de administración (HU-074): páginas para el computador, sobre la misma API.
+    init_web(app)
+
+    @app.get("/")
+    def root():
+        """La dirección principal del servidor lleva a la web de administración."""
+        return redirect(url_for("web.panel"))
 
     @app.before_request
     def reject_empty_write_fields():
+        # Los formularios de la web no son JSON: su revisión es la de la propia web (CSRF y,
+        # al llamar a la API por dentro, las mismas validaciones de siempre).
+        if is_web_path(request.path):
+            return None
         if request.method not in ("POST", "PUT", "PATCH"):
             return None
         if request.path == "/api/profile" and request.method == "PUT":
