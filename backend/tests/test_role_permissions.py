@@ -122,6 +122,30 @@ class RolePermissionTests(unittest.TestCase):
         admin_view = self.call(self.admin, "GET", "/api/residents").get_json()["residents"][0]
         self.assertIn("email", admin_view)
 
+    def test_residents_can_be_found_by_id(self):
+        other = self.user(
+            "RESIDENT", "otro-residente-permisos@test.local",
+            apartment_ref=apartment_for("Apto 102"), phone="3000000001", occupancy_type="propietario",
+        )
+        db.session.commit()
+
+        found = self.call(self.admin, "GET", f"/api/residents?id={other.id}")
+        missing = self.call(self.admin, "GET", "/api/residents?id=999999")
+        everyone = self.call(self.admin, "GET", "/api/residents")
+        by_guard = self.call(self.guard, "GET", f"/api/residents?id={self.resident.id}")
+        not_a_number = self.call(self.admin, "GET", "/api/residents?id=abc")
+
+        self.assertEqual([item["id"] for item in found.get_json()["residents"]], [other.id])
+        self.assertEqual(missing.status_code, 200)
+        self.assertEqual(missing.get_json()["residents"], [])
+        self.assertEqual(len(everyone.get_json()["residents"]), 2)
+        self.assertEqual([item["id"] for item in by_guard.get_json()["residents"]], [self.resident.id])
+        self.assertEqual(
+            set(by_guard.get_json()["residents"][0]),
+            {"id", "name", "phone", "apartment", "apartmentNumber"},
+        )
+        self.assertEqual(not_a_number.status_code, 400)
+
     def test_resident_cannot_use_staff_routes(self):
         for method, path, body in [
             ("GET", "/api/residents", None),

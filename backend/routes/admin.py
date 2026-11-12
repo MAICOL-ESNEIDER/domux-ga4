@@ -534,9 +534,18 @@ def get_residents():
 
     Portería solo recibe nombre, teléfono y apartamento, y no busca por correo
     (SEC-015): es lo que necesita para avisar o entregar.
+
+    Con ``id`` devuelve solo a ese residente: así una pantalla que llega con el
+    residente ya elegido (por ejemplo desde el perfil de su apartamento) lo
+    encuentra aunque no esté entre los primeros 30 de la lista.
     """
     is_guard = g.current_user.role == "GUARD"
     query = User.query.filter_by(role="RESIDENT").filter(User.is_active.is_(True))
+    resident_id = (request.args.get("id") or "").strip()
+    if resident_id:
+        if not resident_id.isdigit():
+            return error_response(400, "El id del residente debe ser un número.")
+        query = query.filter(User.id == int(resident_id))
     search = (request.args.get("search") or "").strip()
     if search:
         pattern = f"%{search}%"
