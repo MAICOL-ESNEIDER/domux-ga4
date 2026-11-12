@@ -45,6 +45,7 @@ import com.dracknoval.domux.data.NotificationItem
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.mensajeDeError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -59,6 +60,8 @@ private data class HomeModule(
 @Composable
 fun HomeScreen(navController: NavController) {
     var unreadCount by remember { mutableIntStateOf(0) }
+    // Comunicados vigentes que el residente aún no ha abierto (HU-059).
+    var unreadAnnouncements by remember { mutableIntStateOf(0) }
     var notifications by remember { mutableStateOf<List<NotificationItem>>(emptyList()) }
     var notificationError by remember { mutableStateOf<String?>(null) }
     var notificationActionMessage by remember { mutableStateOf<String?>(null) }
@@ -131,6 +134,19 @@ fun HomeScreen(navController: NavController) {
                 }
             } catch (exception: Exception) {
                 notificationError = "Sin conexión para actualizar notificaciones: ${exception.message}"
+            }
+            if (Session.isResident) {
+                // Con una sola fila basta: el servidor siempre responde cuántos comunicados le faltan por leer.
+                try {
+                    val announcements = RetrofitClient.api.getAnnouncements(Session.bearer(), pageSize = 1)
+                    if (announcements.isSuccessful) {
+                        unreadAnnouncements = announcements.body()?.unreadCount ?: 0
+                    }
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (_: Exception) {
+                    // Si falla se conserva el número anterior y se vuelve a intentar en la próxima vuelta.
+                }
             }
             delay(30_000)
         }
@@ -246,7 +262,8 @@ fun HomeScreen(navController: NavController) {
                         title = module.title,
                         detail = module.detail,
                         icon = module.icon,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        badge = if (module.route == "announcements") unreadAnnouncements else 0
                     ) { navController.navigate(module.route) }
                 }
                 if (rowModules.size == 1) Spacer(Modifier.weight(1f))

@@ -1,632 +1,678 @@
 package com.dracknoval.domux
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dracknoval.domux.data.CommonArea
-import com.dracknoval.domux.data.AddReservationMessageRequest
-import com.dracknoval.domux.data.CreateReservationRequest
 import com.dracknoval.domux.data.Reservation
-import com.dracknoval.domux.data.ReservationAvailabilityResponse
 import com.dracknoval.domux.data.ResidentSummary
-import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
-import com.dracknoval.domux.data.UpdateReservationStatusRequest
-import com.dracknoval.domux.data.mensajeDeError
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 import java.util.TimeZone
 
-private val reservationSlots = listOf(
-    "08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00",
-    "16:00-18:00", "18:00-20:00", "20:00-22:00"
+private const val TAB_LIST = "Reservas registradas"
+private const val TAB_NEW = "Nueva reserva"
+
+// Estados en los que una reserva todavía se puede aprobar, rechazar o cancelar.
+private val OPEN_STATUSES = listOf("pendiente", "activa", "aprobada")
+
+/** Lo que se le pregunta a la persona antes de ejecutar una acción. */
+private class ReservationConfirmation(
+    val message: String,
+    val confirmLabel: String,
+    val danger: Boolean,
+    val action: () -> Unit
 )
 
-private fun reservationDateString(date: Date): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }.format(date)
-
-private fun reservationTodayString(): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().time)
-
-private fun reservationDateMillis(value: String): Long? = try {
-    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-        isLenient = false
-        timeZone = TimeZone.getTimeZone("UTC")
-    }.parse(value)?.time
-} catch (_: Exception) {
-    null
-}
-
+/**
+ * Reservas de zonas comunes (HU-050 a HU-055). El residente reserva y cancela dentro del plazo de
+ * cada zona; la administración reserva por un residente, aprueba, rechaza y cancela. La pantalla
+ * solo dibuja lo que le da [ReservationsViewModel].
+ */
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun ReservationCalendarPicker(
-    value: String,
-    blockedDates: Set<String>,
-    onMonthChanged: (year: Int, month: Int) -> Unit,
-    onValueChange: (String) -> Unit
+fun ReservationsScreen(
+    navController: NavController,
+    targetResidentId: Int? = null,
+    viewModel: ReservationsViewModel = viewModel()
 ) {
-    var showPicker by remember { mutableStateOf(false) }
-    val selectableDates = remember(blockedDates) {
-        object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
-                val selectedDate = reservationDateString(Date(utcTimeMillis))
-                return selectedDate >= reservationTodayString() && selectedDate !in blockedDates
-            }
+    val state by viewModel.state.collectAsState()
+    val canBook = Session.isAdmin || Session.isResident
+    val tabs = if (canBook) listOf(TAB_LIST, TAB_NEW) else listOf(TAB_LIST)
+    // Si la administración llega desde el perfil de un residente, abre directo la reserva nueva.
+    var selectedTab by rememberSaveable { mutableStateOf(if (targetResidentId != null && canBook) 1 else 0) }
+    val tab = selectedTab.coerceIn(tabs.indices)
+    var confirmation by remember { mutableStateOf<ReservationConfirmation?>(null) }
 
-            override fun isSelectableYear(year: Int): Boolean =
-                year >= Calendar.getInstance().get(Calendar.YEAR)
-        }
-    }
-    val state = rememberDatePickerState(
-        initialSelectedDateMillis = reservationDateMillis(value),
-        selectableDates = selectableDates
-    )
-    LaunchedEffect(state.displayedMonthMillis) {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-            timeInMillis = state.displayedMonthMillis
-        }
-        onMonthChanged(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1)
-    }
-    OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
-        Text(if (value.isBlank()) "Seleccionar fecha" else "Fecha: $value")
-    }
-    if (blockedDates.isNotEmpty()) {
-        Text("Los días totalmente ocupados aparecen bloqueados.", style = MaterialTheme.typography.bodySmall)
-    }
-    if (showPicker) {
-        val selectedDate = state.selectedDateMillis?.let { reservationDateString(Date(it)) }
-        val canConfirm = selectedDate != null &&
-            selectedDate >= reservationTodayString() &&
-            selectedDate !in blockedDates
-        DatePickerDialog(
-            onDismissRequest = { showPicker = false },
-            confirmButton = {
-                TextButton(
-                    enabled = canConfirm,
-                    onClick = {
-                        state.selectedDateMillis?.let { onValueChange(reservationDateString(Date(it))) }
-                        showPicker = false
-                    }
-                ) { Text("Aceptar") }
-            },
-            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancelar") } }
-        ) {
-            DatePicker(state = state)
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-fun ReservationsScreen(navController: NavController, targetResidentId: Int? = null) {
-    var reservations by remember { mutableStateOf<List<Reservation>>(emptyList()) }
-    var areas by remember { mutableStateOf<List<CommonArea>>(emptyList()) }
-    var residents by remember { mutableStateOf<List<ResidentSummary>>(emptyList()) }
-    var availability by remember { mutableStateOf<ReservationAvailabilityResponse?>(null) }
-    var blockedDates by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var calendarMonth by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var selectedArea by remember { mutableStateOf<CommonArea?>(null) }
-    var selectedResident by remember { mutableStateOf<ResidentSummary?>(null) }
-    var date by remember { mutableStateOf("") }
-    var slot by remember { mutableStateOf("") }
-    var requestMessage by remember { mutableStateOf("") }
-    var requestMediaUrl by remember { mutableStateOf<String?>(null) }
-    var requestMediaType by remember { mutableStateOf<String?>(null) }
-    var requestMediaName by remember { mutableStateOf<String?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var submitting by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
-    var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
-    var attemptedCreate by remember { mutableStateOf(false) }
-    var includeArchived by remember { mutableStateOf(false) }
-    var legalSuccessMessage by remember { mutableStateOf("") }
-    var legalBusy by remember { mutableStateOf(false) }
-    var selectedTab by remember {
-        mutableIntStateOf(if (targetResidentId != null) 1 else 0)
-    }
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    suspend fun load() {
-        loading = true
-        try {
-            val response = RetrofitClient.api.getReservations(
-                Session.bearer(),
-                if (includeArchived) "true" else null
-            )
-            if (response.isSuccessful) reservations = response.body()?.reservations.orEmpty()
-            else message = mensajeDeError(response.code(), response.errorBody()?.string())
-            val areaResponse = RetrofitClient.api.getCommonAreas(Session.bearer())
-            if (areaResponse.isSuccessful) {
-                areas = areaResponse.body()?.areas.orEmpty()
-                if (selectedArea == null) selectedArea = areas.firstOrNull()
-            }
-            if (Session.isAdmin) {
-                val residentResponse = RetrofitClient.api.getResidents(Session.bearer())
-                if (residentResponse.isSuccessful) {
-                    residents = residentResponse.body()?.residents.orEmpty()
-                    selectedResident = residents.firstOrNull { it.id == targetResidentId }
-                        ?: selectedResident?.takeIf { current ->
-                            residents.any { it.id == current.id }
-                        }
-                        ?: residents.firstOrNull()
-                }
-            }
-        } catch (exception: Exception) {
-            if (exception is CancellationException) throw exception
-            message = "No se pudieron cargar las reservas: ${exception.message}"
-        } finally {
-            loading = false
-        }
-    }
-
-    LaunchedEffect(includeArchived) { load() }
-    LaunchedEffect(selectedArea?.id, date) {
-        val area = selectedArea
-        if (area != null && date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
-            availability = null
-            try {
-                val response = RetrofitClient.api.getReservationAvailability(
-                    Session.bearer(), area.id, date
-                )
-                if (response.isSuccessful) availability = response.body()
-                else message = mensajeDeError(response.code(), response.errorBody()?.string())
-            } catch (exception: Exception) {
-                if (exception is CancellationException) throw exception
-                message = "No se pudo consultar la disponibilidad: ${exception.message}"
-            }
-        } else availability = null
-    }
-    LaunchedEffect(selectedArea?.id, calendarMonth) {
-        val area = selectedArea
-        val month = calendarMonth
-        if (area != null && month != null) {
-            blockedDates = emptySet()
-            try {
-                val response = RetrofitClient.api.getReservationCalendar(
-                    Session.bearer(), area.id, month.first, month.second
-                )
-                if (response.isSuccessful) blockedDates = response.body()?.blockedDates.orEmpty().toSet()
-                else message = mensajeDeError(response.code(), response.errorBody()?.string())
-            } catch (exception: Exception) {
-                if (exception is CancellationException) throw exception
-                message = "No se pudo consultar el calendario: ${exception.message}"
-            }
-        } else blockedDates = emptySet()
+    LaunchedEffect(Unit) { viewModel.start() }
+    LaunchedEffect(targetResidentId) {
+        if (targetResidentId != null) viewModel.useResident(targetResidentId)
     }
 
     DomuxScreenScaffold(title = "Reservas de zonas comunes", navController = navController) { padding ->
-    Column(Modifier.fillMaxSize().padding(padding).padding(20.dp)) {
-        DomuxSectionTabs(
-            listOf("Reservas registradas", "Nueva reserva"),
-            selectedTab
-        ) { selectedTab = it }
-        DomuxFeedbackBanner(message) { message = "" }
-        if (legalSuccessMessage.isNotBlank()) {
-            Text(legalSuccessMessage, color = Color(0xFF34D399), modifier = Modifier.padding(vertical = 4.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            DomuxSectionTabs(tabs, tab) { selectedTab = it }
+            if (state.message.isNotBlank()) {
+                DomuxMessageBanner(state.message, state.messageIsError) { viewModel.dismissMessage() }
+            }
+            if (tabs[tab] == TAB_NEW) {
+                ReservationForm(
+                    modifier = Modifier.weight(1f),
+                    state = state,
+                    onArea = { viewModel.selectArea(it) },
+                    onDate = { viewModel.selectDate(it) },
+                    onSlot = { viewModel.selectSlot(it) },
+                    onMonth = { year, month -> viewModel.showMonth(year, month) },
+                    onResident = { viewModel.selectResident(it) },
+                    onNotice = { viewModel.showNotice(it) },
+                    onSubmit = { summary, attendees, note, mediaUrl, mediaType ->
+                        confirmation = ReservationConfirmation(
+                            message = summary,
+                            confirmLabel = "Reservar",
+                            danger = false,
+                            action = { viewModel.create(attendees, note, mediaUrl, mediaType) }
+                        )
+                    },
+                    onCreated = { selectedTab = 0 }
+                )
+            } else {
+                ReservationList(
+                    modifier = Modifier.weight(1f),
+                    state = state,
+                    onIncludeArchived = { viewModel.setIncludeArchived(it) },
+                    onRefresh = { viewModel.refresh() },
+                    onDecide = { reservation, status ->
+                        val approving = status == "aprobada"
+                        confirmation = ReservationConfirmation(
+                            message = if (approving) {
+                                "¿Estás seguro de aprobar la reserva de ${reservation.commonAreaName.orEmpty()} del ${humanDate(reservation.date)}?"
+                            } else {
+                                "¿Estás seguro de rechazar la reserva de ${reservation.commonAreaName.orEmpty()} del ${humanDate(reservation.date)}?"
+                            },
+                            confirmLabel = if (approving) "Aprobar" else "Rechazar",
+                            danger = !approving,
+                            action = { viewModel.decide(reservation, status) }
+                        )
+                    },
+                    onCancel = { reservation ->
+                        confirmation = ReservationConfirmation(
+                            message = "¿Estás seguro de cancelar la reserva de ${reservation.commonAreaName.orEmpty()} del ${humanDate(reservation.date)}?",
+                            confirmLabel = "Cancelar reserva",
+                            danger = true,
+                            action = { viewModel.cancel(reservation) }
+                        )
+                    },
+                    onSend = { reservation, text, mediaUrl, mediaType ->
+                        viewModel.sendMessage(reservation, text, mediaUrl, mediaType)
+                    },
+                    onNotice = { viewModel.showNotice(it) }
+                )
+            }
         }
-        if ((Session.isAdmin || Session.isResident) && selectedTab == 1) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Column(Modifier.padding(14.dp)) {
-                    if (Session.isResident && Session.isMinor && !Session.parentalConsent) {
+    }
+
+    confirmation?.let { pending ->
+        DomuxConfirmDialog(
+            title = "¿Estás seguro de confirmar esta acción?",
+            message = pending.message,
+            confirmLabel = pending.confirmLabel,
+            danger = pending.danger,
+            onConfirm = {
+                confirmation = null
+                pending.action()
+            },
+            onDismiss = { confirmation = null }
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lista de reservas
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ReservationList(
+    modifier: Modifier,
+    state: ReservationsUiState,
+    onIncludeArchived: (Boolean) -> Unit,
+    onRefresh: () -> Unit,
+    onDecide: (Reservation, String) -> Unit,
+    onCancel: (Reservation) -> Unit,
+    onSend: (Reservation, String?, String?, String?) -> Unit,
+    onNotice: (String) -> Unit
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (state.loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // El respaldo va dentro de la lista para que se desplace con ella y deje ver las reservas.
+            if (Session.isAdmin) {
+                item {
+                    LegalBackupCard(
+                        archiveLabel = "Archivar finalizadas y limpiar",
+                        archiveMessage = "Las reservas finalizadas y las PQRS resueltas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa.",
+                        includeArchived = state.includeArchived,
+                        onToggleArchived = { onIncludeArchived(!state.includeArchived) },
+                        onArchived = onRefresh
+                    )
+                }
+            }
+            if (state.reservations.isEmpty() && !state.loading) {
+                item { Text("No hay reservas registradas.") }
+            }
+            items(state.reservations, key = { it.id }) { reservation ->
+                ReservationCard(
+                    reservation = reservation,
+                    busy = state.busy,
+                    onDecide = { status -> onDecide(reservation, status) },
+                    onCancel = { onCancel(reservation) },
+                    onSend = { text, mediaUrl, mediaType -> onSend(reservation, text, mediaUrl, mediaType) },
+                    onNotice = onNotice
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReservationCard(
+    reservation: Reservation,
+    busy: Boolean,
+    onDecide: (String) -> Unit,
+    onCancel: () -> Unit,
+    onSend: (String?, String?, String?) -> Unit,
+    onNotice: (String) -> Unit
+) {
+    val actionable = reservation.status in OPEN_STATUSES && !reservation.isArchived
+    DomuxCard(Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
+            Text("${humanDate(reservation.date)} · ${reservation.timeSlot}")
+            Text("Residente: ${reservation.residentName.orEmpty()} · ${reservation.apartment.orEmpty()}")
+            reservation.attendees?.let { people ->
+                Text("Personas: $people")
+            }
+            if (reservation.createdByAdministration) {
+                Text("Creada por administración", style = MaterialTheme.typography.labelSmall)
+            }
+            reservation.messages.orEmpty().forEach { item ->
+                Text(
+                    "${item.authorName ?: item.authorRole} · ${item.createdAt.orEmpty()}",
+                    style = MaterialTheme.typography.labelSmall
+                )
+                if (!item.message.isNullOrBlank()) Text(item.message)
+                MediaAttachmentChip(item.mediaUrl, item.mediaType)
+            }
+            DomuxStatusBadge(
+                reservation.status.replaceFirstChar(Char::uppercase).replace('_', ' '),
+                when (reservation.status) {
+                    "aprobada", "activa" -> DomuxBadgeTone.SUCCESS
+                    "rechazada", "cancelada" -> DomuxBadgeTone.ALERT
+                    else -> DomuxBadgeTone.PROGRESS
+                }
+            )
+            if (reservation.requestedByMinor) {
+                DomuxStatusBadge("Menor con autorización parental", DomuxBadgeTone.PROGRESS)
+            }
+            if (reservation.isArchived) {
+                DomuxStatusBadge("Archivada en Excel", DomuxBadgeTone.ALERT)
+            }
+            // El residente cancela hasta el plazo de la zona (HU-053); después, debe escribirle a la administración.
+            if (Session.isResident && actionable) {
+                val until = humanDate(reservation.cancelUntil)
+                if (reservation.canCancel) {
+                    if (until.isNotEmpty()) {
                         Text(
-                            "Los menores de edad no pueden reservar zonas comunes salvo que cuenten con autorización parental activa registrada en administración.",
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(bottom = 10.dp)
+                            "Puedes cancelarla hasta el $until.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    Text(if (Session.isAdmin) "Crear reserva para un residente" else "Nueva reserva", style = MaterialTheme.typography.titleMedium)
-                    Text("Zona común")
-                    Row {
-                        areas.forEach { area ->
+                    TextButton(enabled = !busy, onClick = onCancel) { Text("Cancelar reserva") }
+                } else if (until.isNotEmpty()) {
+                    Text(
+                        "Ya no se puede cancelar: el plazo terminó el $until. Si necesitas cambiarla, escríbele a la administración.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+            if (Session.isAdmin && actionable) {
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    if (reservation.status == "pendiente" || reservation.status == "activa") {
+                        TextButton(enabled = !busy, onClick = { onDecide("aprobada") }) { Text("Aprobar") }
+                        TextButton(enabled = !busy, onClick = { onDecide("rechazada") }) { Text("Rechazar") }
+                    }
+                    TextButton(enabled = !busy, onClick = onCancel) { Text("Cancelar reserva") }
+                }
+            }
+            if ((Session.isResident || Session.isAdmin) && actionable) {
+                ReservationReplyBox(reservation, busy, onSend, onNotice)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReservationReplyBox(
+    reservation: Reservation,
+    busy: Boolean,
+    onSend: (String?, String?, String?) -> Unit,
+    onNotice: (String) -> Unit
+) {
+    // Cuando el servidor acepta el mensaje la lista trae uno más y el cuadro queda limpio.
+    val count = reservation.messages?.size
+    var reply by remember(reservation.id, count) { mutableStateOf("") }
+    var mediaUrl by remember(reservation.id, count) { mutableStateOf<String?>(null) }
+    var mediaType by remember(reservation.id, count) { mutableStateOf<String?>(null) }
+    var mediaName by remember(reservation.id, count) { mutableStateOf<String?>(null) }
+    OutlinedTextField(
+        value = reply,
+        onValueChange = { reply = it },
+        label = { Text("Mensaje para ${if (Session.isAdmin) "el residente" else "administración"}") },
+        modifier = Modifier.fillMaxWidth()
+    )
+    MediaAttachmentPicker(mediaName, { url, type, name ->
+        mediaUrl = url
+        mediaType = type
+        mediaName = name
+    }, { onNotice(it) })
+    TextButton(
+        enabled = !busy,
+        onClick = {
+            if (reply.isBlank() && mediaUrl == null) {
+                onNotice("Escribe un mensaje o adjunta un archivo.")
+            } else {
+                onSend(reply.trim().ifEmpty { null }, mediaUrl, mediaType)
+            }
+        }
+    ) { Text("Enviar mensaje") }
+}
+
+// ---------------------------------------------------------------------------
+// Reserva nueva
+// ---------------------------------------------------------------------------
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun ReservationForm(
+    modifier: Modifier,
+    state: ReservationsUiState,
+    onArea: (Int) -> Unit,
+    onDate: (String) -> Unit,
+    onSlot: (String) -> Unit,
+    onMonth: (Int, Int) -> Unit,
+    onResident: (ResidentSummary?) -> Unit,
+    onNotice: (String) -> Unit,
+    onSubmit: (String, Int?, String?, String?, String?) -> Unit,
+    onCreated: () -> Unit
+) {
+    var attendeesText by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
+    var attempted by rememberSaveable { mutableStateOf(false) }
+    // El adjunto va en base64 y puede pesar varios MB: no se guarda con el estado de la pantalla.
+    var mediaUrl by remember { mutableStateOf<String?>(null) }
+    var mediaType by remember { mutableStateOf<String?>(null) }
+    var mediaName by remember { mutableStateOf<String?>(null) }
+    var handled by rememberSaveable { mutableStateOf(state.created) }
+
+    // Cuando el servidor acepta la reserva, el formulario queda limpio y se vuelve a la lista.
+    LaunchedEffect(state.created) {
+        if (state.created != handled) {
+            handled = state.created
+            attendeesText = ""
+            note = ""
+            attempted = false
+            mediaUrl = null
+            mediaType = null
+            mediaName = null
+            onCreated()
+        }
+    }
+
+    val admin = Session.isAdmin
+    val minorBlocked = Session.isResident && Session.isMinor && !Session.parentalConsent
+    val area = state.area
+    val today = colombiaToday()
+    // El residente reserva dentro de la anticipación de la zona; la administración, desde hoy (HU-055).
+    val firstDate = addDaysIso(today, if (admin) 0 else (area?.minAdvanceDays ?: 0))
+    val lastDate = if (admin || area == null || area.maxAdvanceDays <= 0) null else addDaysIso(today, area.maxAdvanceDays)
+    val capacity = area?.capacity
+    val people = attendeesText.toIntOrNull()
+    val peopleError = capacity != null && (people == null || people < 1 || people > capacity)
+
+    Column(
+        modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        DomuxCard(Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (minorBlocked) {
+                    Text(
+                        "Los menores de edad no pueden reservar zonas comunes salvo que cuenten con autorización parental activa registrada en administración.",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Text(
+                    if (admin) "Crear reserva para un residente" else "Nueva reserva",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text("Zona común", style = MaterialTheme.typography.labelLarge)
+                if (state.areas.isEmpty()) {
+                    Text("Todavía no hay zonas comunes configuradas.")
+                } else {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        state.areas.forEach { option ->
                             FilterChip(
-                                selected = selectedArea?.id == area.id,
-                                onClick = { selectedArea = area; slot = "" },
-                                label = { Text(area.name) },
-                                modifier = Modifier.padding(end = 5.dp)
+                                selected = state.areaId == option.id,
+                                onClick = { onArea(option.id) },
+                                label = { Text(option.name) }
                             )
                         }
                     }
-                    if (Session.isAdmin) {
-                        DomuxResidentSearchField(
-                            selectedResident = selectedResident,
-                            onSelectResident = { selectedResident = it }
-                        )
-                    }
-                    ReservationCalendarPicker(
-                        date,
-                        blockedDates,
-                        { year, month -> calendarMonth = year to month },
-                        { date = it; slot = "" }
+                }
+                if (area != null) ZoneRules(area, admin)
+                if (admin) {
+                    DomuxResidentSearchField(
+                        selectedResident = state.resident,
+                        onSelectResident = onResident
                     )
-                    if (attemptedCreate && date.isBlank()) {
-                        Text("La fecha es obligatoria.", color = MaterialTheme.colorScheme.error)
+                    if (attempted && state.resident == null) {
+                        Text("Selecciona el residente.", color = MaterialTheme.colorScheme.error)
                     }
-                    if (date.isNotBlank()) {
-                        Text("Horarios disponibles", style = MaterialTheme.typography.titleSmall)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            reservationSlots.forEach { time ->
-                                val available = availability?.availableSlots?.contains(time) ?: false
+                }
+                ReservationDatePicker(
+                    value = state.date,
+                    firstDate = firstDate,
+                    lastDate = lastDate,
+                    unavailable = state.fullDates + state.closedDates,
+                    onMonthChanged = onMonth,
+                    onValueChange = onDate
+                )
+                Text(
+                    if (lastDate != null) {
+                        "Puedes reservar del ${humanDate(firstDate)} al ${humanDate(lastDate)}. Los días sin horarios libres o cerrados por mantenimiento aparecen bloqueados."
+                    } else {
+                        "Los días sin horarios libres o cerrados por mantenimiento aparecen bloqueados."
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (attempted && state.date.isBlank()) {
+                    Text("La fecha es obligatoria.", color = MaterialTheme.colorScheme.error)
+                }
+                if (state.date.isNotBlank()) {
+                    Text("Horarios", style = MaterialTheme.typography.titleSmall)
+                    when {
+                        state.availabilityLoading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        state.availability?.closed == true -> Text(
+                            "${area?.name ?: "La zona"} está cerrada ese día por mantenimiento. Elige otra fecha.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        else -> FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            state.slots.forEach { time ->
+                                val available = state.availability?.availableSlots?.contains(time) ?: false
                                 FilterChip(
-                                    selected = slot == time,
+                                    selected = state.slot == time,
                                     enabled = available,
-                                    onClick = { slot = time },
+                                    onClick = { onSlot(time) },
                                     label = { Text(if (available) time else "$time · Ocupado") }
                                 )
                             }
                         }
                     }
-                    if (attemptedCreate && slot.isBlank()) {
-                        Text("Selecciona una franja horaria disponible.", color = MaterialTheme.colorScheme.error)
-                    }
-                    if (attemptedCreate && Session.isAdmin && selectedResident == null) {
-                        Text("Selecciona el residente.", color = MaterialTheme.colorScheme.error)
-                    }
-                    Text(
-                        "Máximo 1 reserva por día y 2 reservas por semana por residente.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                }
+                if (attempted && state.slot.isBlank()) {
+                    Text("Selecciona una franja horaria disponible.", color = MaterialTheme.colorScheme.error)
+                }
+                if (capacity != null) {
                     OutlinedTextField(
-                        value = requestMessage,
-                        onValueChange = { requestMessage = it },
-                        label = { Text("Mensaje opcional para administración") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    MediaAttachmentPicker(requestMediaName, { url, type, name ->
-                        requestMediaUrl = url
-                        requestMediaType = type
-                        requestMediaName = name
-                    }, { message = it })
-                    Button(
-                        enabled = !submitting &&
-                            !(Session.isResident && Session.isMinor && !Session.parentalConsent),
-                        onClick = {
-                            attemptedCreate = true
-                            val area = selectedArea
-                            if (area == null || date.isBlank() || slot.isBlank() ||
-                                (Session.isAdmin && selectedResident == null)
-                            ) {
-                                message = "Elige zona, fecha, horario y residente cuando corresponda."
-                                return@Button
-                            }
-                            confirmation = "¿Estás seguro de crear esta reserva?" to {
-                                scope.launch {
-                                    submitting = true
-                                    try {
-                                        val response = RetrofitClient.api.createReservation(
-                                            Session.bearer(),
-                                            CreateReservationRequest(
-                                                area.id, date, slot,
-                                                if (Session.isAdmin) selectedResident?.id else null,
-                                                requestMessage.trim().takeIf(String::isNotEmpty),
-                                                requestMediaUrl,
-                                                requestMediaType
-                                            )
-                                        )
-                                        if (response.isSuccessful) {
-                                            date = ""; slot = ""
-                                            requestMessage = ""
-                                            requestMediaUrl = null
-                                            requestMediaType = null
-                                            requestMediaName = null
-                                            attemptedCreate = false
-                                            message = "Reserva creada exitosamente."
-                                            selectedTab = 0
-                                            load()
-                                        } else {
-                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                        }
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        message = "No se pudo crear la reserva: ${exception.message}"
-                                    } finally {
-                                        submitting = false
-                                    }
-                                }
-                            }
+                        value = attendeesText,
+                        onValueChange = { attendeesText = it.filter(Char::isDigit).take(4) },
+                        label = { Text("¿Cuántas personas asistirán? * (máximo $capacity)") },
+                        isError = attempted && peopleError,
+                        supportingText = {
+                            if (attempted && peopleError) Text("Escribe un número entre 1 y $capacity")
                         },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (submitting) "Guardando..." else "Reservar") }
-                }
-            }
-            }
-        }
-
-        if (selectedTab == 0) {
-        if (Session.isAdmin) {
-            DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Column(
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("Respaldo Legal y Archivo Excel", style = MaterialTheme.typography.titleSmall)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = {
-                                legalBusy = true
-                                legalSuccessMessage = ""
-                                scope.launch {
-                                    try {
-                                        val response = RetrofitClient.api.exportLegalReport(Session.bearer())
-                                        if (response.isSuccessful) {
-                                            val file = response.body()
-                                                ?: error("El servidor devolvió un reporte vacío.")
-                                            saveBase64FileToDownloads(
-                                                context,
-                                                file.fileName,
-                                                file.base64,
-                                                file.mimeType
-                                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                            )
-                                            legalSuccessMessage =
-                                                "Reporte legal guardado exitosamente en Descargas/${file.fileName}."
-                                            message = ""
-                                        } else {
-                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                        }
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        message = "No se pudo guardar el reporte legal: ${exception.message}"
-                                    } finally {
-                                        legalBusy = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Descargar Excel Legal") }
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = {
-                                confirmation =
-                                    "Las reservas finalizadas y las PQRS resueltas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa." to {
-                                        legalBusy = true
-                                        legalSuccessMessage = ""
-                                        scope.launch {
-                                            try {
-                                                val response = RetrofitClient.api.archiveHistory(Session.bearer())
-                                                if (response.isSuccessful) {
-                                                    val file = response.body()
-                                                        ?: error("El servidor devolvió un archivo vacío.")
-                                                    load()
-                                                    saveBase64FileToDownloads(
-                                                        context,
-                                                        file.fileName,
-                                                        file.base64,
-                                                        file.mimeType
-                                                            ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                                    )
-                                                    legalSuccessMessage =
-                                                        "${file.message ?: "Historial archivado."} Archivo guardado en Descargas/${file.fileName}."
-                                                    message = ""
-                                                } else {
-                                                    message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                                }
-                                            } catch (exception: Exception) {
-                                                if (exception is CancellationException) throw exception
-                                                message = "No se pudo archivar y guardar el historial: ${exception.message}"
-                                            } finally {
-                                                legalBusy = false
-                                            }
-                                        }
-                                    }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Archivar finalizadas y limpiar") }
-                    }
-                    FilterChip(
-                        selected = includeArchived,
-                        onClick = { includeArchived = !includeArchived },
-                        label = { Text("Ver archivadas") }
                     )
                 }
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("Mensaje opcional para administración") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                MediaAttachmentPicker(mediaName, { url, type, name ->
+                    mediaUrl = url
+                    mediaType = type
+                    mediaName = name
+                }, { onNotice(it) })
+                Button(
+                    enabled = !state.busy && !minorBlocked && area != null,
+                    onClick = {
+                        attempted = true
+                        val chosen = area
+                        val incomplete = state.date.isBlank() || state.slot.isBlank() ||
+                            (admin && state.resident == null) || peopleError
+                        if (chosen == null || incomplete) {
+                            onNotice("Revisa los datos marcados en rojo.")
+                        } else {
+                            val resident = state.resident
+                            val onBehalf = if (admin && resident != null) " a nombre de ${resident.name}" else ""
+                            onSubmit(
+                                "¿Crear la reserva de ${chosen.name} para el ${humanDate(state.date)}, en la franja ${state.slot}$onBehalf?",
+                                if (capacity != null) people else null,
+                                note.trim().ifEmpty { null },
+                                mediaUrl,
+                                mediaType
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (state.busy) "Guardando..." else "Reservar") }
             }
         }
-        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        LazyColumn(Modifier.weight(1f)) {
-            items(reservations, key = { it.id }) { reservation ->
-                DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
-                        Text("${reservation.date} · ${reservation.timeSlot}")
-                        Text("Residente: ${reservation.residentName.orEmpty()} · ${reservation.apartment.orEmpty()}")
-                        if (reservation.createdByAdministration) {
-                            Text("Creada por administración", style = MaterialTheme.typography.labelSmall)
-                        }
-                        reservation.messages.orEmpty().forEach { item ->
-                            Text(
-                                "${item.authorName ?: item.authorRole} · ${item.createdAt.orEmpty()}",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            if (!item.message.isNullOrBlank()) Text(item.message)
-                            MediaAttachmentChip(item.mediaUrl, item.mediaType)
-                        }
-                        DomuxStatusBadge(
-                            reservation.status.replaceFirstChar(Char::uppercase).replace('_', ' '),
-                            when (reservation.status) {
-                                "aprobada", "activa" -> DomuxBadgeTone.SUCCESS
-                                "rechazada", "cancelada" -> DomuxBadgeTone.ALERT
-                                else -> DomuxBadgeTone.PROGRESS
-                            }
-                        )
-                        if (reservation.requestedByMinor) {
-                            DomuxStatusBadge(
-                                "Menor con autorización parental",
-                                DomuxBadgeTone.PROGRESS
-                            )
-                        }
-                        if (reservation.isArchived) {
-                            DomuxStatusBadge("Archivada en Excel", DomuxBadgeTone.ALERT)
-                        }
-                        if (Session.isAdmin && reservation.status in listOf("pendiente", "activa")) {
-                            Row {
-                                TextButton(onClick = {
-                                    confirmation = "¿Estás seguro de aprobar la reserva?" to {
-                                        scope.launch {
-                                            try {
-                                                val response = RetrofitClient.api.updateReservationStatus(
-                                                    Session.bearer(), reservation.id,
-                                                    UpdateReservationStatusRequest("aprobada")
-                                                )
-                                                message = if (response.isSuccessful) "Reserva aprobada."
-                                                else mensajeDeError(response.code(), response.errorBody()?.string())
-                                                load()
-                                            } catch (exception: Exception) {
-                                                if (exception is CancellationException) throw exception
-                                                message = "No se pudo aprobar: ${exception.message}"
-                                            }
-                                        }
-                                    }
-                                }) { Text("Aprobar") }
-                                TextButton(onClick = {
-                                    confirmation = "¿Estás seguro de rechazar la reserva?" to {
-                                        scope.launch {
-                                            try {
-                                                val response = RetrofitClient.api.updateReservationStatus(
-                                                    Session.bearer(), reservation.id,
-                                                    UpdateReservationStatusRequest("rechazada")
-                                                )
-                                                message = if (response.isSuccessful) "Reserva rechazada."
-                                                else mensajeDeError(response.code(), response.errorBody()?.string())
-                                                load()
-                                            } catch (exception: Exception) {
-                                                if (exception is CancellationException) throw exception
-                                                message = "No se pudo rechazar: ${exception.message}"
-                                            }
-                                        }
-                                    }
-                                }) { Text("Rechazar") }
-                            }
-                        }
-                        if (
-                            Session.isAdmin &&
-                            reservation.status in listOf("pendiente", "activa", "aprobada")
-                        ) {
-                            TextButton(onClick = {
-                                confirmation = "¿Estás seguro de cancelar esta reserva?" to {
-                                    scope.launch {
-                                        try {
-                                            val response = RetrofitClient.api.cancelReservation(
-                                                Session.bearer(), reservation.id
-                                            )
-                                            message = if (response.isSuccessful) "Reserva cancelada."
-                                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                                            load()
-                                        } catch (exception: Exception) {
-                                            if (exception is CancellationException) throw exception
-                                            message = "No se pudo cancelar la reserva: ${exception.message}"
-                                        }
-                                    }
-                                }
-                            }) { Text("Cancelar reserva") }
-                        }
-                        if (
-                            (Session.isResident || Session.isAdmin) &&
-                            reservation.status in listOf("pendiente", "activa", "aprobada")
-                        ) {
-                            var reply by remember(reservation.id) { mutableStateOf("") }
-                            var replyMediaUrl by remember(reservation.id) { mutableStateOf<String?>(null) }
-                            var replyMediaType by remember(reservation.id) { mutableStateOf<String?>(null) }
-                            var replyMediaName by remember(reservation.id) { mutableStateOf<String?>(null) }
-                            OutlinedTextField(
-                                value = reply,
-                                onValueChange = { reply = it },
-                                label = { Text("Mensaje para ${if (Session.isAdmin) "el residente" else "administración"}") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            MediaAttachmentPicker(replyMediaName, { url, type, name ->
-                                replyMediaUrl = url
-                                replyMediaType = type
-                                replyMediaName = name
-                            }, { message = it })
-                            TextButton(onClick = {
-                                if (reply.isBlank() && replyMediaUrl == null) {
-                                    message = "Escribe un mensaje o adjunta un archivo."
-                                    return@TextButton
-                                }
-                                scope.launch {
-                                    try {
-                                        val response = RetrofitClient.api.addReservationMessage(
-                                            Session.bearer(),
-                                            reservation.id,
-                                            AddReservationMessageRequest(
-                                                reply.trim().takeIf(String::isNotEmpty),
-                                                replyMediaUrl,
-                                                replyMediaType
-                                            )
-                                        )
-                                        message = if (response.isSuccessful) "Mensaje enviado."
-                                        else mensajeDeError(response.code(), response.errorBody()?.string())
-                                        if (response.isSuccessful) load()
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        message = "No se pudo enviar el mensaje: ${exception.message}"
-                                    }
-                                }
-                            }) { Text("Enviar mensaje") }
-                        }
-                        if (
-                            Session.isResident &&
-                            reservation.status in listOf("activa", "pendiente", "aprobada") &&
-                            reservation.date > reservationTodayString()
-                        ) {
-                            TextButton(onClick = {
-                                confirmation = "¿Estás seguro de cancelar esta reserva?" to {
-                                    scope.launch {
-                                        try {
-                                            val response = RetrofitClient.api.cancelReservation(Session.bearer(), reservation.id)
-                                            message = if (response.isSuccessful) "Reserva cancelada."
-                                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                                            load()
-                                        } catch (exception: Exception) {
-                                            if (exception is CancellationException) throw exception
-                                            message = "No se pudo cancelar: ${exception.message}"
-                                        }
-                                    }
-                                }
-                            }) { Text("Cancelar") }
-                        }
-                    }
-                }
-            }
-        }
-        }
     }
-    }
+}
 
-    confirmation?.let { (prompt, action) ->
-        DomuxConfirmDialog(
-            title = "¿Estás seguro de confirmar esta acción?",
-            message = prompt,
-            confirmLabel = "Confirmar",
-            danger = prompt.contains("rechazar", ignoreCase = true) ||
-                prompt.contains("cancelar", ignoreCase = true),
-            onConfirm = { confirmation = null; action() },
-            onDismiss = { confirmation = null }
+/** Las reglas de la zona elegida (HU-055), para que quien reserva sepa de antemano qué se le va a pedir. */
+@Composable
+private fun ZoneRules(area: CommonArea, admin: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        zoneRuleLines(area, admin).forEach { line ->
+            Text(
+                "• $line",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun zoneRuleLines(area: CommonArea, admin: Boolean): List<String> {
+    val lines = mutableListOf<String>()
+    val opensAt = area.openTime
+    val closesAt = area.closeTime
+    if (opensAt != null && closesAt != null) {
+        val slotText = if (area.slotMinutes > 0) ", en franjas de ${slotLengthText(area.slotMinutes)}" else ""
+        lines.add("Horario: de $opensAt a $closesAt$slotText.")
+    }
+    area.capacity?.let { lines.add("Aforo máximo: $it personas.") }
+    if (admin) {
+        lines.add("Como administración puedes reservar sin el límite diario ni semanal del residente.")
+    } else {
+        if (area.minAdvanceDays > 0) {
+            lines.add("Se reserva con al menos ${daysText(area.minAdvanceDays)} de anticipación.")
+        }
+        if (area.maxAdvanceDays > 0) {
+            lines.add("Se puede reservar hasta con ${daysText(area.maxAdvanceDays)} de anticipación.")
+        }
+        if (area.weeklyLimit > 0) {
+            val noun = if (area.weeklyLimit == 1) "reserva" else "reservas"
+            lines.add("Máximo ${area.weeklyLimit} $noun por semana (de lunes a domingo) en esta zona, y 1 por día.")
+        }
+    }
+    if (area.cancelDeadlineDays > 0) {
+        lines.add("El residente puede cancelar hasta ${daysText(area.cancelDeadlineDays)} antes de la fecha reservada.")
+    }
+    area.maintenanceWeekday?.let { weekday ->
+        lines.add("Cierra por mantenimiento los ${weekdayPlural(weekday)} (si ese día es festivo, pasa al día siguiente).")
+    }
+    return lines
+}
+
+// ---------------------------------------------------------------------------
+// Calendario de la reserva
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ReservationDatePicker(
+    value: String,
+    firstDate: String,
+    lastDate: String?,
+    unavailable: Set<String>,
+    onMonthChanged: (year: Int, month: Int) -> Unit,
+    onValueChange: (String) -> Unit
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
+        Text(if (value.isBlank()) "Seleccionar fecha" else "Fecha: ${humanDate(value)}")
+    }
+    if (showPicker) {
+        ReservationDateDialog(
+            value = value,
+            firstDate = firstDate,
+            lastDate = lastDate,
+            unavailable = unavailable,
+            onMonthChanged = onMonthChanged,
+            onPicked = { picked ->
+                onValueChange(picked)
+                showPicker = false
+            },
+            onDismiss = { showPicker = false }
         )
+    }
+}
+
+/**
+ * Calendario de Material con los días que no se pueden elegir apagados: los anteriores a
+ * [firstDate], los posteriores a [lastDate], los sin franjas libres y los de mantenimiento.
+ * Los días sin franjas llegan del servidor después de abrirlo; por eso se leen al momento de
+ * dibujar cada día y no al crearlo.
+ */
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun ReservationDateDialog(
+    value: String,
+    firstDate: String,
+    lastDate: String?,
+    unavailable: Set<String>,
+    onMonthChanged: (year: Int, month: Int) -> Unit,
+    onPicked: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val unavailableNow by rememberUpdatedState(unavailable)
+    val selectableDates = remember(firstDate, lastDate) {
+        object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                val day = isoFromUtcMillis(utcTimeMillis)
+                return day >= firstDate && (lastDate == null || day <= lastDate) && day !in unavailableNow
+            }
+
+            override fun isSelectableYear(year: Int): Boolean {
+                val firstYear = firstDate.take(4).toIntOrNull() ?: 0
+                val lastYear = lastDate?.take(4)?.toIntOrNull() ?: Int.MAX_VALUE
+                return year in firstYear..lastYear
+            }
+        }
+    }
+    val pickerState = rememberDatePickerState(
+        initialSelectedDateMillis = utcMillisFromIso(value),
+        initialDisplayedMonthMillis = utcMillisFromIso(value) ?: utcMillisFromIso(firstDate),
+        selectableDates = selectableDates
+    )
+    LaunchedEffect(pickerState.displayedMonthMillis) {
+        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        calendar.timeInMillis = pickerState.displayedMonthMillis
+        onMonthChanged(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1)
+    }
+    val picked = pickerState.selectedDateMillis?.let { isoFromUtcMillis(it) }
+    val canConfirm = picked != null &&
+        picked >= firstDate &&
+        (lastDate == null || picked <= lastDate) &&
+        picked !in unavailable
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                enabled = canConfirm,
+                onClick = { if (picked != null) onPicked(picked) }
+            ) { Text("Aceptar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    ) {
+        DatePicker(state = pickerState)
     }
 }

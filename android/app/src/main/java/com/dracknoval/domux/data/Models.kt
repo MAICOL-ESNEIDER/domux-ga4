@@ -172,6 +172,10 @@ data class ResidentSummary(
 )
 data class ResidentsListResponse(val residents: List<ResidentSummary>?)
 
+/**
+ * Comunicado de la administración. Lleva categoría (HU-058), a veces torre (HU-061) y fecha de
+ * vencimiento (HU-060). Los anteriores a esas historias no traen categoría.
+ */
 data class Announcement(
     val id: Int,
     val title: String,
@@ -181,18 +185,48 @@ data class Announcement(
     val eventDate: String? = null,
     val eventTime: String? = null,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    val category: String? = null,
+    val categoryLabel: String? = null,
+    val towerId: Int? = null,
+    val towerName: String? = null,
+    val expiresAt: String? = null,
+    val isExpired: Boolean = false,
+    // Solo el residente tiene comunicados sin leer (HU-059).
+    val isRead: Boolean = false,
+    // Solo la administración ve cuántos apartamentos lo leyeron y de cuántos (HU-062).
+    val readApartments: Int? = null,
+    val totalApartments: Int? = null
 )
-data class AnnouncementsListResponse(val announcements: List<Announcement>?)
+data class AnnouncementsListResponse(
+    val announcements: List<Announcement>?,
+    val page: Int = 1,
+    val pageSize: Int = 50,
+    val total: Int = 0,
+    val totalPages: Int = 1,
+    // Cuántos comunicados vigentes le faltan por leer al residente.
+    val unreadCount: Int = 0
+)
 data class CreateAnnouncementRequest(
     val title: String,
     val message: String,
+    // Una de las cinco categorías: mantenimiento, urgente, asamblea, seguridad o zonas_comunes.
+    val category: String,
+    // Sin torre, el comunicado es para toda la unidad.
+    val towerId: Int? = null,
+    // Último día vigente (AAAA-MM-DD); sin fecha, nunca vence.
+    val expiresAt: String? = null,
     val eventDate: String? = null,
     val eventTime: String? = null,
     val mediaUrl: String? = null,
     val mediaType: String? = null
 )
 data class CreateAnnouncementResponse(val message: String?, val announcement: Announcement?)
+data class AnnouncementReadResponse(
+    val message: String?,
+    val announcement: Announcement?,
+    val unreadCount: Int = 0
+)
 
 data class Pqrs(
     val id: Int,
@@ -216,7 +250,15 @@ data class Pqrs(
     val satisfactionComment: String? = null,
     val satisfactionUpdatedAt: String? = null,
     val isArchived: Boolean = false,
-    val archivedAt: String? = null
+    val archivedAt: String? = null,
+    // Número único de la PQRS, como «PQRS-2026-000123» (HU-072).
+    val radicado: String? = null,
+    // Semáforo del plazo (HU-073): «verde», «amarillo» o «rojo»; sin valor si ya está resuelta.
+    val semaphore: String? = null,
+    // Días hábiles que faltan para vencer; negativo si ya venció.
+    val daysRemaining: Int? = null,
+    // Último día para responder (AAAA-MM-DD).
+    val dueDate: String? = null
 )
 data class PqrsMessageItem(
     val id: Int,
@@ -266,7 +308,27 @@ data class BatchRespondPqrsResponse(
     val pqrsIds: List<Int>
 )
 
-data class CommonArea(val id: Int, val name: String)
+/**
+ * Zona común con sus reglas de reserva (HU-055): horario, aforo, anticipación, plazo de
+ * cancelación y límite semanal. La administración las ajusta; la app las muestra y las respeta.
+ */
+data class CommonArea(
+    val id: Int,
+    val name: String,
+    val openTime: String? = null,
+    val closeTime: String? = null,
+    val slotMinutes: Int = 0,
+    // Las franjas del día, como «08:00-10:00», según el horario de la zona.
+    val slots: List<String>? = null,
+    // Máximo de personas; sin valor, la zona no lleva aforo.
+    val capacity: Int? = null,
+    val minAdvanceDays: Int = 0,
+    val maxAdvanceDays: Int = 0,
+    val cancelDeadlineDays: Int = 0,
+    val weeklyLimit: Int = 0,
+    // Día de la semana en que cierra por mantenimiento (0 es lunes); sin valor, no cierra.
+    val maintenanceWeekday: Int? = null
+)
 data class CommonAreasListResponse(val areas: List<CommonArea>?)
 data class Reservation(
     val id: Int,
@@ -283,7 +345,12 @@ data class Reservation(
     val messages: List<ReservationMessageItem>? = null,
     val isArchived: Boolean = false,
     val archivedAt: String? = null,
-    val requestedByMinor: Boolean = false
+    val requestedByMinor: Boolean = false,
+    // Cuántas personas asistirán, si quien reservó lo dijo.
+    val attendees: Int? = null,
+    // Último día en que el residente puede cancelar (AAAA-MM-DD) y si todavía está a tiempo.
+    val cancelUntil: String? = null,
+    val canCancel: Boolean = false
 )
 data class ReservationMessageItem(
     val id: Int,
@@ -304,7 +371,8 @@ data class CreateReservationRequest(
     val residentId: Int? = null,
     val message: String? = null,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    val attendees: Int? = null
 )
 data class AddReservationMessageRequest(
     val message: String? = null,
@@ -315,14 +383,19 @@ data class ReservationCalendarResponse(
     val commonAreaId: Int,
     val year: Int,
     val month: Int,
-    val blockedDates: List<String>?
+    // Días en que ya no queda ninguna franja libre.
+    val blockedDates: List<String>?,
+    // Días en que la zona cierra por mantenimiento.
+    val closedDates: List<String>? = null
 )
 data class CreateReservationResponse(val message: String?, val reservation: Reservation?)
 data class ReservationAvailabilityResponse(
     val commonAreaId: Int,
     val date: String,
     val availableSlots: List<String>?,
-    val occupiedSlots: List<String>?
+    val occupiedSlots: List<String>?,
+    // La zona está cerrada ese día por mantenimiento.
+    val closed: Boolean = false
 )
 data class UpdateReservationStatusRequest(val status: String)
 

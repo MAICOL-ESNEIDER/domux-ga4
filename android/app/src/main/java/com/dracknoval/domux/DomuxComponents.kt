@@ -141,12 +141,17 @@ fun DomuxConfirmDialog(
     }
 }
 
+/**
+ * Tarjeta de un módulo del inicio. [badge] es un número pendiente (por ejemplo, los comunicados
+ * sin leer): si es mayor que cero se dibuja en la esquina de la tarjeta.
+ */
 @Composable
 fun DomuxBentoCard(
     title: String,
     detail: String,
     icon: String,
     modifier: Modifier = Modifier,
+    badge: Int = 0,
     onClick: () -> Unit
 ) {
     Surface(
@@ -159,13 +164,33 @@ fun DomuxBentoCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .background(Color(0xFF152C4A), RoundedCornerShape(13.dp)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Text(icon, color = Color(0xFF38BDF8), fontSize = 19.sp)
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(Color(0xFF152C4A), RoundedCornerShape(13.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(icon, color = Color(0xFF38BDF8), fontSize = 19.sp)
+                }
+                if (badge > 0) {
+                    Surface(
+                        color = Color(0xFF450A0A),
+                        contentColor = Color(0xFFF87171),
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            "${badge.coerceAtMost(99)} sin leer",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelMedium)

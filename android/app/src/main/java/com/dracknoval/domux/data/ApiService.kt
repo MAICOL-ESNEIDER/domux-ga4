@@ -110,20 +110,39 @@ interface ApiService {
         @Body body: SetPinRequest
     ): Response<CreateUserResponse>
 
+    // Con id devuelve solo a ese residente: así una pantalla que llega con el residente ya elegido
+    // lo encuentra aunque no esté entre los primeros 30 de la lista.
     @GET("api/residents")
     suspend fun getResidents(
         @Header("Authorization") auth: String,
-        @Query("search") search: String? = null
+        @Query("search") search: String? = null,
+        @Query("id") id: Int? = null
     ): Response<ResidentsListResponse>
 
+    // Vigentes por defecto; con archived = "true", los que ya pasaron su vencimiento (HU-060).
+    // unread = "true" deja solo los que el residente no ha abierto (HU-059).
     @GET("api/announcements")
-    suspend fun getAnnouncements(@Header("Authorization") auth: String): Response<AnnouncementsListResponse>
+    suspend fun getAnnouncements(
+        @Header("Authorization") auth: String,
+        @Query("archived") archived: String? = null,
+        @Query("category") category: String? = null,
+        @Query("unread") unread: String? = null,
+        @Query("page") page: Int? = null,
+        @Query("pageSize") pageSize: Int? = null
+    ): Response<AnnouncementsListResponse>
 
     @POST("api/announcements")
     suspend fun createAnnouncement(
         @Header("Authorization") auth: String,
         @Body body: CreateAnnouncementRequest
     ): Response<CreateAnnouncementResponse>
+
+    // El residente abrió el comunicado: queda leído (HU-059) y cuenta para la administración (HU-062).
+    @POST("api/announcements/{id}/read")
+    suspend fun markAnnouncementRead(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<AnnouncementReadResponse>
 
     // Retira el anuncio: deja de verse en la app, pero no se borra (TT-029).
     @PUT("api/announcements/{id}/retire")
