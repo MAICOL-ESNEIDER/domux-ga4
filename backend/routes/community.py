@@ -125,7 +125,7 @@ def archive_history():
 
 
 def _media_and_event_error(data, date_key, time_key):
-    error = validate_media_fields(data)
+    error = validate_media_fields(data, allow_document=True)
     if error:
         return error
     event_date = data.get(date_key)
@@ -507,7 +507,7 @@ def respond_pqrs(pqrs_id):
     response_text = data.get("adminResponse")
     if not isinstance(response_text, str) or not response_text.strip():
         return error_response(400, "Escribe una respuesta antes de actualizar la PQRS.")
-    if error := validate_media_fields(data):
+    if error := validate_media_fields(data, allow_document=True):
         return error_response(400, error)
 
     pqrs = db.session.get(Pqrs, pqrs_id)
@@ -557,7 +557,7 @@ def add_pqrs_message(pqrs_id):
     data, failure = json_body()
     if failure:
         return failure
-    if error := validate_media_fields(data):
+    if error := validate_media_fields(data, allow_document=True):
         return error_response(400, error)
     message = data.get("message")
     if message is not None and not isinstance(message, str):
@@ -663,7 +663,7 @@ def respond_pqrs_batch():
         return error_response(400, "El estado debe ser 'en_proceso' o 'resuelta'.")
     if not isinstance(message, str) or not message.strip():
         return error_response(400, "Escribe una respuesta para todas las PQRS seleccionadas.")
-    if error := validate_media_fields(data):
+    if error := validate_media_fields(data, allow_document=True):
         return error_response(400, error)
 
     pqrs_items = Pqrs.query.filter(Pqrs.id.in_(ids)).all()
@@ -973,7 +973,7 @@ def create_reservation():
     message = data.get("message")
     if message is not None and not isinstance(message, str):
         return error_response(400, "El mensaje debe ser texto.")
-    if error := validate_media_fields(data):
+    if error := validate_media_fields(data, allow_document=True):
         return error_response(400, error)
     resident = _resident_for_write(data)
     if resident is None:
@@ -1099,7 +1099,7 @@ def add_reservation_message(res_id):
     data, failure = json_body()
     if failure:
         return failure
-    if error := validate_media_fields(data):
+    if error := validate_media_fields(data, allow_document=True):
         return error_response(400, error)
     message = data.get("message")
     if message is not None and not isinstance(message, str):

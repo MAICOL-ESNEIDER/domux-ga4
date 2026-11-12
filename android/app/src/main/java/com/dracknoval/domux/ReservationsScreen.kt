@@ -323,11 +323,17 @@ private fun ReservationReplyBox(
         label = { Text("Mensaje para ${if (Session.isAdmin) "el residente" else "administración"}") },
         modifier = Modifier.fillMaxWidth()
     )
-    MediaAttachmentPicker(mediaName, { url, type, name ->
-        mediaUrl = url
-        mediaType = type
-        mediaName = name
-    }, { onNotice(it) })
+    MediaAttachmentPicker(
+        mediaName,
+        { url, type, name ->
+            mediaUrl = url
+            mediaType = type
+            mediaName = name
+        },
+        { onNotice(it) },
+        kinds = AttachmentKinds.MEDIA_AND_PDF,
+        onClear = { mediaUrl = null; mediaType = null; mediaName = null }
+    )
     TextButton(
         enabled = !busy,
         onClick = {
@@ -504,11 +510,17 @@ private fun ReservationForm(
                     label = { Text("Mensaje opcional para administración") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                MediaAttachmentPicker(mediaName, { url, type, name ->
-                    mediaUrl = url
-                    mediaType = type
-                    mediaName = name
-                }, { onNotice(it) })
+                MediaAttachmentPicker(
+                    mediaName,
+                    { url, type, name ->
+                        mediaUrl = url
+                        mediaType = type
+                        mediaName = name
+                    },
+                    { onNotice(it) },
+                    kinds = AttachmentKinds.MEDIA_AND_PDF,
+                    onClear = { mediaUrl = null; mediaType = null; mediaName = null }
+                )
                 Button(
                     enabled = !state.busy && !minorBlocked && area != null,
                     onClick = {

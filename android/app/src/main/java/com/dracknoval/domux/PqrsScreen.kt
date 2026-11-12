@@ -399,11 +399,17 @@ private fun PqrsCard(
                             )
                         }
                     }
-                    MediaAttachmentPicker(responseMediaName, { url, type, name ->
-                        responseMediaUrl = url
-                        responseMediaType = type
-                        responseMediaName = name
-                    }, { viewModel.showNotice(it) })
+                    MediaAttachmentPicker(
+                        responseMediaName,
+                        { url, type, name ->
+                            responseMediaUrl = url
+                            responseMediaType = type
+                            responseMediaName = name
+                        },
+                        { viewModel.showNotice(it) },
+                        kinds = AttachmentKinds.MEDIA_AND_PDF,
+                        onClear = { responseMediaUrl = null; responseMediaType = null; responseMediaName = null }
+                    )
                     Button(
                         enabled = responseText.isNotBlank() && !busy,
                         onClick = {
@@ -423,11 +429,17 @@ private fun PqrsCard(
                         label = { Text("Escribe un mensaje para continuar la conversación") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    MediaAttachmentPicker(replyMediaName, { url, type, name ->
-                        replyMediaUrl = url
-                        replyMediaType = type
-                        replyMediaName = name
-                    }, { viewModel.showNotice(it) })
+                    MediaAttachmentPicker(
+                        replyMediaName,
+                        { url, type, name ->
+                            replyMediaUrl = url
+                            replyMediaType = type
+                            replyMediaName = name
+                        },
+                        { viewModel.showNotice(it) },
+                        kinds = AttachmentKinds.MEDIA_AND_PDF,
+                        onClear = { replyMediaUrl = null; replyMediaType = null; replyMediaName = null }
+                    )
                     Button(
                         enabled = (replyText.isNotBlank() || replyMediaUrl != null) && !busy,
                         onClick = {
@@ -515,11 +527,17 @@ private fun PqrsBatchDialog(state: PqrsUiState, viewModel: PqrsViewModel, onClos
                         )
                     }
                 }
-                MediaAttachmentPicker(mediaName, { url, type, name ->
-                    mediaUrl = url
-                    mediaType = type
-                    mediaName = name
-                }, { viewModel.showNotice(it) })
+                MediaAttachmentPicker(
+                    mediaName,
+                    { url, type, name ->
+                        mediaUrl = url
+                        mediaType = type
+                        mediaName = name
+                    },
+                    { viewModel.showNotice(it) },
+                    kinds = AttachmentKinds.MEDIA_AND_PDF,
+                    onClear = { mediaUrl = null; mediaType = null; mediaName = null }
+                )
             }
         },
         confirmButton = {
@@ -640,11 +658,17 @@ private fun PqrsForm(
                 )
                 DatePickerField("Fecha del incidente", incidentDate, { incidentDate = it })
                 TimePickerField("Hora del incidente", incidentTime, { incidentTime = it })
-                MediaAttachmentPicker(mediaName, { url, type, name ->
-                    mediaUrl = url
-                    mediaType = type
-                    mediaName = name
-                }, { viewModel.showNotice(it) })
+                MediaAttachmentPicker(
+                    mediaName,
+                    { url, type, name ->
+                        mediaUrl = url
+                        mediaType = type
+                        mediaName = name
+                    },
+                    { viewModel.showNotice(it) },
+                    kinds = AttachmentKinds.MEDIA_AND_PDF,
+                    onClear = { mediaUrl = null; mediaType = null; mediaName = null }
+                )
                 Button(
                     enabled = !state.busy && !minorBlocked,
                     onClick = {

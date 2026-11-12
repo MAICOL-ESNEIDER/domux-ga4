@@ -92,68 +92,6 @@ fun TimePickerField(label: String, value: String, onValueChange: (String) -> Uni
     }
 }
 
-@Composable
-fun MediaAttachmentPicker(
-    attachmentName: String?,
-    onAttachment: (mediaUrl: String, mediaType: String, fileName: String) -> Unit,
-    onError: (String) -> Unit
-) {
-    MediaAttachmentPickerFiltered(attachmentName, onAttachment, null, onError)
-}
-
-@Composable
-fun MediaAttachmentPicker(
-    attachmentName: String?,
-    onAttachment: (mediaUrl: String, mediaType: String, fileName: String) -> Unit,
-    mimeTypeFilter: String,
-    onError: (String) -> Unit
-) {
-    MediaAttachmentPickerFiltered(attachmentName, onAttachment, mimeTypeFilter, onError)
-}
-
-@Composable
-private fun MediaAttachmentPickerFiltered(
-    attachmentName: String?,
-    onAttachment: (mediaUrl: String, mediaType: String, fileName: String) -> Unit,
-    mimeTypeFilter: String?,
-    onError: (String) -> Unit
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                try {
-                    val mimeType = context.contentResolver.getType(uri).orEmpty()
-                    val type = when {
-                        mimeType.startsWith("image/") -> "image"
-                        mimeType.startsWith("video/") -> "video"
-                        mimeType.startsWith("audio/") -> "audio"
-                        else -> null
-                    }
-                    if (type == null) {
-                        onError("Selecciona una imagen, video o audio.")
-                    } else {
-                        val encoded = withContext(Dispatchers.IO) { readAsBase64(context, uri) }
-                        val dataUrl = "data:$mimeType;base64,$encoded"
-                        onAttachment(dataUrl, type, uri.lastPathSegment ?: "Adjunto")
-                    }
-                } catch (exception: Exception) {
-                    onError("No se pudo leer el adjunto: ${exception.message}")
-                }
-            }
-        }
-    }
-    Column {
-        Button(onClick = { launcher.launch(mimeTypeFilter ?: "*/*") }) {
-            Text(if (attachmentName == null) "Adjuntar imagen, video o audio" else "Cambiar adjunto")
-        }
-        if (attachmentName != null) {
-            Text("Adjunto: $attachmentName", color = MaterialTheme.colorScheme.secondary)
-        }
-    }
-}
-
 fun saveBase64FileToDownloads(
     context: android.content.Context,
     fileName: String,
@@ -245,23 +183,3 @@ fun DomuxCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
         content = content
     )
 }
-
-private fun readAsBase64(context: android.content.Context, uri: Uri): String {
-    val input = context.contentResolver.openInputStream(uri)
-        ?: error("El archivo seleccionado no está disponible")
-    input.use { stream ->
-        val output = ByteArrayOutputStream()
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var total = 0
-        while (true) {
-            val count = stream.read(buffer)
-            if (count < 0) break
-            total += count
-            require(total <= MAX_ATTACHMENT_BYTES) { "El adjunto debe pesar máximo 5 MB" }
-            output.write(buffer, 0, count)
-        }
-        return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
-    }
-}
-
-private const val MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024

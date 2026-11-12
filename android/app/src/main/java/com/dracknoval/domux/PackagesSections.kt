@@ -491,7 +491,9 @@ fun PackageRegistrationSection(
                         mediaType = type
                         mediaName = name
                     },
-                    onMessage
+                    onMessage,
+                    kinds = AttachmentKinds.PHOTO,
+                    onClear = { mediaUrl = null; mediaType = null; mediaName = null }
                 )
                 Button(
                     onClick = {

@@ -369,6 +369,8 @@ class WebAnnouncementPublishTests(WebAnnouncementCase):
             self.assertIn(f">{tower}</option>", body)
         self.assertIn(f'min="{colombia_today().isoformat()}"', body)
         self.assertIn('accept="image/png,image/jpeg,image/webp,video/mp4', body)
+        self.assertIn(',application/pdf"', body)
+        self.assertIn("Foto, video, audio o PDF (opcional)", body)
         self.assertIn("Publicar comunicado", body)
         self.assertIn('data-confirm="¿Publicar el comunicado?', body)
         self.assertRegex(body, r'<input id="title" name="title"[^>]*required')
@@ -432,20 +434,29 @@ class WebAnnouncementPublishTests(WebAnnouncementCase):
         self.assertEqual(response.status_code, 302)
         self.assertIsNone(Announcement.query.one().media_url)
 
-    def test_a_file_that_is_not_a_photo_a_video_or_an_audio_is_refused_and_nothing_is_lost(self):
+    def test_a_file_that_is_not_a_photo_a_video_an_audio_or_a_pdf_is_refused_and_nothing_is_lost(self):
         for name, content in (
             ("foto.png", b"<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>"),
             ("pagina.png", b"<html><script>alert(1)</script></html>"),
-            ("documento.pdf", b"%PDF-1.4 contenido"),
+            ("documento.pdf", b"PK\x03\x04 un .docx con nombre de PDF"),
             ("vacio.png", b"x"),
         ):
             with self.subTest(name=name):
                 response = self.publish({"title": "No se pierde"}, media=(name, content))
                 body = self.text(response)
                 self.assertEqual(response.status_code, 400)
-                self.assertIn("no es una imagen, un video ni un audio", body)
+                self.assertIn("no es una imagen, un video, un audio ni un PDF", body)
                 self.assertIn('value="No se pierde"', body)
                 self.assertEqual(Announcement.query.count(), 0)
+
+    def test_a_pdf_is_published_as_a_document(self):
+        # Por ejemplo el acta de la asamblea: se reconoce por sus primeros bytes, no por el nombre.
+        response = self.publish({"title": "Acta de la asamblea"}, media=("acta.bin", b"%PDF-1.7 acta"))
+
+        self.assertEqual(response.status_code, 302)
+        announcement = Announcement.query.one()
+        self.assertEqual(announcement.media_type, "document")
+        self.assertTrue(announcement.media_url.startswith("data:application/pdf;base64,"))
 
     def test_a_file_that_weighs_too_much_is_refused(self):
         response = self.publish(media=("enorme.png", PNG + b"0" * uploads.MAX_MEDIA_BYTES))
@@ -585,6 +596,27 @@ class WebAnnouncementAttachmentTests(WebAnnouncementCase):
                 item = self.add("Raro", media=media, media_type="image" if media else None)
                 self.assertEqual(self.client.get(f"/web/comunicados/{item.id}/adjunto").status_code, 404)
 
+    def test_a_pdf_is_offered_for_download_and_never_opened_inside_the_web(self):
+        pdf = b"%PDF-1.7 acta"
+        item = self.add("Acta", media="data:application/pdf;base64," + base64.b64encode(pdf).decode(), media_type="document")
+
+        body = self.page(f"/web/comunicados/{item.id}")
+        response = self.client.get(f"/web/comunicados/{item.id}/adjunto")
+
+        self.assertIn("Descargar el documento PDF", body)
+        self.assertNotIn(f'src="/web/comunicados/{item.id}/adjunto"', body)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/pdf")
+        self.assertEqual(response.data, pdf)
+        self.assertEqual(response.headers["Content-Disposition"], 'attachment; filename="adjunto.pdf"')
+        self.assertIn("sandbox", response.headers["Content-Security-Policy"])
+
+    def test_a_pdf_label_on_something_that_is_not_a_pdf_is_not_served(self):
+        fake = "data:application/pdf;base64," + base64.b64encode(b"<html><script>x()</script></html>").decode()
+        item = self.add("Falso", media=fake, media_type="document")
+
+        self.assertEqual(self.client.get(f"/web/comunicados/{item.id}/adjunto").status_code, 404)
+
     def test_a_retired_or_unknown_announcement_has_no_attachment(self):
         item = self.add("Con foto", media=PHOTO, media_type="image")
         self.post(f"/web/comunicados/{item.id}/retirar")
@@ -627,6 +659,15 @@ class UploadReadingTests(unittest.TestCase):
         upload = FileStorage(stream=io.BytesIO(PNG), filename="foto.png")
 
         self.assertEqual(uploads.read_media(upload), (PHOTO, "image"))
+
+    def test_a_pdf_is_read_only_where_documents_are_allowed(self):
+        from werkzeug.datastructures import FileStorage
+
+        pdf = b"%PDF-1.4 documento"
+        allowed = uploads.read_media(FileStorage(stream=io.BytesIO(pdf), filename="a.pdf"), allow_document=True)
+        self.assertEqual(allowed, ("data:application/pdf;base64," + base64.b64encode(pdf).decode(), "document"))
+        with self.assertRaises(uploads.UploadError):
+            uploads.read_media(FileStorage(stream=io.BytesIO(pdf), filename="a.pdf"))
 
     def test_no_file_chosen_is_not_an_error(self):
         from werkzeug.datastructures import FileStorage

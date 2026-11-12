@@ -3,6 +3,7 @@
 import re
 from datetime import datetime
 
+from services.media import check_attachment
 from time_utils import colombia_today
 
 PIN_REGEX = re.compile(r"[0-9]{4}")
@@ -124,15 +125,30 @@ def validate_time(time_str):
     return None
 
 
-def validate_media_fields(data):
+def validate_media_fields(data, allow_document=False):
+    """Revisa el adjunto de una solicitud (``mediaType`` y ``mediaUrl``); devuelve el error o None.
+
+    El archivo se reconoce por sus primeros bytes y no puede pesar más de 6 MB. Si está bien, deja en
+    ``data["mediaUrl"]`` el adjunto con su tipo real, que es lo que se guarda. ``allow_document``
+    permite además un PDF («document»): solo en PQRS, reservas y comunicados.
+    """
     media_type = data.get("mediaType")
     media_url = data.get("mediaUrl")
-    if media_type is not None and media_type not in MEDIA_TYPES:
-        return "El tipo de contenido multimedia debe ser image, video o audio."
+    allowed = MEDIA_TYPES + ("document",) if allow_document else MEDIA_TYPES
+    if media_type is not None and media_type not in allowed:
+        if media_type == "document":
+            return "Aquí solo se pueden adjuntar fotos, videos o audios."
+        kinds = "image, video, audio o document" if allow_document else "image, video o audio"
+        return f"El tipo de contenido multimedia debe ser {kinds}."
     if media_type and not media_url:
         return "Debes proporcionar mediaUrl cuando indicas mediaType."
     if media_url and not media_type:
         return "Debes indicar mediaType cuando proporcionas mediaUrl."
+    if media_url:
+        normalized, error = check_attachment(media_url, media_type, allow_document)
+        if error:
+            return error
+        data["mediaUrl"] = normalized
     return None
 
 

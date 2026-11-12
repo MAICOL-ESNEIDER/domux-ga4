@@ -4,6 +4,8 @@ import hashlib
 
 from flask import Response, abort, flash, request
 
+from services.media import PDF_MIME
+
 #: Política de seguridad de un archivo adjunto: no puede cargar ni ejecutar nada, aunque alguien
 #: haya guardado como «imagen» otra cosa. (GitHub entrega así el contenido de los usuarios.)
 FILE_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
@@ -51,7 +53,7 @@ def fetch_all(api, path, key, max_pages=20, **params):
 
 
 def file_response(found):
-    """La respuesta con un adjunto, o un 404 si no existe o no es una imagen, un video o un audio.
+    """La respuesta con un adjunto, o un 404 si no existe o no es una imagen, un video, un audio o un PDF.
 
     ``found`` es lo que entregan los servicios: ``(bytes, tipo)`` o None. La respuesta lleva una
     política de seguridad propia (sin scripts, sin cargar nada y en una caja aislada) y se puede pedir
@@ -61,6 +63,9 @@ def file_response(found):
         abort(404)
     raw, mime = found
     response = Response(raw, mimetype=mime)
+    if mime == PDF_MIME:
+        # Un PDF puede traer formularios o código: no se abre dentro de la web, se descarga.
+        response.headers["Content-Disposition"] = 'attachment; filename="adjunto.pdf"'
     response.set_etag(hashlib.sha256(raw).hexdigest())
     response.headers["Content-Security-Policy"] = FILE_POLICY
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"

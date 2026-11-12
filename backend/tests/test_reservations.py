@@ -1,3 +1,4 @@
+import base64
 import unittest
 from datetime import date, timedelta
 
@@ -93,7 +94,7 @@ class ReservationWorkflowTests(ReservationTestCase):
     def test_reservation_request_is_pending_and_optional_message_is_saved(self):
         response = self.create_request(
             message="Necesito confirmar el depósito.",
-            mediaUrl="data:image/png;base64,AA==",
+            mediaUrl="data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nfoto").decode(),
             mediaType="image",
         )
         self.assertEqual(response.status_code, 201)

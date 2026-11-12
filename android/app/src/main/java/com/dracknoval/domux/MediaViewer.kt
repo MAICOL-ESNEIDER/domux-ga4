@@ -3,7 +3,9 @@ package com.dracknoval.domux
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfRenderer
 import android.media.MediaPlayer
+import android.os.ParcelFileDescriptor
 import android.util.Base64
 import android.widget.MediaController
 import android.widget.VideoView
@@ -15,6 +17,8 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,7 +56,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -67,14 +74,15 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Visor de los adjuntos que llegan del servidor (fotos, videos y audios de PQRS, reservas,
- * comunicados, paquetes y visitas).
+ * Visor de los adjuntos que llegan del servidor (fotos, videos, audios y documentos PDF de PQRS,
+ * reservas, comunicados, paquetes y visitas).
  *
  * El servidor entrega cada adjunto como «data:image/jpeg;base64,…». Aquí se separa, se muestra la
  * foto en miniatura (se toca para verla en grande y acercarla con dos dedos), el video se abre en
- * pantalla completa y el audio tiene su reproductor. Nada se guarda en la galería ni en Descargas:
- * un video o un audio se escribe en la carpeta temporal privada de la app solo mientras se
- * reproduce y se borra al cerrar (ver [AppTempFiles]).
+ * pantalla completa, el audio tiene su reproductor y el PDF se lee página por página dentro de la
+ * app. Nada se guarda en la galería ni en Descargas: un video, un audio o un PDF se escribe en la
+ * carpeta temporal privada de la app solo mientras está abierto y se borra al cerrar (ver
+ * [AppTempFiles]).
  */
 
 /** Un adjunto ya separado en su tipo (por ejemplo «image/jpeg») y sus bytes. */
@@ -105,7 +113,8 @@ private fun extensionFor(mimeType: String): String = when (mimeType) {
     "video/mp4" -> "mp4"
     "video/3gpp" -> "3gp"
     "video/webm" -> "webm"
-    "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/aac" -> "m4a"
+    "audio/mp4", "audio/m4a", "audio/x-m4a" -> "m4a"
+    "audio/aac", "audio/x-aac" -> "aac"
     "audio/mpeg", "audio/mp3" -> "mp3"
     "audio/ogg", "audio/opus" -> "ogg"
     "audio/wav", "audio/x-wav" -> "wav"
@@ -134,7 +143,7 @@ private fun decodeBitmap(bytes: ByteArray, maxSide: Int): Bitmap? {
 }
 
 /** «1:05» a partir de milisegundos. */
-private fun clockText(milliseconds: Int): String {
+internal fun clockText(milliseconds: Int): String {
     val seconds = (milliseconds / 1000).coerceAtLeast(0)
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
@@ -147,8 +156,8 @@ private sealed interface Prepared<out T> {
 }
 
 /**
- * Muestra un adjunto según su tipo: «image», «video» o «audio». [description] es lo que oye
- * quien usa el lector de pantalla (por ejemplo «Foto del paquete»).
+ * Muestra un adjunto según su tipo: «image», «video», «audio» o «document» (PDF). [description]
+ * es lo que oye quien usa el lector de pantalla (por ejemplo «Foto del paquete»).
  */
 @Composable
 fun MediaAttachment(mediaUrl: String?, mediaType: String?, description: String = "Foto adjunta") {
@@ -157,6 +166,7 @@ fun MediaAttachment(mediaUrl: String?, mediaType: String?, description: String =
         "image" -> ImageAttachment(mediaUrl, description)
         "video" -> VideoAttachment(mediaUrl)
         "audio" -> AudioAttachment(mediaUrl)
+        "document" -> DocumentAttachment(mediaUrl)
         else -> AttachmentNotice("Este adjunto no se puede mostrar en la app.")
     }
 }
@@ -472,6 +482,178 @@ private fun AudioAttachment(dataUrl: String) {
                 else -> clockText(duration)
             },
             style = MaterialTheme.typography.labelMedium
+        )
+    }
+}
+
+// --- Documentos PDF -------------------------------------------------------------------------
+
+/** Tarjeta del PDF adjunto; al tocarla se abre dentro de la app, página por página. */
+@Composable
+private fun DocumentAttachment(dataUrl: String) {
+    var open by remember(dataUrl) { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .widthIn(max = 320.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClickLabel = "Abrir el documento") { open = true }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(painterResource(R.drawable.ic_description), contentDescription = null, modifier = Modifier.size(28.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Documento PDF", style = MaterialTheme.typography.titleSmall)
+            Text("Toca para leerlo", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    if (open) PdfViewerDialog(dataUrl) { open = false }
+}
+
+/**
+ * Un PDF abierto desde la carpeta temporal. El lector de Android solo deja abrir una página a la
+ * vez, así que dibujar y cerrar van por turnos; al cerrar se borra el archivo.
+ */
+private class OpenedPdf(private val file: File) {
+    private val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    private val renderer = try {
+        PdfRenderer(descriptor)
+    } catch (exception: Exception) {
+        descriptor.close()
+        file.delete()
+        throw exception
+    }
+    private val lock = Any()
+    private var closed = false
+
+    val pageCount: Int = renderer.pageCount
+
+    /** La página [index] dibujada con [width] píxeles de ancho; null si ya se cerró o falla. */
+    fun render(index: Int, width: Int): Bitmap? {
+        synchronized(lock) {
+            if (closed) return null
+            return try {
+                val page = renderer.openPage(index)
+                try {
+                    val height = (width.toFloat() * page.height / page.width).toInt().coerceAtLeast(1)
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    bitmap.eraseColor(android.graphics.Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    bitmap
+                } finally {
+                    page.close()
+                }
+            } catch (exception: Exception) {
+                null
+            }
+        }
+    }
+
+    fun close() {
+        synchronized(lock) {
+            if (closed) return
+            closed = true
+            try {
+                renderer.close()
+            } catch (exception: Exception) {
+                // Si no abrió bien no hay nada más que cerrar.
+            }
+            descriptor.close()
+            file.delete()
+        }
+    }
+}
+
+/** El PDF en pantalla completa. Cada página se puede tocar para verla en grande y acercarla. */
+@Composable
+private fun PdfViewerDialog(dataUrl: String, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val document by produceState<Prepared<OpenedPdf>>(Prepared.Loading, dataUrl) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                decodeDataUrl(dataUrl)?.let { Prepared.Ready(OpenedPdf(writeTemp(context, it))) } ?: Prepared.Failed
+            } catch (exception: Exception) {
+                Prepared.Failed
+            }
+        }
+    }
+    DisposableEffect(document) {
+        val opened = document.let { if (it is Prepared.Ready) it.value else null }
+        onDispose { opened?.close() }
+    }
+    val pageWidth = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }.coerceAtMost(1440)
+    var zoomed by remember { mutableStateOf<Bitmap?>(null) }
+    FullScreenViewer(onClose) {
+        when (val current = document) {
+            is Prepared.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            is Prepared.Failed -> Text(
+                "No se pudo abrir el documento.",
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center)
+            )
+            is Prepared.Ready -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 72.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(current.value.pageCount) { index ->
+                    PdfPage(current.value, index, current.value.pageCount, pageWidth) { zoomed = it }
+                }
+            }
+        }
+    }
+    zoomed?.let { page -> ZoomedPageDialog(page) { zoomed = null } }
+}
+
+@Composable
+private fun PdfPage(document: OpenedPdf, index: Int, total: Int, width: Int, onZoom: (Bitmap) -> Unit) {
+    val page by produceState<Prepared<Bitmap>>(Prepared.Loading, document, index) {
+        value = withContext(Dispatchers.IO) { document.render(index, width)?.let { Prepared.Ready(it) } ?: Prepared.Failed }
+    }
+    when (val current = page) {
+        is Prepared.Loading -> Box(
+            Modifier
+                .fillMaxWidth()
+                .height(240.dp),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
+        is Prepared.Failed -> Text("No se pudo mostrar la página ${index + 1}.", color = Color.White)
+        is Prepared.Ready -> Image(
+            bitmap = current.value.asImageBitmap(),
+            contentDescription = "Página ${index + 1} de $total. Toca para verla en grande.",
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClickLabel = "Ver la página en grande") { onZoom(current.value) }
+        )
+    }
+}
+
+/** Una página del PDF en grande: se acerca y se mueve con dos dedos. */
+@Composable
+private fun ZoomedPageDialog(page: Bitmap, onClose: () -> Unit) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val zoom = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 5f)
+        offset = if (scale == 1f) Offset.Zero else offset + panChange
+    }
+    FullScreenViewer(onClose) {
+        Image(
+            bitmap = page.asImageBitmap(),
+            contentDescription = "Página del documento",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
+                    translationY = offset.y
+                }
+                .transformable(zoom)
         )
     }
 }

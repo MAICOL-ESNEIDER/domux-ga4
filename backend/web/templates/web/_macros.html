@@ -74,8 +74,14 @@
 </nav>
 {%- endmacro %}
 
-{# Un adjunto (foto, video o audio) que se pide aparte a la web: «url» es la ruta que lo entrega y «kind», su tipo. #}
+{# Un adjunto (foto, video, audio o PDF) que se pide aparte a la web: «url» es la ruta que lo entrega y «kind», su tipo. El PDF no se abre en la página: se descarga. #}
 {% macro attachment(url, kind, alt="Foto adjunta") -%}
+{% if kind == "document" %}
+<p class="attachment attachment-document">
+  <a href="{{ url }}" download>Descargar el documento PDF</a>
+  <span class="small">Se guarda en tu equipo; ábrelo con tu lector de PDF.</span>
+</p>
+{% else %}
 <figure class="attachment">
   {% if kind == "video" %}
   <video controls preload="metadata" src="{{ url }}">Este navegador no puede reproducir el video.</video>
@@ -88,6 +94,7 @@
     <a href="{{ url }}" target="_blank" rel="noopener">Abrir {{ {"video": "el video", "audio": "el audio"}.get(kind, "la foto") }} en otra pestaña</a>
   </figcaption>
 </figure>
+{% endif %}
 {%- endmacro %}
 
 {# Logo y nombre de la unidad (HU-077) para la barra lateral y el inicio de sesión; sin datos guardados, los de DOMUX. #}

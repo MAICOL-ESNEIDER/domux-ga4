@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Carpetas que DOMUX puede compartir con otras apps (WhatsApp, correo...): solo la temporal de los QR. -->
+<!--
+  Carpetas privadas que DOMUX deja ver a otras apps, solo mientras hace falta:
+  - shared: la imagen del QR que se comparte (WhatsApp, correo...).
+  - capture: donde la app de cámara deja la foto o el video que se acaba de tomar para DOMUX.
+-->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <cache-path name="capture" path="capture/" />
 </paths>

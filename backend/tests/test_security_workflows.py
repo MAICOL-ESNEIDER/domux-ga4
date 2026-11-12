@@ -1,4 +1,5 @@
 import os
+import base64
 import unittest
 from datetime import timedelta
 from unittest.mock import patch
@@ -103,7 +104,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         response = self.register_visit(
             visitorDocument="1234",
             mediaConsent=True,
-            mediaUrl="data:image/jpeg;base64,AA==",
+            mediaUrl="data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff\xe0foto").decode(),
             mediaType="image",
         )
         self.assertEqual(response.status_code, 201)

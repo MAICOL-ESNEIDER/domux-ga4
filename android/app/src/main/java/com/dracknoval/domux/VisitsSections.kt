@@ -509,8 +509,9 @@ fun VisitRegistrationSection(
                             photoType = type
                             photoName = name
                         },
-                        "image/*",
-                        onMessage
+                        onMessage,
+                        kinds = AttachmentKinds.PHOTO,
+                        onClear = { photoUrl = null; photoType = null; photoName = null }
                     )
                 }
                 Button(

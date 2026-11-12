@@ -1,7 +1,7 @@
 """Comunicados en la web (HU-080): publicar, ver cuántos apartamentos los leyeron y retirarlos.
 
 Son las mismas reglas de la app (categoría obligatoria, toda la unidad o una torre, fecha de vencimiento,
-foto, video o audio adjunto): la web reúne lo que escribió o eligió la administración y lo manda a la API.
+foto, video, audio o PDF adjunto): la web reúne lo que escribió o eligió la administración y lo manda a la API.
 Un comunicado nunca se borra: al retirarlo deja de verse en la app, pero queda guardado con quién y cuándo
 lo retiró (ADR-013). En la pantalla ancha la lista y el comunicado se ven juntos; en la angosta (celular o
 ventana pequeña) son dos pantallas, con un enlace para volver.
@@ -20,7 +20,7 @@ from web.api import Api
 from web.forms import compact, number, text
 from web.security import login_required, safe_next
 from web.support import file_response
-from web.uploads import MAX_MEDIA_BYTES, MEDIA_ACCEPT, MEDIA_FORMATS_TEXT, UploadError, read_media
+from web.uploads import DOCUMENT_ACCEPT, DOCUMENT_FORMATS_TEXT, MAX_MEDIA_BYTES, UploadError, read_media
 
 #: Filas de la lista por página.
 PAGE_SIZE = 15
@@ -160,7 +160,7 @@ def _new_page(towers, values, status=200):
     return render_template(
         "web/announcement_new.html", values=values, towers=towers,
         category_options=list(ANNOUNCEMENT_CATEGORIES.items()), today=colombia_today().isoformat(),
-        media_accept=MEDIA_ACCEPT, media_formats=MEDIA_FORMATS_TEXT, media_mb=MAX_MEDIA_BYTES // (1024 * 1024),
+        media_accept=DOCUMENT_ACCEPT, media_formats=DOCUMENT_FORMATS_TEXT, media_mb=MAX_MEDIA_BYTES // (1024 * 1024),
     ), status
 
 
@@ -174,7 +174,7 @@ def announcement_new():
 
     values = {key: text(key) for key in FORM_FIELDS}
     try:
-        media = read_media(request.files.get("media"))
+        media = read_media(request.files.get("media"), allow_document=True)
     except UploadError as problem:
         flash(str(problem), "error")
         return _new_page(towers, values, 400)
@@ -215,5 +215,5 @@ def announcement_retire(announcement_id):
 @bp.get("/comunicados/<int:announcement_id>/adjunto")
 @login_required
 def announcement_attachment(announcement_id):
-    """El adjunto del comunicado (foto, video o audio)."""
+    """El adjunto del comunicado (foto, video, audio o PDF)."""
     return file_response(announcement_view.attachment(announcement_id))
