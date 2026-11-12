@@ -21,6 +21,7 @@ class AdminSummaryTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = create_app()
         cls.app.config.update(TESTING=True)
+        cls.addClassCleanup(env_setup.release_app, cls.app)
 
     def setUp(self):
         self.context = self.app.app_context()
