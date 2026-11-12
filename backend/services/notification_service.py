@@ -9,7 +9,7 @@ from google.auth.exceptions import DefaultCredentialsError
 from firebase_admin import credentials, initialize_app, messaging
 from firebase_admin.exceptions import FirebaseError
 from extensions import db
-from models import DevicePushToken, Notification, User
+from models import Apartment, DevicePushToken, Notification, User
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
@@ -142,9 +142,15 @@ def notify_user(user_id, title, message, notification_type):
     return notification
 
 
-def notify_residents(title, message, notification_type):
-    # Solo los residentes activos reciben los comunicados (DEF-011).
-    residents = db.session.query(User.id).filter_by(role="RESIDENT", is_active=True).all()
+def notify_residents(title, message, notification_type, tower_id=None):
+    # Solo los residentes activos reciben los comunicados (DEF-011); si el comunicado
+    # es de una torre, solo los residentes de esa torre (HU-061).
+    query = db.session.query(User.id).filter(User.role == "RESIDENT", User.is_active.is_(True))
+    if tower_id is not None:
+        query = query.join(Apartment, User.apartment_id == Apartment.id).filter(
+            Apartment.tower_id == tower_id
+        )
+    residents = query.all()
     notifications = [
         Notification(
             user_id=user_id,

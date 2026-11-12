@@ -1,4 +1,5 @@
 import unittest
+from datetime import timedelta
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -7,7 +8,12 @@ from auth import generate_token
 from extensions import db
 from models import CommonArea, Notification, Pqrs, Reservation, User
 from structure_fixtures import apartment_for
+from time_utils import colombia_today
 from werkzeug.security import generate_password_hash
+
+
+def days_from_today(days):
+    return (colombia_today() + timedelta(days=days)).isoformat()
 
 
 class AdminResidentActionTests(unittest.TestCase):
@@ -122,7 +128,7 @@ class AdminResidentActionTests(unittest.TestCase):
             json={
                 "residentId": self.other_resident.id,
                 "commonAreaId": self.area.id,
-                "date": "2099-06-20",
+                "date": days_from_today(10),
                 "timeSlot": "10:00-12:00",
             },
         )

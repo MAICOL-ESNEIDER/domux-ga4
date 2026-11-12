@@ -2,15 +2,36 @@
 
 from datetime import date, timedelta
 
-from sqlalchemy import Index, false, select, text
+from sqlalchemy import Index, event, false, select, text
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr
+from sqlalchemy.orm.attributes import set_committed_value
 
 from config import visitor_parking_max_days
 from extensions import db
+from services.pqrs_rules import RUNNING_STATUSES, make_radicado, pqrs_semaphore
+from services.zone_rules import (
+    DEFAULT_CANCEL_DEADLINE_DAYS,
+    DEFAULT_CLOSE_TIME,
+    DEFAULT_MAX_ADVANCE_DAYS,
+    DEFAULT_MIN_ADVANCE_DAYS,
+    DEFAULT_OPEN_TIME,
+    DEFAULT_SLOT_MINUTES,
+    DEFAULT_WEEKLY_LIMIT,
+    zone_slots,
+)
 from time_utils import colombia_today, to_colombia, utc_now
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
+
+#: Categorías de los comunicados (HU-058 y RN-026): lo que se guarda y lo que se muestra.
+ANNOUNCEMENT_CATEGORIES = {
+    "mantenimiento": "Mantenimiento",
+    "urgente": "Urgente",
+    "asamblea": "Asamblea",
+    "seguridad": "Seguridad",
+    "zonas_comunes": "Zonas comunes",
+}
 
 #: Tipos de parqueadero de la unidad (HU-015).
 PARKING_KINDS = ("residente", "visitante")
@@ -605,6 +626,11 @@ class Announcement(RetirableMixin, db.Model):
 
     Un comunicado nunca se borra (TT-029): al retirarlo deja de verse en la
     app, pero sigue en la base con la fecha y quién lo retiró.
+
+    Lleva una categoría (HU-058); solo los anteriores a esa historia no la
+    tienen. Si tiene torre (HU-061), solo lo ven los residentes de esa torre; sin
+    torre es para toda la unidad. Pasada su fecha de vencimiento (HU-060) sale
+    de la lista principal y queda en «Archivados».
     """
 
     __tablename__ = "announcements"
@@ -612,6 +638,14 @@ class Announcement(RetirableMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(20), nullable=True)
+    tower_id = db.Column(
+        db.Integer,
+        db.ForeignKey("towers.id", name="fk_announcements_tower_id_towers"),
+        nullable=True,
+        index=True,
+    )
+    expires_at = db.Column(db.Date, nullable=True)
     event_date = db.Column(db.String(20), nullable=True)
     event_time = db.Column(db.String(20), nullable=True)
     media_url = db.Column(db.Text, nullable=True)
@@ -620,12 +654,24 @@ class Announcement(RetirableMixin, db.Model):
     created_at = db.Column(db.DateTime, default=utc_now)
 
     author = db.relationship("User", foreign_keys=[author_id])
+    tower = db.relationship("Tower")
+
+    @property
+    def is_expired(self):
+        """True si ya pasó su fecha de vencimiento: el último día vigente es el del vencimiento."""
+        return self.expires_at is not None and self.expires_at < colombia_today()
 
     def to_dict(self):
         return {
             "id": self.id,
             "title": self.title or "",
             "message": self.message or "",
+            "category": self.category,
+            "categoryLabel": ANNOUNCEMENT_CATEGORIES.get(self.category),
+            "towerId": self.tower_id,
+            "towerName": self.tower.name if self.tower else None,
+            "expiresAt": self.expires_at.isoformat() if self.expires_at else None,
+            "isExpired": self.is_expired,
             "eventDate": self.event_date,
             "eventTime": self.event_time,
             "mediaUrl": self.media_url,
@@ -637,10 +683,52 @@ class Announcement(RetirableMixin, db.Model):
         }
 
 
+class AnnouncementRead(db.Model):
+    """Quién leyó un comunicado y cuándo (HU-059 y HU-062).
+
+    Guarda el apartamento del residente al momento de leerlo: así el conteo de
+    apartamentos que leyeron no cambia si después se muda. Cada residente deja
+    una sola lectura por comunicado.
+    """
+
+    __tablename__ = "announcement_reads"
+    __table_args__ = (
+        db.UniqueConstraint("announcement_id", "user_id", name="uq_announcement_reads_user"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    announcement_id = db.Column(
+        db.Integer,
+        db.ForeignKey("announcements.id", name="fk_announcement_reads_announcement_id_announcements"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_announcement_reads_user_id_users"),
+        nullable=False,
+        index=True,
+    )
+    apartment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("apartments.id", name="fk_announcement_reads_apartment_id_apartments"),
+        nullable=True,
+    )
+    read_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+
+
 class Pqrs(db.Model):
+    """Petición, queja, reclamo o sugerencia de un residente.
+
+    Al guardarse recibe su número de radicado, único y visible en la lista y en el
+    detalle (HU-072). Mientras no esté resuelta, su plazo corre en días hábiles y
+    se muestra con un semáforo (HU-073).
+    """
+
     __tablename__ = "pqrs"
 
     id = db.Column(db.Integer, primary_key=True)
+    radicado = db.Column(db.String(30), unique=True, index=True, nullable=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_by_admin_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     category = db.Column(db.String(40), default="Petición")
@@ -671,10 +759,24 @@ class Pqrs(db.Model):
         order_by="PqrsSatisfaction.created_at, PqrsSatisfaction.id",
     )
 
+    @property
+    def semaphore(self):
+        """El semáforo del plazo (HU-073); None si ya está resuelta, porque deja de correr."""
+        if self.status not in RUNNING_STATUSES or self.created_at is None:
+            return None
+        return pqrs_semaphore(
+            to_colombia(self.created_at).date(), colombia_today(), self.category
+        )
+
     def to_dict(self):
         latest_rating = self.satisfaction_ratings[-1] if self.satisfaction_ratings else None
+        semaphore = self.semaphore
         return {
             "id": self.id,
+            "radicado": self.radicado,
+            "semaphore": semaphore["color"] if semaphore else None,
+            "daysRemaining": semaphore["daysRemaining"] if semaphore else None,
+            "dueDate": semaphore["dueDate"] if semaphore else None,
             "residentId": self.resident_id,
             "createdByAdminId": self.created_by_admin_id,
             "createdByAdministration": self.created_by_admin_id is not None,
@@ -698,6 +800,22 @@ class Pqrs(db.Model):
             "residentName": self.resident.full_name if self.resident else None,
             "apartment": self.resident.apartment if self.resident else None,
         }
+
+
+@event.listens_for(Pqrs, "after_insert")
+def _assign_radicado(mapper, connection, pqrs):
+    """Le da su radicado a toda PQRS nueva, la cree la ruta que la cree (HU-072).
+
+    El número lleva el id de la PQRS, que solo se conoce después de guardarla;
+    por eso se escribe justo después del INSERT y dentro de la misma transacción.
+    """
+    if pqrs.radicado:
+        return
+    radicado = make_radicado(pqrs.id, pqrs.created_at)
+    connection.execute(
+        Pqrs.__table__.update().where(Pqrs.__table__.c.id == pqrs.id).values(radicado=radicado)
+    )
+    set_committed_value(pqrs, "radicado", radicado)
 
 
 class PqrsMessage(db.Model):
@@ -763,13 +881,76 @@ class DevicePushToken(db.Model):
 
 
 class CommonArea(db.Model):
+    """Zona común que los residentes pueden reservar, con sus propias reglas.
+
+    El horario, el aforo, la anticipación y los plazos (HU-055, RN-020 a RN-022) se
+    guardan en la zona y la administración los cambia desde la web, sin tocar el
+    código. Las reservas nuevas siempre usan las reglas guardadas. Los valores por
+    defecto vienen de services/zone_rules.py.
+
+    * open_time, close_time y slot_minutes: el horario y la duración de cada franja.
+    * capacity: aforo máximo de personas; sin valor, no se revisa.
+    * min_advance_days y max_advance_days: con cuántos días de anticipación se
+      puede reservar (como mínimo y como máximo).
+    * cancel_deadline_days: el residente cancela hasta esos días antes de la fecha.
+    * weekly_limit: reservas por semana de cada residente en esta zona.
+    * maintenance_weekday: día de la semana (0 es lunes) en que la zona cierra por
+      mantenimiento; si es festivo, pasa al día siguiente (RN-021).
+    """
+
     __tablename__ = "common_areas"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    open_time = db.Column(
+        db.String(5), nullable=False, default=DEFAULT_OPEN_TIME, server_default=DEFAULT_OPEN_TIME
+    )
+    close_time = db.Column(
+        db.String(5), nullable=False, default=DEFAULT_CLOSE_TIME, server_default=DEFAULT_CLOSE_TIME
+    )
+    slot_minutes = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_SLOT_MINUTES,
+        server_default=str(DEFAULT_SLOT_MINUTES),
+    )
+    capacity = db.Column(db.Integer, nullable=True)
+    min_advance_days = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_MIN_ADVANCE_DAYS,
+        server_default=str(DEFAULT_MIN_ADVANCE_DAYS),
+    )
+    max_advance_days = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_MAX_ADVANCE_DAYS,
+        server_default=str(DEFAULT_MAX_ADVANCE_DAYS),
+    )
+    cancel_deadline_days = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_CANCEL_DEADLINE_DAYS,
+        server_default=str(DEFAULT_CANCEL_DEADLINE_DAYS),
+    )
+    weekly_limit = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_WEEKLY_LIMIT,
+        server_default=str(DEFAULT_WEEKLY_LIMIT),
+    )
+    maintenance_weekday = db.Column(db.Integer, nullable=True)
+
+    @property
+    def slots(self):
+        """Las franjas que ofrece la zona cada día, según su horario."""
+        return zone_slots(self.open_time, self.close_time, self.slot_minutes)
 
     def to_dict(self):
-        return {"id": self.id, "name": self.name or ""}
+        return {
+            "id": self.id,
+            "name": self.name or "",
+            "openTime": self.open_time,
+            "closeTime": self.close_time,
+            "slotMinutes": self.slot_minutes,
+            "slots": self.slots,
+            "capacity": self.capacity,
+            "minAdvanceDays": self.min_advance_days,
+            "maxAdvanceDays": self.max_advance_days,
+            "cancelDeadlineDays": self.cancel_deadline_days,
+            "weeklyLimit": self.weekly_limit,
+            "maintenanceWeekday": self.maintenance_weekday,
+        }
 
 
 class Reservation(db.Model):
@@ -792,6 +973,7 @@ class Reservation(db.Model):
     common_area_id = db.Column(db.Integer, db.ForeignKey("common_areas.id"), nullable=False)
     date = db.Column(db.String(20), nullable=False)
     time_slot = db.Column(db.String(40), nullable=False)
+    attendees = db.Column(db.Integer, nullable=True)
     status = db.Column(db.String(20), default="pendiente")
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
     archived_at = db.Column(db.DateTime, nullable=True)
@@ -806,7 +988,31 @@ class Reservation(db.Model):
         order_by="ReservationMessage.created_at, ReservationMessage.id",
     )
 
+    @property
+    def cancel_until(self):
+        """Último día en que el residente puede cancelar (RN-020 y HU-053).
+
+        Es el plazo de la zona contado hacia atrás desde la fecha reservada.
+        """
+        try:
+            reserved_day = date.fromisoformat(self.date)
+        except (TypeError, ValueError):
+            return None
+        days = self.common_area.cancel_deadline_days if self.common_area else DEFAULT_CANCEL_DEADLINE_DAYS
+        return reserved_day - timedelta(days=days)
+
+    @property
+    def resident_can_cancel(self):
+        """True si el residente todavía está a tiempo de cancelar esta reserva."""
+        deadline = self.cancel_until
+        return (
+            self.status in ("pendiente", "activa", "aprobada")
+            and deadline is not None
+            and colombia_today() <= deadline
+        )
+
     def to_dict(self):
+        cancel_until = self.cancel_until
         return {
             "id": self.id,
             "residentId": self.resident_id,
@@ -816,6 +1022,9 @@ class Reservation(db.Model):
             "commonAreaName": self.common_area.name if self.common_area else None,
             "date": self.date,
             "timeSlot": self.time_slot,
+            "attendees": self.attendees,
+            "cancelUntil": cancel_until.isoformat() if cancel_until else None,
+            "canCancel": self.resident_can_cancel,
             "status": self.status or "activa",
             "isArchived": bool(self.is_archived),
             "archivedAt": _fmt(self.archived_at),

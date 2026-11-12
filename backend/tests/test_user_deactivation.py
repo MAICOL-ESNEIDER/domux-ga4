@@ -120,7 +120,11 @@ class UserDeactivationTests(unittest.TestCase):
 
         response = self.client.post(
             "/api/announcements",
-            json={"title": "Corte de agua", "message": "Mañana de 8 a 12."},
+            json={
+                "title": "Corte de agua",
+                "message": "Mañana de 8 a 12.",
+                "category": "mantenimiento",
+            },
             headers=self.headers(self.admin),
         )
 

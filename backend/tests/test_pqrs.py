@@ -1,17 +1,21 @@
 import unittest
+from datetime import date, timedelta
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
 from app import create_app, migrate_pqrs_conversations
 from auth import generate_token
+from business_days import business_days_between, is_business_day
 from extensions import db
 from models import AuditLog, Notification, Pqrs, PqrsMessage, PqrsSatisfaction, User
 from structure_fixtures import apartment_for
-from time_utils import colombia_today
+from time_utils import colombia_day_to_utc, colombia_today
 from werkzeug.security import generate_password_hash
 
 
-class PqrsWorkflowTests(unittest.TestCase):
+class PqrsTestCase(unittest.TestCase):
+    """Base con un administrador, dos residentes y un guardia."""
+
     @classmethod
     def setUpClass(cls):
         cls.app = create_app()
@@ -82,6 +86,8 @@ class PqrsWorkflowTests(unittest.TestCase):
         db.session.commit()
         return pqrs
 
+
+class PqrsWorkflowTests(PqrsTestCase):
     def test_admin_can_create_pqrs_for_a_resident(self):
         response = self.client.post(
             "/api/pqrs",
@@ -269,6 +275,144 @@ class PqrsWorkflowTests(unittest.TestCase):
         )
         migrate_pqrs_conversations()
         self.assertEqual(len(migrated.conversation), 2)
+
+
+class PqrsRadicadoTests(PqrsTestCase):
+    """HU-072 y HU-073: número de radicado único y semáforo del plazo en días hábiles."""
+
+    def create_through_api(self, user=None, **fields):
+        body = {"subject": "Humedad", "message": "Hay humedad en el techo.", **fields}
+        return self.client.post("/api/pqrs", headers=self.auth(user or self.resident), json=body)
+
+    def made_days_ago(self, business_days, status="abierta"):
+        """Una PQRS radicada hace ese número de días hábiles (contados hasta hoy)."""
+        today = colombia_today()
+        created_day = today
+        while business_days_between(created_day, today) < business_days:
+            created_day -= timedelta(days=1)
+        pqrs = self.make_pqrs(status=status)
+        pqrs.created_at = colombia_day_to_utc(created_day) + timedelta(hours=15)
+        db.session.commit()
+        return pqrs
+
+    def listed(self, user, query=""):
+        response = self.client.get(f"/api/pqrs{query}", headers=self.auth(user))
+        self.assertEqual(response.status_code, 200)
+        return response.get_json()["pqrs"]
+
+    def listed_item(self, user, pqrs):
+        """La PQRS pedida tal como la ve ese usuario en la lista."""
+        return next(item for item in self.listed(user) if item["id"] == pqrs.id)
+
+    def test_every_new_pqrs_gets_its_own_radicado(self):
+        first = self.create_through_api().get_json()["pqrs"]
+        second = self.create_through_api(self.other_resident).get_json()["pqrs"]
+
+        year = colombia_today().year
+        self.assertRegex(first["radicado"], rf"^PQRS-{year}-\d{{6}}$")
+        self.assertRegex(second["radicado"], rf"^PQRS-{year}-\d{{6}}$")
+        self.assertNotEqual(first["radicado"], second["radicado"])
+        self.assertEqual(first["radicado"], f"PQRS-{year}-{first['id']:06d}")
+        self.assertEqual(Pqrs.query.filter_by(radicado=first["radicado"]).count(), 1)
+
+    def test_pqrs_created_without_the_route_also_get_a_radicado(self):
+        pqrs = self.make_pqrs()
+
+        self.assertEqual(pqrs.radicado, f"PQRS-{colombia_today().year}-{pqrs.id:06d}")
+        self.assertEqual(db.session.get(Pqrs, pqrs.id).radicado, pqrs.radicado)
+
+    def test_a_pqrs_created_by_administration_also_has_a_radicado(self):
+        response = self.create_through_api(self.admin, residentId=self.resident.id)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.get_json()["pqrs"]["radicado"].startswith("PQRS-"))
+
+    def test_the_radicado_is_in_the_list_for_the_resident_and_for_administration(self):
+        pqrs = self.make_pqrs()
+
+        for user in (self.resident, self.admin):
+            with self.subTest(role=user.role):
+                self.assertEqual(self.listed(user)[0]["radicado"], pqrs.radicado)
+
+    def test_the_radicado_never_changes_when_the_pqrs_is_answered(self):
+        pqrs = self.make_pqrs()
+        radicado = pqrs.radicado
+
+        self.client.put(
+            f"/api/pqrs/{pqrs.id}/respond",
+            headers=self.auth(self.admin),
+            json={"status": "resuelta", "adminResponse": "Listo."},
+        )
+
+        self.assertEqual(db.session.get(Pqrs, pqrs.id).radicado, radicado)
+
+    def test_a_pqrs_can_be_found_by_its_radicado(self):
+        wanted = self.make_pqrs()
+        self.make_pqrs()
+
+        found = self.listed(self.admin, f"?search={wanted.radicado}")
+
+        self.assertEqual([item["id"] for item in found], [wanted.id])
+
+    def test_green_with_more_than_five_business_days_left(self):
+        for elapsed, remaining in ((0, 15), (9, 6)):
+            with self.subTest(elapsed=elapsed):
+                pqrs = self.made_days_ago(elapsed)
+                item = self.listed_item(self.resident, pqrs)
+                self.assertEqual(item["semaphore"], "verde")
+                self.assertEqual(item["daysRemaining"], remaining)
+
+    def test_yellow_with_five_or_fewer_business_days_left(self):
+        for elapsed, remaining in ((10, 5), (15, 0)):
+            with self.subTest(elapsed=elapsed):
+                pqrs = self.made_days_ago(elapsed, status="en_proceso")
+                item = self.listed_item(self.admin, pqrs)
+                self.assertEqual(item["semaphore"], "amarillo")
+                self.assertEqual(item["daysRemaining"], remaining)
+
+    def test_red_once_the_term_expired(self):
+        self.made_days_ago(16)
+
+        item = self.listed(self.admin)[0]
+
+        self.assertEqual(item["semaphore"], "rojo")
+        self.assertEqual(item["daysRemaining"], -1)
+
+    def test_the_due_date_is_shown_and_is_a_business_day(self):
+        self.made_days_ago(3)
+
+        due = date.fromisoformat(self.listed(self.admin)[0]["dueDate"])
+
+        self.assertTrue(is_business_day(due))
+        self.assertGreater(due, colombia_today())
+
+    def test_a_resolved_pqrs_has_no_semaphore(self):
+        self.made_days_ago(40, status="resuelta")
+
+        item = self.listed(self.admin)[0]
+
+        self.assertIsNone(item["semaphore"])
+        self.assertIsNone(item["daysRemaining"])
+        self.assertIsNone(item["dueDate"])
+
+    def test_reopening_a_pqrs_keeps_counting_from_its_original_date(self):
+        pqrs = self.made_days_ago(30, status="resuelta")
+
+        self.client.post(
+            f"/api/pqrs/{pqrs.id}/messages",
+            headers=self.auth(self.resident),
+            json={"message": "Sigue el problema."},
+        )
+
+        item = self.listed(self.resident)[0]
+        self.assertEqual(item["status"], "abierta")
+        self.assertEqual(item["semaphore"], "rojo")
+
+    def test_a_new_pqrs_starts_green_with_fifteen_business_days(self):
+        created = self.create_through_api().get_json()["pqrs"]
+
+        self.assertEqual(created["semaphore"], "verde")
+        self.assertEqual(created["daysRemaining"], 15)
 
 
 if __name__ == "__main__":

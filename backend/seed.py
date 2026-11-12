@@ -203,10 +203,10 @@ def seed_if_empty():
     db.session.commit()
 
     db.session.add_all([
-        CommonArea(name="Salón social"),
-        CommonArea(name="Gimnasio"),
-        CommonArea(name="Cancha múltiple"),
-        CommonArea(name="Zona BBQ"),
+        CommonArea(name="Salón social", capacity=40),
+        CommonArea(name="Gimnasio", capacity=15),
+        CommonArea(name="Cancha múltiple", capacity=20),
+        CommonArea(name="Zona BBQ", capacity=25),
     ])
     db.session.add(Announcement(
         title="¡Bienvenido a Domux!",

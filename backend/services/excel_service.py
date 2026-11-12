@@ -482,14 +482,15 @@ def generate_legal_report_xlsx(
         workbook,
         "PQRS_Radicados",
         (
-            "ID", "Fecha Creación", "Fecha Actualización", "Estado", "Archivada",
+            "ID", "Radicado", "Fecha Creación", "Fecha Actualización", "Estado", "Archivada",
             "Fecha Archivo", "Categoría", "Asunto", "Descripción", "Respuesta Admin",
             "Residente", "Documento", "Apartamento", "Creada por Admin",
             "Calificación Satisfacción", "Comentario",
         ),
         [
             (
-                item.id, _format_datetime(item.created_at), _format_datetime(item.updated_at),
+                item.id, item.radicado, _format_datetime(item.created_at),
+                _format_datetime(item.updated_at),
                 item.status, bool(item.is_archived), _format_datetime(item.archived_at),
                 item.category, item.subject, item.message, item.admin_response,
                 item.resident.full_name if item.resident else None,

@@ -34,15 +34,6 @@ HOUSEHOLD_RELATIONSHIPS = (
     "suegra",
     "otro",
 )
-VALID_TIME_SLOTS = (
-    "08:00-10:00",
-    "10:00-12:00",
-    "12:00-14:00",
-    "14:00-16:00",
-    "16:00-18:00",
-    "18:00-20:00",
-    "20:00-22:00",
-)
 VALID_PQRS_STATUSES = ("abierta", "en_proceso", "resuelta")
 VALID_PACKAGE_STATUSES = ("por_llegar", "pendiente", "entregado")
 
@@ -118,12 +109,6 @@ def validate_iso_date(date_str):
         return "Formato de fecha inválido. Usa el calendario en formato AAAA-MM-DD."
     if parsed_date.isoformat() != date_str:
         return "Formato de fecha inválido. Usa el calendario en formato AAAA-MM-DD."
-    return None
-
-
-def validate_time_slot(slot_str):
-    if not isinstance(slot_str, str) or slot_str not in VALID_TIME_SLOTS:
-        return "Selecciona una franja horaria válida del calendario."
     return None
 
 

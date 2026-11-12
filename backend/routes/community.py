@@ -1,13 +1,14 @@
 import base64
-from datetime import date, timedelta
+from datetime import date
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from auth import role_required, token_required
-from errors import error_response
+from errors import ApiError, error_response
 from extensions import db
 from models import (
+    ANNOUNCEMENT_CATEGORIES,
     Announcement,
     CommonArea,
     Pqrs,
@@ -17,7 +18,19 @@ from models import (
     ReservationMessage,
     User,
 )
-from routes.common import json_body
+from routes.common import bool_arg, json_body, json_object, page_args, save_changes
+from services.announcement_service import (
+    announcement_payloads,
+    archived_only,
+    current_only,
+    mark_as_read,
+    parse_category,
+    parse_expiry,
+    parse_tower_id,
+    unread_count,
+    unread_only,
+    visible_announcements,
+)
 from services.audit_service import add_audit_log
 from services.notification_service import notify_residents, notify_user
 from services.excel_service import (
@@ -26,19 +39,27 @@ from services.excel_service import (
 )
 from services.reservation_service import (
     ACTIVE_RESERVATION_STATUSES,
+    LIMIT_RESERVATION_STATUSES,
+    month_calendar,
     reservation_availability,
     reservation_conflicts,
+    weekly_reservation_count,
+)
+from services.zone_rules import (
+    days_text,
+    human_date,
+    is_maintenance_day,
+    parse_zone_rules,
+    WEEKDAY_NAMES,
 )
 from validators import (
     VALID_PQRS_STATUSES,
-    VALID_TIME_SLOTS,
     parse_optional_bool,
     require_non_empty_fields,
     validate_future_or_today_date,
     validate_iso_date,
     validate_media_fields,
     validate_time,
-    validate_time_slot,
 )
 from time_utils import colombia_today, utc_now
 
@@ -121,16 +142,38 @@ def _resident_for_write(data):
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_announcements():
-    """Lista los comunicados publicados, del más nuevo al más antiguo.
+    """Lista los comunicados, del más nuevo al más antiguo, de a 50 por página.
 
-    Los retirados no salen en la lista, pero siguen guardados en la base.
+    Por defecto salen los vigentes; con ``archived=true``, los que ya pasaron su
+    fecha de vencimiento (HU-060). Un residente solo ve los de toda la unidad y los
+    de su torre (HU-061), y puede pedir solo los que no ha leído con ``unread=true``
+    (HU-059). Se puede filtrar por ``category``. Los retirados no salen, pero siguen
+    guardados en la base. ``unreadCount`` dice cuántos vigentes le faltan por leer.
     """
+    user = g.current_user
+    archived = bool_arg("archived")
+    query = visible_announcements(user)
+    query = archived_only(query) if archived else current_only(query)
+    if request.args.get("category"):
+        query = query.filter(Announcement.category == parse_category(request.args["category"]))
+    if user.role == "RESIDENT" and bool_arg("unread"):
+        query = unread_only(query, user)
+    page, size = page_args(default_size=50, max_size=200)
+    total = query.count()
     items = (
-        Announcement.query.filter(Announcement.retired_at.is_(None))
-        .order_by(Announcement.created_at.desc())
+        query.order_by(Announcement.created_at.desc(), Announcement.id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
         .all()
     )
-    return jsonify({"announcements": [item.to_dict() for item in items]})
+    return jsonify({
+        "announcements": announcement_payloads(items, user),
+        "page": page,
+        "pageSize": size,
+        "total": total,
+        "totalPages": (total + size - 1) // size,
+        "unreadCount": unread_count(user),
+    })
 
 
 @bp.post("/announcements")
@@ -148,10 +191,16 @@ def create_announcement():
         return error_response(400, validation_error)
     if error := _media_and_event_error(data, "eventDate", "eventTime"):
         return error_response(400, error)
+    category = parse_category(data.get("category"))
+    tower_id = parse_tower_id(data.get("towerId"))
+    expires_at = parse_expiry(data.get("expiresAt"))
 
     announcement = Announcement(
         title=data["title"].strip(),
         message=data["message"].strip(),
+        category=category,
+        tower_id=tower_id,
+        expires_at=expires_at,
         event_date=data.get("eventDate"),
         event_time=data.get("eventTime"),
         media_url=data.get("mediaUrl"),
@@ -160,12 +209,43 @@ def create_announcement():
     )
     db.session.add(announcement)
     notify_residents(
-        "Nuevo anuncio",
-        announcement.title,
+        "Anuncio urgente" if category == "urgente" else "Nuevo anuncio",
+        f"{ANNOUNCEMENT_CATEGORIES[category]}: {announcement.title}",
         "announcement",
+        tower_id=tower_id,
     )
     db.session.commit()
-    return jsonify({"message": "Anuncio publicado", "announcement": announcement.to_dict()}), 201
+    return jsonify({
+        "message": "Anuncio publicado",
+        "announcement": announcement_payloads([announcement], g.current_user)[0],
+    }), 201
+
+
+@bp.post("/announcements/<int:announcement_id>/read")
+@token_required
+@role_required("RESIDENT")
+def read_announcement(announcement_id):
+    """Marca el comunicado como leído por el residente que lo abrió (HU-059).
+
+    Se puede llamar más de una vez: la lectura se anota una sola vez. Un comunicado
+    que el residente no puede ver (de otra torre o retirado) responde 404.
+    """
+    announcement = visible_announcements(g.current_user).filter(
+        Announcement.id == announcement_id
+    ).first()
+    if announcement is None:
+        raise ApiError("Anuncio no encontrado", 404)
+    mark_as_read(g.current_user, announcement)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Otra solicitud lo marcó al mismo tiempo: ya quedó leído.
+        db.session.rollback()
+    return jsonify({
+        "message": "Anuncio marcado como leído",
+        "announcement": announcement_payloads([announcement], g.current_user)[0],
+        "unreadCount": unread_count(g.current_user),
+    })
 
 
 def _retire_announcement(announcement_id):
@@ -184,7 +264,7 @@ def _retire_announcement(announcement_id):
     db.session.commit()
     return jsonify({
         "message": "Anuncio retirado. Ya no se ve en la app, pero queda guardado.",
-        "announcement": announcement.to_dict(),
+        "announcement": announcement_payloads([announcement], g.current_user)[0],
     })
 
 
@@ -246,6 +326,7 @@ def get_pqrs():
     if search:
         pattern = f"%{search}%"
         query = query.filter(db.or_(
+            Pqrs.radicado.ilike(pattern),
             Pqrs.subject.ilike(pattern),
             Pqrs.message.ilike(pattern),
             Pqrs.category.ilike(pattern),
@@ -569,8 +650,33 @@ def respond_pqrs_batch():
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_common_areas():
+    """Las zonas comunes con sus reglas de reserva (horario, franjas, aforo, plazos...)."""
     areas = CommonArea.query.order_by(CommonArea.name).all()
     return jsonify({"areas": [area.to_dict() for area in areas]})
+
+
+@bp.put("/common-areas/<int:area_id>/rules")
+@token_required
+@role_required("ADMIN")
+def update_common_area_rules(area_id):
+    """Cambia las reglas de una zona común (HU-055, RN-022). Solo la administración.
+
+    Solo se cambian los datos que vienen en la solicitud. Las reservas nuevas usan
+    las reglas desde ese momento; las que ya existen no se tocan.
+    """
+    data = json_object(required=True)
+    area = db.session.get(CommonArea, area_id)
+    if area is None:
+        raise ApiError("Zona común no encontrada", 404)
+    changes = parse_zone_rules(data, area)
+    before = {column: getattr(area, column) for column in changes}
+    for column, value in changes.items():
+        setattr(area, column, value)
+    add_audit_log(
+        "common_area", area.id, "rules_changed", {"before": before, "after": changes}
+    )
+    save_changes()
+    return jsonify({"message": "Reglas de la zona actualizadas", "area": area.to_dict()})
 
 
 @bp.get("/reservations")
@@ -599,20 +705,21 @@ def get_reservations():
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_reservation_availability():
+    """Franjas libres y ocupadas de una zona en un día, según el horario de la zona."""
     common_area_id = request.args.get("commonAreaId", type=int)
-    date = request.args.get("date")
-    if common_area_id is None or not date:
+    day = request.args.get("date")
+    if common_area_id is None or not day:
         return error_response(400, "commonAreaId y date son obligatorios")
-    if error := validate_future_or_today_date(date):
+    if error := validate_future_or_today_date(day):
         return error_response(400, error)
-    if db.session.get(CommonArea, common_area_id) is None:
+    area = db.session.get(CommonArea, common_area_id)
+    if area is None:
         return error_response(404, "Zona común no encontrada")
 
-    slots = reservation_availability(common_area_id, date)
     return jsonify({
         "commonAreaId": common_area_id,
-        "date": date,
-        **slots,
+        "date": day,
+        **reservation_availability(area, day),
     })
 
 
@@ -627,25 +734,89 @@ def get_reservation_calendar():
         return error_response(400, "commonAreaId, year y month son obligatorios.")
     if not 1 <= month <= 12 or not 2000 <= year <= 2100:
         return error_response(400, "El mes o año del calendario no es válido.")
-    if db.session.get(CommonArea, common_area_id) is None:
+    area = db.session.get(CommonArea, common_area_id)
+    if area is None:
         return error_response(404, "Zona común no encontrada.")
-    prefix = f"{year:04d}-{month:02d}-"
-    rows = db.session.query(
-        Reservation.date,
-        db.func.count(db.func.distinct(Reservation.time_slot)),
-    ).filter(
-        Reservation.common_area_id == common_area_id,
-        Reservation.date.like(f"{prefix}%"),
-        Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
-    ).group_by(Reservation.date).having(
-        db.func.count(db.func.distinct(Reservation.time_slot)) >= len(VALID_TIME_SLOTS)
-    ).all()
+    full_days, closed_days = month_calendar(area, year, month)
     return jsonify({
         "commonAreaId": common_area_id,
         "year": year,
         "month": month,
-        "blockedDates": [reservation_date for reservation_date, _ in rows],
+        "blockedDates": full_days,
+        "closedDates": closed_days,
     })
+
+
+def _zone_request_error(area, data):
+    """Revisa que la franja, el día y el número de personas encajen con las reglas de la zona.
+
+    Aplica a todos, también cuando la administración reserva por un residente:
+    una franja fuera del horario, un día de mantenimiento o más personas que el
+    aforo no son reservas posibles (HU-055 y RN-021).
+    """
+    if data["timeSlot"] not in area.slots:
+        return error_response(
+            400,
+            f"Esa franja no existe en {area.name}: abre de {area.open_time} a {area.close_time}, "
+            f"en franjas de {area.slot_minutes} minutos.",
+        )
+    requested_day = date.fromisoformat(data["date"])
+    if is_maintenance_day(area.maintenance_weekday, requested_day):
+        return error_response(
+            400,
+            f"{area.name} está cerrada por mantenimiento el {human_date(requested_day)}: "
+            f"su mantenimiento es cada {WEEKDAY_NAMES[area.maintenance_weekday]} "
+            "(si ese día es festivo, pasa al día siguiente).",
+        )
+    attendees = data.get("attendees")
+    if attendees is not None:
+        if isinstance(attendees, bool) or not isinstance(attendees, int) or attendees < 1:
+            return error_response(400, "El número de personas debe ser un entero mayor que 0.")
+        if area.capacity is not None and attendees > area.capacity:
+            return error_response(
+                400,
+                f"El aforo de {area.name} es de {area.capacity} personas y escribiste {attendees}.",
+            )
+    return None
+
+
+def _resident_limit_error(area, resident, data):
+    """Revisa la anticipación y los límites diario y semanal del residente en esa zona.
+
+    La administración no pasa por estos límites cuando reserva a nombre de un
+    residente. El límite semanal es de cada zona (HU-055); el diario es uno por día.
+    """
+    requested_day = date.fromisoformat(data["date"])
+    days_ahead = (requested_day - colombia_today()).days
+    if days_ahead < area.min_advance_days:
+        return error_response(
+            400,
+            f"{area.name} se reserva con al menos {days_text(area.min_advance_days)} de anticipación.",
+        )
+    if days_ahead > area.max_advance_days:
+        return error_response(
+            400,
+            f"{area.name} se puede reservar con máximo {days_text(area.max_advance_days)} de anticipación.",
+        )
+    same_day = Reservation.query.filter(
+        Reservation.resident_id == resident.id,
+        Reservation.date == data["date"],
+        Reservation.status.in_(LIMIT_RESERVATION_STATUSES),
+        Reservation.is_archived.is_(False),
+    ).first()
+    if same_day is not None:
+        return error_response(
+            409,
+            "Límite diario alcanzado: solo puedes tener 1 reserva activa o pendiente por día.",
+        )
+    if weekly_reservation_count(resident.id, area.id, requested_day) >= area.weekly_limit:
+        noun = "reserva" if area.weekly_limit == 1 else "reservas"
+        return error_response(
+            409,
+            f"Límite semanal alcanzado: máximo {area.weekly_limit} {noun} por semana en "
+            f"{area.name} para permitir el uso equitativo de las zonas comunes.",
+        )
+    return None
 
 
 @bp.post("/reservations")
@@ -671,8 +842,8 @@ def create_reservation():
         return error_response(400, "Selecciona una zona común válida")
     if error := validate_future_or_today_date(data["date"]):
         return error_response(400, error)
-    if error := validate_time_slot(data["timeSlot"]):
-        return error_response(400, error)
+    if error := _zone_request_error(area, data):
+        return error
     message = data.get("message")
     if message is not None and not isinstance(message, str):
         return error_response(400, "El mensaje debe ser texto.")
@@ -690,33 +861,8 @@ def create_reservation():
             403,
             "Los menores de edad requieren autorización parental registrada por administración para solicitar reservas.",
         )
-    if g.current_user.role == "RESIDENT":
-        active_statuses = ("pendiente", "activa", "aprobada")
-        daily_reservation = Reservation.query.filter(
-            Reservation.resident_id == resident.id,
-            Reservation.date == data["date"],
-            Reservation.status.in_(active_statuses),
-            Reservation.is_archived.is_(False),
-        ).first()
-        if daily_reservation is not None:
-            return error_response(
-                409,
-                "Límite diario alcanzado: solo puedes tener 1 reserva activa o pendiente por día.",
-            )
-        requested_date = date.fromisoformat(data["date"])
-        week_start = requested_date - timedelta(days=requested_date.weekday())
-        week_end = week_start + timedelta(days=6)
-        weekly_reservation_count = Reservation.query.filter(
-            Reservation.resident_id == resident.id,
-            Reservation.date.between(week_start.isoformat(), week_end.isoformat()),
-            Reservation.status.in_(active_statuses),
-            Reservation.is_archived.is_(False),
-        ).count()
-        if weekly_reservation_count >= 2:
-            return error_response(
-                409,
-                "Límite semanal alcanzado: máximo 2 reservas por semana para permitir el uso equitativo de las zonas comunes.",
-            )
+    if g.current_user.role == "RESIDENT" and (error := _resident_limit_error(area, resident, data)):
+        return error
     if reservation_conflicts(area.id, data["date"], data["timeSlot"]):
         return error_response(409, "Ese horario ya no está disponible")
 
@@ -726,6 +872,7 @@ def create_reservation():
         common_area_id=area.id,
         date=data["date"],
         time_slot=data["timeSlot"],
+        attendees=data.get("attendees"),
         status="pendiente",
     )
     db.session.add(reservation)
@@ -885,8 +1032,15 @@ def cancel_reservation(res_id):
         return error_response(403, "Esa reserva no es tuya")
     if reservation.status not in ("pendiente", "activa", "aprobada"):
         return error_response(400, "Solo se pueden cancelar reservas pendientes o aprobadas.")
-    if g.current_user.role == "RESIDENT" and reservation.date <= colombia_today().isoformat():
-        return error_response(400, "Solo puedes cancelar la reserva antes del día reservado.")
+    if g.current_user.role == "RESIDENT" and not reservation.resident_can_cancel:
+        area = reservation.common_area
+        return error_response(
+            400,
+            f"El plazo para cancelar ya venció: {area.name} se cancela hasta "
+            f"{days_text(area.cancel_deadline_days)} antes de la fecha reservada, es decir, hasta el "
+            f"{human_date(reservation.cancel_until)}. Escríbele a administración en la "
+            "conversación de la reserva si necesitas cambiarla.",
+        )
     previous_status = reservation.status
     reservation.status = "cancelada"
     add_audit_log(
