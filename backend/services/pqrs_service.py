@@ -9,41 +9,23 @@ por uno cuando la página los muestra.
 Ninguna función de este archivo guarda en la base.
 """
 
-import base64
-import binascii
-import re
-
 from sqlalchemy import case, false, func, select
 
 from errors import ApiError
 from extensions import db
 from models import Pqrs, PqrsMessage, User
+from services.list_view import full_name
+from services.media import decode_media
 from services.pqrs_rules import GREEN, RED, RUNNING_STATUSES, YELLOW, running_semaphore
 from time_utils import colombia_today, format_colombia
 
-#: El único valor de ``view`` que existe además de la vista completa.
-SUMMARY_VIEW = "summary"
-
 #: Los colores del semáforo que se pueden pedir como filtro.
 SEMAPHORE_FILTERS = (GREEN, YELLOW, RED)
-
-#: Tipos de archivo que la web muestra. Son los tres que acepta la app (imagen, video y audio); un
-#: SVG o cualquier tipo con XML o HTML se descarta porque puede llevar scripts.
-MEDIA_MIME = re.compile(r"(?:image|video|audio)/[a-z0-9][a-z0-9.+-]*")
 
 
 # ---------------------------------------------------------------------------
 # Lo que se pide en la URL
 # ---------------------------------------------------------------------------
-
-def parse_view(value):
-    """La vista pedida con ``?view=``: None (la completa de siempre) o «summary» (la liviana)."""
-    if value in (None, ""):
-        return None
-    if value != SUMMARY_VIEW:
-        raise ApiError("El parámetro 'view' solo acepta el valor 'summary'.")
-    return SUMMARY_VIEW
-
 
 def parse_semaphore(value):
     """El color de semáforo pedido con ``?semaphore=``, o None si no se pidió ninguno."""
@@ -92,10 +74,6 @@ def _urgency_order():
     )
 
 
-def _full_name(first, last):
-    return f"{(first or '').strip()} {(last or '').strip()}".strip()
-
-
 def _summary_row(row, today):
     semaphore = running_semaphore(row.status, row.created_at, row.category, today)
     # La solicitud y su primer mensaje guardan el mismo adjunto: se cuenta una sola vez.
@@ -111,7 +89,7 @@ def _summary_row(row, today):
         "daysRemaining": semaphore["daysRemaining"] if semaphore else None,
         "dueDate": semaphore["dueDate"] if semaphore else None,
         "residentId": row.resident_id,
-        "residentName": _full_name(row.resident_first_name, row.resident_last_name),
+        "residentName": full_name(row.resident_first_name, row.resident_last_name),
         "apartment": row.apartment,
         "createdByAdministration": row.created_by_admin_id is not None,
         "hasMedia": attachments > 0,
@@ -175,28 +153,6 @@ def detail_dict(pqrs):
     for message in data["messages"]:
         message["hasMedia"] = bool(message.pop("mediaUrl"))
     return data
-
-
-def decode_media(value):
-    """Los bytes y el tipo de un adjunto guardado como «data:image/jpeg;base64,…».
-
-    Devuelve None si no es una imagen, un video o un audio, o si no se puede leer: la web no muestra
-    nada que no sea de esos tres tipos ni sigue enlaces a otros sitios.
-    """
-    if not isinstance(value, str):
-        return None
-    header, _, payload = value.partition(",")
-    header = header.strip().lower()
-    if not header.startswith("data:") or not header.endswith(";base64"):
-        return None
-    mime = header[len("data:"):-len(";base64")].split(";")[0].strip()
-    if MEDIA_MIME.fullmatch(mime) is None or "xml" in mime or "html" in mime:
-        return None
-    try:
-        raw = base64.b64decode("".join(payload.split()), validate=True)
-    except (binascii.Error, ValueError):
-        return None
-    return (raw, mime) if raw else None
 
 
 def attachment(pqrs_id, message_id=None):

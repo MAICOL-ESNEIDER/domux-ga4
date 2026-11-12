@@ -17,6 +17,15 @@ ACTIVE_RESERVATION_STATUSES = ("activa", "aprobada")
 #: Las que cuentan para los límites diario y semanal del residente.
 LIMIT_RESERVATION_STATUSES = ("pendiente", "activa", "aprobada")
 
+#: Las que esperan la decisión de la administración: solo esas se aprueban o se rechazan.
+PENDING_RESERVATION_STATUSES = ("pendiente", "activa")
+
+#: Las que la administración todavía puede cancelar.
+CANCELLABLE_RESERVATION_STATUSES = ("pendiente", "activa", "aprobada")
+
+#: Las que ya terminaron: no admiten más mensajes en la conversación.
+CLOSED_RESERVATION_STATUSES = ("rechazada", "cancelada")
+
 
 def reservation_conflicts(common_area_id, day, time_slot, exclude_id=None):
     """True si la franja se cruza con otra reserva activa o aprobada de la zona (RN-019).

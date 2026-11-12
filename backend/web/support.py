@@ -1,6 +1,12 @@
-"""Ayudas que comparten las páginas de la web: avisos de resultado y paginación."""
+"""Ayudas que comparten las páginas de la web: avisos de resultado, paginación y entrega de adjuntos."""
 
-from flask import flash
+import hashlib
+
+from flask import Response, abort, flash, request
+
+#: Política de seguridad de un archivo adjunto: no puede cargar ni ejecutar nada, aunque alguien
+#: haya guardado como «imagen» otra cosa. (GitHub entrega así el contenido de los usuarios.)
+FILE_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 
 
 def flash_result(result, success_default="Listo."):
@@ -42,3 +48,20 @@ def fetch_all(api, path, key, max_pages=20, **params):
         if page >= result.get("totalPages", 1):
             break
     return rows, None
+
+
+def file_response(found):
+    """La respuesta con un adjunto, o un 404 si no existe o no es una imagen, un video o un audio.
+
+    ``found`` es lo que entregan los servicios: ``(bytes, tipo)`` o None. La respuesta lleva una
+    política de seguridad propia (sin scripts, sin cargar nada y en una caja aislada) y se puede pedir
+    por partes, para que un video avance y retroceda.
+    """
+    if found is None:
+        abort(404)
+    raw, mime = found
+    response = Response(raw, mimetype=mime)
+    response.set_etag(hashlib.sha256(raw).hexdigest())
+    response.headers["Content-Security-Policy"] = FILE_POLICY
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    return response.make_conditional(request, accept_ranges=True, complete_length=len(raw))

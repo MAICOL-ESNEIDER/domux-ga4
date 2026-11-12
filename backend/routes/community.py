@@ -32,7 +32,8 @@ from services.announcement_service import (
     visible_announcements,
 )
 from services.audit_service import add_audit_log
-from services import pqrs_service
+from services import pqrs_service, reservation_view
+from services.list_view import parse_view
 from services.notification_service import notify_residents, notify_user
 from services.excel_service import (
     MIME_XLSX,
@@ -40,7 +41,10 @@ from services.excel_service import (
 )
 from services.reservation_service import (
     ACTIVE_RESERVATION_STATUSES,
+    CANCELLABLE_RESERVATION_STATUSES,
+    CLOSED_RESERVATION_STATUSES,
     LIMIT_RESERVATION_STATUSES,
+    PENDING_RESERVATION_STATUSES,
     month_calendar,
     reservation_availability,
     reservation_conflicts,
@@ -301,7 +305,7 @@ def get_pqrs():
     Con ``semaphore=verde|amarillo|rojo`` deja solo las que están en curso con ese color de plazo.
     """
     user = g.current_user
-    view = pqrs_service.parse_view(request.args.get("view"))
+    view = parse_view(request.args.get("view"))
     semaphore = pqrs_service.parse_semaphore(request.args.get("semaphore"))
     query = Pqrs.query.join(User, Pqrs.resident_id == User.id)
     include_archived, error = parse_optional_bool(
@@ -363,7 +367,7 @@ def get_pqrs_item(pqrs_id):
     Con ``view=summary`` va sin el contenido de los adjuntos (solo dice cuáles mensajes los tienen),
     para que la web no cargue fotos que no va a mostrar en esa página.
     """
-    view = pqrs_service.parse_view(request.args.get("view"))
+    view = parse_view(request.args.get("view"))
     pqrs = db.session.get(Pqrs, pqrs_id)
     if pqrs is None or (g.current_user.role == "RESIDENT" and pqrs.resident_id != g.current_user.id):
         raise ApiError("PQRS no encontrada", 404)
@@ -716,12 +720,27 @@ def update_common_area_rules(area_id):
 @token_required
 @role_required("ADMIN", "RESIDENT")
 def get_reservations():
+    """Las reservas del residente, o todas las de la unidad si quien consulta es la administración.
+
+    Sin parámetros entrega la lista completa de siempre (con conversación y adjuntos), que es la que
+    usa la app. Con ``view=summary`` entrega la lista liviana de la web: sin conversación ni adjuntos,
+    paginada (``page`` y ``pageSize``), con lo que más urge primero y con el número de reservas de cada
+    estado en ``counts``. Los filtros ``status`` (un estado o «por_aprobar»), ``commonAreaId``,
+    ``dateFrom``, ``dateTo`` y ``q`` valen en las dos vistas.
+    """
     user = g.current_user
-    if user.role == "ADMIN":
-        query = Reservation.query
-    elif user.role == "RESIDENT":
-        query = Reservation.query.filter_by(resident_id=user.id)
-    else:
+    view = parse_view(request.args.get("view"))
+    statuses = reservation_view.parse_status(request.args.get("status"))
+    date_from = reservation_view.parse_day(request.args.get("dateFrom"), "dateFrom")
+    date_to = reservation_view.parse_day(request.args.get("dateTo"), "dateTo")
+    area_id = request.args.get("commonAreaId", type=int)
+    search = (request.args.get("search") or request.args.get("q") or "").strip()
+    query = Reservation.query.join(User, Reservation.resident_id == User.id).join(
+        CommonArea, Reservation.common_area_id == CommonArea.id
+    )
+    if user.role == "RESIDENT":
+        query = query.filter(Reservation.resident_id == user.id)
+    elif user.role != "ADMIN":
         return error_response(403, "No tienes permiso para ver las reservas")
     include_archived, error = parse_optional_bool(
         request.args.get("includeArchived"), "includeArchived"
@@ -730,8 +749,38 @@ def get_reservations():
         return error_response(400, error)
     if include_archived is not True:
         query = query.filter(Reservation.is_archived.is_(False))
+    # Los números de las pestañas cuentan todos los estados: se sacan antes de filtrar por estado.
+    unfiltered = reservation_view.filter_reservations(
+        query, area_id=area_id, date_from=date_from, date_to=date_to, search=search
+    )
+    query = reservation_view.filter_reservations(unfiltered, statuses=statuses)
+    if view is not None:
+        page, size = page_args(default_size=25, max_size=100)
+        return jsonify({
+            **reservation_view.summary_page(query, page, size),
+            "counts": reservation_view.status_counts(unfiltered),
+        })
     items = query.order_by(Reservation.created_at.desc()).all()
     return jsonify({"reservations": [item.to_dict() for item in items]})
+
+
+@bp.get("/reservations/<int:res_id>")
+@token_required
+@role_required("ADMIN", "RESIDENT")
+def get_reservation_item(res_id):
+    """Una reserva con su conversación. Un residente solo ve las suyas.
+
+    Con ``view=summary`` va sin el contenido de los adjuntos (solo dice cuáles mensajes los tienen) y
+    con ``slotTaken``, para que la web no cargue fotos que no va a mostrar en esa página.
+    """
+    view = parse_view(request.args.get("view"))
+    reservation = db.session.get(Reservation, res_id)
+    if reservation is None or (
+        g.current_user.role == "RESIDENT" and reservation.resident_id != g.current_user.id
+    ):
+        raise ApiError("Reserva no encontrada", 404)
+    data = reservation_view.detail_dict(reservation) if view is not None else reservation.to_dict()
+    return jsonify({"reservation": data})
 
 
 @bp.get("/reservations/availability")
@@ -958,7 +1007,7 @@ def update_reservation_status(res_id):
     reservation = db.session.get(Reservation, res_id)
     if reservation is None:
         return error_response(404, "Reserva no encontrada")
-    if reservation.status not in ("pendiente", "activa"):
+    if reservation.status not in PENDING_RESERVATION_STATUSES:
         return error_response(400, "Solo puedes aprobar o rechazar reservas pendientes.")
     if status in ACTIVE_RESERVATION_STATUSES and reservation_conflicts(
         reservation.common_area_id,
@@ -1019,7 +1068,7 @@ def add_reservation_message(res_id):
         return error_response(404, "Reserva no encontrada.")
     if g.current_user.role == "RESIDENT" and reservation.resident_id != g.current_user.id:
         return error_response(403, "Solo puedes escribir en tus propias reservas.")
-    if reservation.status in ("rechazada", "cancelada"):
+    if reservation.status in CLOSED_RESERVATION_STATUSES:
         return error_response(400, "No se puede continuar una conversación de una reserva finalizada.")
 
     reservation.messages.append(ReservationMessage(
@@ -1063,7 +1112,7 @@ def cancel_reservation(res_id):
         return error_response(404, "Reserva no encontrada")
     if g.current_user.role == "RESIDENT" and reservation.resident_id != g.current_user.id:
         return error_response(403, "Esa reserva no es tuya")
-    if reservation.status not in ("pendiente", "activa", "aprobada"):
+    if reservation.status not in CANCELLABLE_RESERVATION_STATUSES:
         return error_response(400, "Solo se pueden cancelar reservas pendientes o aprobadas.")
     if g.current_user.role == "RESIDENT" and not reservation.resident_can_cancel:
         area = reservation.common_area

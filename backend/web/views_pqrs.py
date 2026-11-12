@@ -7,19 +7,17 @@ la angosta (celular o ventana pequeña) son dos pantallas, con un enlace para vo
 
 Las fotos, videos y audios de las PQRS no viajan dentro de la página: cada uno se pide aparte a una
 ruta que solo entrega imágenes, videos y audios, con una política de seguridad que no deja ejecutar
-nada (ver ``_file``).
+nada (ver ``file_response``).
 """
 
-import hashlib
-
-from flask import Response, abort, flash, g, redirect, render_template, request, url_for
+from flask import abort, flash, g, redirect, render_template, request, url_for
 
 from services import pqrs_service
 from web import bp
 from web.api import Api
 from web.forms import compact, number, text
 from web.security import login_required
-from web.support import fetch_all
+from web.support import fetch_all, file_response
 from web.texts import PQRS_STATUSES, plural
 
 #: Filas de la bandeja por página.
@@ -35,10 +33,6 @@ DEADLINE_OPTIONS = (("rojo", "Vencida"), ("amarillo", "Por vencer"), ("verde", "
 
 #: La API solo deja responder por lotes con estos dos estados.
 BATCH_STATUS_OPTIONS = tuple(option for option in STATUS_OPTIONS if option[0] != "abierta")
-
-#: Política de seguridad de un archivo adjunto: no puede cargar ni ejecutar nada, aunque alguien
-#: haya guardado como «imagen» otra cosa. (GitHub entrega así el contenido de los usuarios.)
-FILE_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 
 
 # --- Lo que se pide en la URL -------------------------------------------------------------------
@@ -211,31 +205,15 @@ def pqrs_new():
 
 # --- Adjuntos ------------------------------------------------------------------------------------------
 
-def _file(found):
-    """La respuesta con un adjunto, o un 404 si no existe o no es una imagen, un video o un audio.
-
-    Lleva una política de seguridad propia (sin scripts, sin cargar nada y en una caja aislada) y se
-    puede pedir por partes, para que un video avance y retroceda.
-    """
-    if found is None:
-        abort(404)
-    raw, mime = found
-    response = Response(raw, mimetype=mime)
-    response.set_etag(hashlib.sha256(raw).hexdigest())
-    response.headers["Content-Security-Policy"] = FILE_POLICY
-    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    return response.make_conditional(request, accept_ranges=True, complete_length=len(raw))
-
-
 @bp.get("/pqrs/<int:pqrs_id>/adjunto")
 @login_required
 def pqrs_attachment(pqrs_id):
     """El adjunto con el que el residente radicó la PQRS."""
-    return _file(pqrs_service.attachment(pqrs_id))
+    return file_response(pqrs_service.attachment(pqrs_id))
 
 
 @bp.get("/pqrs/<int:pqrs_id>/mensajes/<int:message_id>/adjunto")
 @login_required
 def pqrs_message_attachment(pqrs_id, message_id):
     """El adjunto de un mensaje de la conversación."""
-    return _file(pqrs_service.attachment(pqrs_id, message_id))
+    return file_response(pqrs_service.attachment(pqrs_id, message_id))

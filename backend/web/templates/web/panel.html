@@ -94,7 +94,12 @@
       <tbody>
         {% for row in pending_reservations %}
         <tr>
-          <td>{{ row.commonAreaName or "—" }}{% if row.attendees %}<br><small class="muted">{{ plural(row.attendees, "persona", "personas") }}</small>{% endif %}</td>
+          <td>
+            {%- if row.commonAreaName and page_exists("web.reservation_detail") -%}
+            <a href="{{ url_for('web.reservation_detail', res_id=row.id) }}">{{ row.commonAreaName }}<span class="sr-only"> del {{ row.date | date_es }}, {{ row.residentName }}</span></a>
+            {%- else -%}{{ row.commonAreaName or "—" }}{%- endif -%}
+            {% if row.attendees %}<br><small class="muted">{{ plural(row.attendees, "persona", "personas") }}</small>{% endif %}
+          </td>
           <td>{{ row.date | date_es }}<br><small class="muted">{{ row.timeSlot }}</small></td>
           <td>{{ row.residentName }}<br><small class="muted">{{ row.apartment or "—" }}</small></td>
           <td class="actions">

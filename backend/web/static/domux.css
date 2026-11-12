@@ -233,6 +233,7 @@ input[type="checkbox"], input[type="radio"] { width: 1.15rem; height: 1.15rem; a
 .notice-success { background: #052e16; color: var(--ok); border-color: #10b981; }
 .notice-error { background: var(--bad-bg); color: var(--bad); border-color: #ef4444; }
 .notice-info { background: var(--card); color: var(--soft); border-color: var(--line); }
+.notice-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
 
 .badge {
   display: inline-block; padding: .1rem .65rem; border-radius: 999px; border: 1px solid;
@@ -280,6 +281,7 @@ dialog .dialog-actions { display: flex; gap: .5rem; justify-content: flex-end; m
 .inbox-list .filters { gap: .5rem .75rem; margin-bottom: .75rem; }
 .inbox-list .filters .field { flex: 1 1 100px; min-width: 0; }
 .inbox-list .filters .field.grow { flex: 1 1 100%; }
+.inbox-list .filters .field.field-date { flex: 1 1 140px; }
 .inbox-card { padding: .25rem 0 1rem; }
 .inbox-card > .empty, .inbox-card > .pager { padding-left: 1.25rem; padding-right: 1.25rem; }
 .inbox-tools { padding: .25rem 1.25rem 0; border-bottom: 1px solid var(--line); }
@@ -295,6 +297,7 @@ dialog .dialog-actions { display: flex; gap: .5rem; justify-content: flex-end; m
   padding: .7rem 1rem .7rem .25rem; color: var(--text); text-decoration: none;
 }
 .inbox-link:hover { color: var(--text); }
+.inbox-items.no-select .inbox-link { padding-left: 1.25rem; }
 .inbox-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .inbox-subject { overflow-wrap: anywhere; }
 .inbox-meta { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }

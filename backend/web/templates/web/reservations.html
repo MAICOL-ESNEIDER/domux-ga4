@@ -1,0 +1,187 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import status_badge, badge, pager, attachment %}
+{% from "web/_forms.html" import textarea %}
+{% set page_title = "Reservas" %}
+
+{% block content %}
+{% set filtered = filters.q or filters.zona or filters.desde or filters.hasta or filters.archivadas %}
+{% set tab_args = {"estado": filters.estado} if filters.estado != "por_aprobar" else {} %}
+<div class="inbox-page{% if selected %} has-detail{% endif %}">
+<div class="page-head">
+  <div>
+    <h1>Reservas</h1>
+    <p>{{ plural(total, "reserva", "reservas") }}{% if filtered %} con esos filtros{% endif %}.{% if filters.estado in ("por_aprobar", "todas") %} Las que esperan tu decisión van primero, la de fecha más próxima antes.{% endif %}</p>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Estado de las reservas">
+  {% for tab in tabs %}
+  <a href="{{ tab.url }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }} ({{ tab.count }})</a>
+  {% endfor %}
+</nav>
+
+<div class="inbox">
+
+  {# --- La lista -------------------------------------------------------------------------------- #}
+  <section class="inbox-list" aria-label="Lista de reservas">
+    <form class="filters" method="get" action="{{ url_for('web.reservations_list') }}" role="search" aria-label="Filtrar reservas">
+      {% if filters.estado != "por_aprobar" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
+      <div class="field grow">
+        <label for="q">Buscar</label>
+        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
+               placeholder="Residente, apartamento o zona">
+      </div>
+      <div class="field">
+        <label for="zona">Zona</label>
+        <select id="zona" name="zona" data-autosubmit>
+          <option value="">Todas</option>
+          {% for value, label in zone_options %}<option value="{{ value }}"{% if filters.zona == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field field-date">
+        <label for="desde">Desde</label>
+        <input type="date" id="desde" name="desde" value="{{ filters.desde }}">
+      </div>
+      <div class="field field-date">
+        <label for="hasta">Hasta</label>
+        <input type="date" id="hasta" name="hasta" value="{{ filters.hasta }}">
+      </div>
+      <div class="check">
+        <input type="checkbox" id="archivadas" name="archivadas" value="1"{% if filters.archivadas %} checked{% endif %} data-autosubmit>
+        <label for="archivadas">Incluir archivadas</label>
+      </div>
+      <button type="submit" class="btn">Filtrar</button>
+      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.reservations_list', **tab_args) }}">Quitar filtros</a>{% endif %}
+    </form>
+
+    <div class="card inbox-card">
+      {% if items %}
+      <ul class="inbox-items no-select">
+        {% for item in items %}
+        {% set current = selected and selected.id == item.id %}
+        <li class="inbox-item{% if current %} is-current{% endif %}">
+          <a class="inbox-link" href="{{ url_for('web.reservation_detail', res_id=item.id, **list_args) }}"{% if current %} aria-current="true"{% endif %}>
+            <span class="inbox-top">
+              <strong class="inbox-subject">{{ item.commonAreaName or "Zona común" }}</strong>
+              {{ status_badge("reservation", item.status) }}
+            </span>
+            <span>{{ item.date|date_es }} · {{ item.timeSlot }}{% if item.attendees %} · {{ plural(item.attendees, "persona", "personas") }}{% endif %}</span>
+            <span class="inbox-meta">{{ item.apartment or "Sin apartamento" }} · {{ item.residentName }}</span>
+            {% if item.messageCount or item.attachmentCount or item.createdByAdministration or item.isArchived %}
+            <span class="inbox-deadline">
+              {% if item.messageCount %}<span class="inbox-meta">{{ plural(item.messageCount, "mensaje", "mensajes") }}</span>{% endif %}
+              {% if item.attachmentCount %}<span class="inbox-meta">{{ plural(item.attachmentCount, "adjunto", "adjuntos") }}</span>{% endif %}
+              {% if item.createdByAdministration %}<span class="inbox-meta">Registrada por la administración</span>{% endif %}
+              {% if item.isArchived %}<span class="inbox-meta">Archivada</span>{% endif %}
+            </span>
+            {% endif %}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {{ pager(page, pages) }}
+      {% else %}
+      <p class="empty">{% if filtered %}No hay reservas que coincidan con esos filtros.{% else %}{{ empty_text }}{% endif %}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {# --- La reserva abierta al lado -------------------------------------------------------------- #}
+  <section class="inbox-detail" aria-label="Detalle de la reserva">
+    {% if selected %}
+    <article class="card" aria-labelledby="detail-title">
+      <a class="back-link" href="{{ url_for('web.reservations_list', **list_args) }}">‹ Volver a la lista</a>
+      <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.commonAreaName or "Zona común" }}</h2>
+      <p>
+        {{ status_badge("reservation", selected.status) }}
+        {% if selected.isArchived %}{{ badge("Archivada", "neutral") }}{% endif %}
+      </p>
+
+      {% if can_decide and selected.slotTaken %}
+      <p class="notice notice-warn" id="slot-taken" role="status">Esa franja ya la ocupa otra reserva aprobada, así que esta no se puede aprobar. Puedes rechazarla; antes, explícale el motivo al residente en la conversación.</p>
+      {% endif %}
+
+      <dl class="facts">
+        <dt>Fecha</dt><dd>{{ selected.date|date_es }}</dd>
+        <dt>Franja</dt><dd>{{ selected.timeSlot }}</dd>
+        <dt>Personas</dt><dd>{{ selected.attendees or "No indicó" }}</dd>
+        <dt>Residente</dt><dd>{{ selected.residentName or "—" }}</dd>
+        <dt>Apartamento</dt><dd>{{ selected.apartment or "—" }}</dd>
+        {% if selected.requestedByMinor %}<dt>Menor de edad</dt><dd>Sí</dd>{% endif %}
+        <dt>Solicitada</dt>
+        <dd>{{ selected.createdAt|date_es }}{% if selected.createdByAdministration %} · la registró la administración a nombre del residente{% endif %}</dd>
+      </dl>
+      {% if (can_decide or can_cancel) and selected.cancelUntil %}
+      <p class="muted">El residente puede cancelar hasta el {{ selected.cancelUntil|date_es }}{% if not selected.canCancel %}; ese plazo ya venció{% endif %}.</p>
+      {% endif %}
+
+      {% if can_decide %}
+      <h3 id="decision-title">Decisión</h3>
+      <form method="post" action="{{ url_for('web.reservation_decide', res_id=selected.id) }}" aria-labelledby="decision-title">
+        {{ csrf_input() }}
+        <input type="hidden" name="next" value="{{ url_for('web.reservation_detail', res_id=selected.id, **list_args) }}">
+        <p class="help">Si la vas a rechazar, escríbele antes el motivo en la conversación: una reserva rechazada ya no recibe mensajes.</p>
+        <div class="form-actions">
+          <button type="submit" class="btn" name="decision" value="aprobada"{% if selected.slotTaken %} disabled aria-describedby="slot-taken"{% endif %}>Aprobar</button>
+          <button type="submit" class="btn btn-danger" name="decision" value="rechazada"
+                  data-confirm="¿Rechazar la reserva de {{ selected.residentName }}? Se le avisará al residente y la conversación quedará cerrada."
+                  data-confirm-label="Sí, rechazar">Rechazar</button>
+        </div>
+      </form>
+      {% elif can_cancel %}
+      <h3 id="decision-title">Cancelar la reserva</h3>
+      <form method="post" action="{{ url_for('web.reservation_cancel', res_id=selected.id) }}" aria-labelledby="decision-title">
+        {{ csrf_input() }}
+        <input type="hidden" name="next" value="{{ url_for('web.reservation_detail', res_id=selected.id, **list_args) }}">
+        <p class="help">Si hay un imprevisto, cancélala: la franja queda libre y el residente recibe un aviso. Antes explícale el motivo en la conversación, porque una reserva cancelada ya no recibe mensajes.</p>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-danger"
+                  data-confirm="¿Cancelar la reserva de {{ selected.residentName }}? La franja quedará libre, se le avisará al residente y la conversación quedará cerrada."
+                  data-confirm-label="Sí, cancelar la reserva">Cancelar reserva</button>
+        </div>
+      </form>
+      {% else %}
+      <p class="muted">Esta reserva ya terminó: no se puede cambiar.</p>
+      {% endif %}
+
+      <h3>Conversación</h3>
+      {% if selected.messages %}
+      <ol class="thread">
+        {% for entry in selected.messages %}
+        <li class="msg{% if entry.authorRole == 'ADMIN' %} from-admin{% endif %}">
+          <p class="who-line">
+            <strong>{{ entry.authorName or role_labels.get(entry.authorRole, "—") }}</strong>
+            · {{ role_labels.get(entry.authorRole, "") }} · {{ entry.createdAt|date_es }}
+          </p>
+          {% if entry.message %}<p class="prewrap mb-0">{{ entry.message }}</p>{% endif %}
+          {% if entry.hasMedia %}{{ attachment(url_for('web.reservation_attachment', res_id=selected.id, message_id=entry.id), entry.mediaType) }}{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="muted">Todavía no hay mensajes en esta reserva.</p>
+      {% endif %}
+
+      {% if is_closed %}
+      <p class="muted">Esta reserva está {{ badge_info("reservation", selected.status).label|lower }}: la conversación quedó cerrada y ya no se pueden enviar mensajes.</p>
+      {% else %}
+      <h3 id="reply-title">Escribirle al residente</h3>
+      <form method="post" action="{{ url_for('web.reservation_message', res_id=selected.id, **list_args) }}" aria-labelledby="reply-title">
+        {{ csrf_input() }}
+        {{ textarea("message", "Mensaje", reply.message, required=True,
+                    help="El residente recibe un aviso en la app.") }}
+        <div class="form-actions">
+          <button type="submit" class="btn">Enviar mensaje</button>
+        </div>
+      </form>
+      {% endif %}
+    </article>
+    {% else %}
+    <div class="card inbox-placeholder">
+      <p class="empty">Elige una reserva de la lista para ver sus datos y la conversación, y para decidir sobre ella.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+</div>
+{% endblock %}

@@ -13,14 +13,11 @@ from sqlalchemy.orm import load_only
 from models import UNCLAIMED_ORANGE_HOURS, Notification, PackageItem, Pqrs, Reservation
 from services.alert_service import run_alerts
 from services.pqrs_rules import RED, RUNNING_STATUSES, YELLOW, pqrs_semaphore
+from services.reservation_service import PENDING_RESERVATION_STATUSES
 from time_utils import colombia_today, to_colombia, utc_now
 
 #: Cuántas filas trae cada lista del panel.
 PANEL_ROWS = 8
-
-#: Reservas que esperan la decisión de la administración (las mismas a las que la app muestra
-#: «Aprobar» y «Rechazar»).
-PENDING_RESERVATION_STATUSES = ("pendiente", "activa")
 
 
 def _urgent_pqrs():
