@@ -22,6 +22,15 @@ RESERVATION_STATUSES = {
     "cancelada": ("Cancelada", "alert"),
 }
 
+#: Categoría de un comunicado (HU-058): texto y tono. Las claves son las de ``models.ANNOUNCEMENT_CATEGORIES``.
+ANNOUNCEMENT_CATEGORIES = {
+    "mantenimiento": ("Mantenimiento", "progress"),
+    "urgente": ("Urgente", "alert"),
+    "asamblea": ("Asamblea", "neutral"),
+    "seguridad": ("Seguridad", "progress"),
+    "zonas_comunes": ("Zonas comunes", "neutral"),
+}
+
 #: Semáforo del plazo de una PQRS (HU-073).
 SEMAPHORES = {
     "verde": ("En plazo", "success"),
@@ -44,6 +53,7 @@ _KINDS = {
     "pqrs": PQRS_STATUSES,
     "reservation": RESERVATION_STATUSES,
     "semaphore": SEMAPHORES,
+    "announcement": ANNOUNCEMENT_CATEGORIES,
 }
 
 
@@ -94,6 +104,17 @@ def deadline_text(days_remaining, due_date):
 def notification_type(value):
     """El tema de una notificación en palabras."""
     return NOTIFICATION_TYPES.get(value or "general", "General")
+
+
+def slot_length_text(minutes):
+    """La duración de una franja con palabras: «30 minutos», «1 hora», «1 hora y media» o «2 horas»."""
+    if minutes < 60:
+        return f"{minutes} minutos"
+    hours, rest = divmod(minutes, 60)
+    base = "1 hora" if hours == 1 else f"{hours} horas"
+    if rest == 0:
+        return base
+    return f"{base} y media" if rest == 30 else f"{base} y {rest} minutos"
 
 
 def plural(count, singular, plural_form):

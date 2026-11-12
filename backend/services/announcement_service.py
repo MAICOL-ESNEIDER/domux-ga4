@@ -130,28 +130,43 @@ def reachable_apartments(tower_id):
     return query.scalar() or 0
 
 
-def announcement_payloads(items, user):
-    """Los comunicados listos para responder, con lo que depende de quién los pide.
+def reading_counts(announcements):
+    """Por cada comunicado, cuántos apartamentos lo leyeron y a cuántos llega (HU-062).
 
-    Todos llevan ``isRead`` (los que no son residentes no tienen nada sin leer).
-    La administración recibe además cuántos apartamentos lo leyeron y de cuántos
-    (HU-062); los residentes nunca ven esos números.
+    ``announcements`` es una lista de ``(id del comunicado, id de su torre o None)``. Devuelve
+    ``{id: (apartamentos que lo leyeron, apartamentos a los que llega)}``.
     """
-    ids = [item.id for item in items]
-    read_ids = _read_ids(user, ids) if ids and user.role == "RESIDENT" else set()
-    readers = _apartments_that_read(ids) if ids and user.role == "ADMIN" else {}
+    ids = [announcement_id for announcement_id, _tower_id in announcements]
+    readers = _apartments_that_read(ids) if ids else {}
     reachable = {}
-    payloads = []
-    for item in items:
-        data = item.to_dict()
-        data["isRead"] = user.role != "RESIDENT" or item.id in read_ids
+    counts = {}
+    for announcement_id, tower_id in announcements:
+        if tower_id not in reachable:
+            reachable[tower_id] = reachable_apartments(tower_id)
+        counts[announcement_id] = (readers.get(announcement_id, 0), reachable[tower_id])
+    return counts
+
+
+def add_reader_data(payloads, user):
+    """Agrega a cada comunicado, ya armado como diccionario, lo que depende de quién lo pide.
+
+    Todos llevan ``isRead`` (los que no son residentes no tienen nada sin leer). La administración
+    recibe además cuántos apartamentos lo leyeron y de cuántos (HU-062); los residentes nunca ven
+    esos números. Cada diccionario necesita su ``id`` y su ``towerId``.
+    """
+    ids = [data["id"] for data in payloads]
+    read_ids = _read_ids(user, ids) if ids and user.role == "RESIDENT" else set()
+    counts = reading_counts([(data["id"], data["towerId"]) for data in payloads]) if user.role == "ADMIN" else {}
+    for data in payloads:
+        data["isRead"] = user.role != "RESIDENT" or data["id"] in read_ids
         if user.role == "ADMIN":
-            if item.tower_id not in reachable:
-                reachable[item.tower_id] = reachable_apartments(item.tower_id)
-            data["readApartments"] = readers.get(item.id, 0)
-            data["totalApartments"] = reachable[item.tower_id]
-        payloads.append(data)
+            data["readApartments"], data["totalApartments"] = counts[data["id"]]
     return payloads
+
+
+def announcement_payloads(items, user):
+    """Los comunicados listos para responder, con lo que depende de quién los pide (ver ``add_reader_data``)."""
+    return add_reader_data([item.to_dict() for item in items], user)
 
 
 def mark_as_read(user, announcement):

@@ -1,0 +1,45 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import field, select, textarea %}
+{% set page_title = "Nuevo comunicado" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Nuevo comunicado</h1>
+    <p>Lo ven los residentes en la app. Una vez publicado no se edita ni se borra: si ya no aplica, se retira.</p>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('web.announcement_new') }}" enctype="multipart/form-data"
+      class="card form-narrow" aria-label="Nuevo comunicado">
+  {{ csrf_input() }}
+  {{ field("title", "Título", values.title, required=True, maxlength=150,
+           help="Corto y claro: es lo primero que lee el residente. Hasta 150 letras.") }}
+  {{ textarea("message", "Mensaje", values.message, required=True, rows=8,
+              help="Lo que quieres contar, con fechas y horas si aplican.") }}
+  {{ select("category", "Categoría", category_options, values.category, required=True, blank="Elige una categoría",
+            help="Ayuda a que los residentes encuentren el comunicado. «Urgente» llega como aviso urgente.") }}
+  {{ select("towerId", "¿A quién le llega?", towers, values.towerId, blank="Toda la unidad",
+            help="Si eliges una torre, solo lo ven los residentes de esa torre.") }}
+  {{ field("expiresAt", "Vence el", values.expiresAt, type="date", extra={"min": today},
+           help="Pasada esa fecha el comunicado pasa a Archivados. Si no pones fecha, nunca vence.") }}
+  <div class="form-row">
+    {{ field("eventDate", "Fecha del evento", values.eventDate, type="date",
+             help="Solo si trata de algo que ocurre un día: una asamblea, un corte de agua, una fumigación.") }}
+    {{ field("eventTime", "Hora del evento", values.eventTime, type="time") }}
+  </div>
+
+  <div class="field">
+    <label for="media">Foto, video o audio (opcional)</label>
+    <input type="file" id="media" name="media" accept="{{ media_accept }}" aria-describedby="media-help">
+    <p class="help" id="media-help">Formatos: {{ media_formats }}. Pesa hasta {{ media_mb }} MB.</p>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn"
+            data-confirm="¿Publicar el comunicado? Los residentes lo verán en la app. Después no se puede editar: solo retirar."
+            data-confirm-label="Sí, publicar" data-confirm-danger="no">Publicar comunicado</button>
+    <a class="btn btn-quiet" href="{{ url_for('web.announcements_list') }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

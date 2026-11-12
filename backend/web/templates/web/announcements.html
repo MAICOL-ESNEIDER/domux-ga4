@@ -1,0 +1,135 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import status_badge, badge, pager, attachment %}
+{% set page_title = "Comunicados" %}
+
+{% block content %}
+{% set filtered = filters.q or filters.categoria or filters.torre %}
+{% set tab_args = {"estado": filters.estado} if filters.estado != "vigentes" else {} %}
+<div class="inbox-page{% if selected %} has-detail{% endif %}">
+<div class="page-head">
+  <div>
+    <h1>Comunicados</h1>
+    <p>{{ plural(total, "comunicado", "comunicados") }}{% if filtered %} con esos filtros{% endif %}. Los más nuevos van primero.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('web.announcement_new') }}">Nuevo comunicado</a>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Estado de los comunicados">
+  {% for tab in tabs %}
+  <a href="{{ tab.url }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }} ({{ tab.count }})</a>
+  {% endfor %}
+</nav>
+
+<div class="inbox">
+
+  {# --- La lista -------------------------------------------------------------------------------- #}
+  <section class="inbox-list" aria-label="Lista de comunicados">
+    <form class="filters" method="get" action="{{ url_for('web.announcements_list') }}" role="search" aria-label="Filtrar comunicados">
+      {% if filters.estado != "vigentes" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
+      <div class="field grow">
+        <label for="q">Buscar</label>
+        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
+               placeholder="Palabras del título o del mensaje">
+      </div>
+      <div class="field">
+        <label for="categoria">Categoría</label>
+        <select id="categoria" name="categoria" data-autosubmit>
+          <option value="">Todas</option>
+          {% for value, label in category_options %}<option value="{{ value }}"{% if filters.categoria == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="torre">Para</label>
+        <select id="torre" name="torre" data-autosubmit>
+          <option value="">Todos</option>
+          {% for value, label in tower_options %}<option value="{{ value }}"{% if filters.torre == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn">Filtrar</button>
+      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.announcements_list', **tab_args) }}">Quitar filtros</a>{% endif %}
+    </form>
+
+    <div class="card inbox-card">
+      {% if items %}
+      <ul class="inbox-items no-select">
+        {% for item in items %}
+        {% set current = selected and selected.id == item.id %}
+        <li class="inbox-item{% if current %} is-current{% endif %}">
+          <a class="inbox-link" href="{{ url_for('web.announcement_detail', announcement_id=item.id, **list_args) }}"{% if current %} aria-current="true"{% endif %}>
+            <span class="inbox-top">
+              <strong class="inbox-subject">{{ item.title }}</strong>
+              {% if item.category %}{{ status_badge("announcement", item.category) }}{% endif %}
+            </span>
+            <span>{{ item.towerName or "Toda la unidad" }} · {{ item.createdAt|date_es }}</span>
+            <span class="inbox-deadline">
+              <span class="inbox-meta">Lo leyeron {{ item.readApartments }} de {{ plural(item.totalApartments, "apartamento", "apartamentos") }}</span>
+              {% if item.hasMedia %}<span class="inbox-meta">Con adjunto</span>{% endif %}
+              {% if item.expiresAt %}<span class="inbox-meta">{% if item.isExpired %}Venció{% else %}Vence{% endif %} el {{ item.expiresAt|date_es }}</span>{% endif %}
+            </span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {{ pager(page, pages) }}
+      {% else %}
+      <p class="empty">{% if filtered %}No hay comunicados que coincidan con esos filtros.{% else %}{{ empty_text }}{% endif %}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {# --- El comunicado abierto al lado ------------------------------------------------------------ #}
+  <section class="inbox-detail" aria-label="Detalle del comunicado">
+    {% if selected %}
+    <article class="card" aria-labelledby="detail-title">
+      <a class="back-link" href="{{ url_for('web.announcements_list', **list_args) }}">‹ Volver a la lista</a>
+      <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.title }}</h2>
+      <p>
+        {% if selected.category %}{{ status_badge("announcement", selected.category) }}{% endif %}
+        {{ badge(selected.towerName or "Toda la unidad", "neutral") }}
+        {% if selected.isExpired %}{{ badge("Archivado", "neutral") }}{% endif %}
+      </p>
+
+      <p class="prewrap">{{ selected.message }}</p>
+      {% if selected.hasMedia %}{{ attachment(url_for('web.announcement_attachment', announcement_id=selected.id), selected.mediaType) }}{% endif %}
+
+      <dl class="facts mt-1">
+        <dt>Publicado</dt><dd>{{ selected.createdAt|date_es }}{% if selected.authorName %} · {{ selected.authorName }}{% endif %}</dd>
+        <dt>Llega a</dt><dd>{{ selected.towerName or "Toda la unidad" }}</dd>
+        <dt>Vencimiento</dt>
+        <dd>{% if selected.expiresAt %}{{ selected.expiresAt|date_es }}{% if selected.isExpired %} · ya venció, por eso está en Archivados{% endif %}{% else %}No vence{% endif %}</dd>
+        {% if selected.eventDate %}
+        <dt>Evento</dt><dd>{{ selected.eventDate|date_es }}{% if selected.eventTime %} a las {{ selected.eventTime }}{% endif %}</dd>
+        {% endif %}
+      </dl>
+
+      <h3 id="reading-title">Quiénes lo han leído</h3>
+      {% if selected.totalApartments %}
+      <p class="mb-0">Lo han leído <strong>{{ selected.readApartments }}</strong> de {{ plural(selected.totalApartments, "apartamento", "apartamentos") }} a los que les llega.</p>
+      <progress class="reading" max="{{ selected.totalApartments }}" value="{{ selected.readApartments }}" aria-labelledby="reading-title">{{ selected.readApartments }} de {{ selected.totalApartments }}</progress>
+      {% else %}
+      <p class="muted">Todavía no hay apartamentos con residentes a los que les llegue este comunicado.</p>
+      {% endif %}
+
+      <h3 id="retire-title">Retirar el comunicado</h3>
+      <form method="post" action="{{ url_for('web.announcement_retire', announcement_id=selected.id) }}" aria-labelledby="retire-title">
+        {{ csrf_input() }}
+        <input type="hidden" name="next" value="{{ url_for('web.announcements_list', **list_args) }}">
+        <p class="help">Si ya no aplica, retíralo: deja de verse en la app, pero queda guardado en el historial. Desde aquí no se puede volver a publicar.</p>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-danger"
+                  data-confirm="¿Retirar el comunicado «{{ selected.title }}»? Dejará de verse en la app, pero quedará guardado."
+                  data-confirm-label="Sí, retirar">Retirar comunicado</button>
+        </div>
+      </form>
+    </article>
+    {% else %}
+    <div class="card inbox-placeholder">
+      <p class="empty">Elige un comunicado de la lista para ver su mensaje, su adjunto y cuántos apartamentos lo han leído.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+</div>
+{% endblock %}

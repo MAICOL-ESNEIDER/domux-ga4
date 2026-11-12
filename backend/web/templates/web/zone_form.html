@@ -1,0 +1,52 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import field, select %}
+{% set page_title = "Reglas de " ~ area.name %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Reglas de {{ area.name }}</h1>
+    <p>Las reservas nuevas usan estas reglas desde que guardas. Las reservas que ya existen no cambian.</p>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('web.zone_edit', area_id=area.id) }}" class="card form-narrow"
+      aria-label="Reglas de {{ area.name }}">
+  {{ csrf_input() }}
+
+  <h2>Horario</h2>
+  <div class="form-row">
+    {{ field("openTime", "Abre a las", values.openTime, type="time", required=True) }}
+    {{ field("closeTime", "Cierra a las", values.closeTime, type="time", required=True) }}
+  </div>
+  {{ select("slotMinutes", "Duración de cada franja", slot_options, values.slotMinutes, required=True,
+            help="El día se parte en franjas de esta duración, desde la hora de apertura. Una franja que no cabe completa antes del cierre no se ofrece.") }}
+
+  <h2>Cuántos y cuándo</h2>
+  {{ field("capacity", "Aforo máximo (personas)", values.capacity, type="number",
+           extra={"min": 1, "max": 2000, "inputmode": "numeric"},
+           help="Déjalo vacío si la zona no tiene un máximo definido.") }}
+  {{ field("minAdvanceDays", "Anticipación mínima (días)", values.minAdvanceDays, type="number", required=True,
+           extra={"min": 0, "max": 30, "inputmode": "numeric"},
+           help="Con cuántos días de anticipación se puede reservar como mínimo. 0 es que se puede reservar el mismo día.") }}
+  {{ field("maxAdvanceDays", "Anticipación máxima (días)", values.maxAdvanceDays, type="number", required=True,
+           extra={"min": 1, "max": 365, "inputmode": "numeric"},
+           help="Qué tan adelante se puede reservar. No puede ser menor que la mínima.") }}
+  {{ field("weeklyLimit", "Reservas por semana de cada residente", values.weeklyLimit, type="number", required=True,
+           extra={"min": 1, "max": 14, "inputmode": "numeric"},
+           help="Cuántas reservas puede tener cada residente en esta zona en una misma semana.") }}
+  {{ field("cancelDeadlineDays", "Plazo para cancelar (días antes)", values.cancelDeadlineDays, type="number", required=True,
+           extra={"min": 1, "max": 3, "inputmode": "numeric"},
+           help="El residente puede cancelar hasta esos días antes de la fecha reservada. Como máximo 3.") }}
+
+  <h2>Mantenimiento</h2>
+  {{ select("maintenanceWeekday", "Día de mantenimiento", weekday_options, values.maintenanceWeekday,
+            blank="Sin día de mantenimiento",
+            help="Ese día de la semana la zona no se puede reservar. Si ese día es festivo, el cierre pasa al día siguiente.") }}
+
+  <div class="form-actions">
+    <button type="submit" class="btn">Guardar las reglas</button>
+    <a class="btn btn-quiet" href="{{ url_for('web.zones_list') }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

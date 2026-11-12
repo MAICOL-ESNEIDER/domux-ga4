@@ -1,0 +1,35 @@
+{% extends "web/base.html" %}
+{% set page_title = "Zonas comunes y reglas" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Zonas comunes y reglas</h1>
+    <p>Las reglas con las que los residentes reservan cada zona. Si cambias una, las reservas nuevas la usan desde ese momento; las que ya existen no cambian.</p>
+  </div>
+</div>
+
+{% if zones %}
+<div class="zone-grid">
+  {% for zone in zones %}
+  <article class="card" aria-labelledby="zone-{{ zone.id }}">
+    <h2 id="zone-{{ zone.id }}">{{ zone.name }}</h2>
+    <dl class="facts">
+      <dt>Horario</dt><dd>{{ zone.schedule }}</dd>
+      <dt>Franjas</dt><dd>{{ zone.slots }}</dd>
+      <dt>Aforo</dt><dd>{{ zone.capacity }}</dd>
+      <dt>Se reserva</dt><dd>{{ zone.advance }}</dd>
+      <dt>Cancelación</dt><dd>{{ zone.cancel }}</dd>
+      <dt>Límite</dt><dd>{{ zone.weekly }}</dd>
+      <dt>Mantenimiento</dt><dd>{{ zone.maintenance }}</dd>
+    </dl>
+    <a class="btn" href="{{ url_for('web.zone_edit', area_id=zone.id) }}">Editar las reglas<span class="sr-only"> de {{ zone.name }}</span></a>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<section class="card" aria-label="Zonas comunes">
+  <p class="empty">Todavía no hay zonas comunes.</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -31,6 +31,7 @@ def init_web(app):
     # Cada módulo registra sus páginas en el blueprint al importarse.
     from web import (  # noqa: F401
         pages,
+        views_announcements,
         views_auth,
         views_notifications,
         views_panel,
@@ -39,6 +40,7 @@ def init_web(app):
         views_structure,
         views_unit,
         views_users,
+        views_zones,
     )
 
     app.register_blueprint(bp)

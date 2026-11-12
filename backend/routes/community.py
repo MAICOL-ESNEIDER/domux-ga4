@@ -32,7 +32,7 @@ from services.announcement_service import (
     visible_announcements,
 )
 from services.audit_service import add_audit_log
-from services import pqrs_service, reservation_view
+from services import announcement_view, pqrs_service, reservation_view
 from services.list_view import parse_view
 from services.notification_service import notify_residents, notify_user
 from services.excel_service import (
@@ -69,6 +69,9 @@ from validators import (
 from time_utils import colombia_today, utc_now
 
 bp = Blueprint("community", __name__, url_prefix="/api")
+
+#: Lo más largo que puede ser el título de un comunicado (lo que cabe en la base de datos).
+MAX_ANNOUNCEMENT_TITLE = 150
 
 
 @bp.post("/admin/archive-history")
@@ -154,16 +157,35 @@ def get_announcements():
     de su torre (HU-061), y puede pedir solo los que no ha leído con ``unread=true``
     (HU-059). Se puede filtrar por ``category``. Los retirados no salen, pero siguen
     guardados en la base. ``unreadCount`` dice cuántos vigentes le faltan por leer.
+
+    Con ``view=summary`` entrega la lista liviana de la web: cada comunicado sin su foto, video o
+    audio (en lugar de ``mediaUrl`` dice ``hasMedia``) y, en ``counts``, cuántos hay vigentes y
+    cuántos archivados. Esa vista también filtra por ``towerId`` (el número de una torre, o ``unit``
+    para los de toda la unidad) y por ``search`` o ``q`` (en el título y en el mensaje).
     """
     user = g.current_user
+    view = parse_view(request.args.get("view"))
     archived = bool_arg("archived")
     query = visible_announcements(user)
-    query = archived_only(query) if archived else current_only(query)
+    if view:
+        query = announcement_view.filter_announcements(
+            query,
+            tower=announcement_view.parse_tower_filter(request.args.get("towerId")),
+            search=(request.args.get("search") or request.args.get("q") or "").strip(),
+        )
     if request.args.get("category"):
         query = query.filter(Announcement.category == parse_category(request.args["category"]))
+    counts = announcement_view.tab_counts(query) if view else None
+    query = archived_only(query) if archived else current_only(query)
     if user.role == "RESIDENT" and bool_arg("unread"):
         query = unread_only(query, user)
     page, size = page_args(default_size=50, max_size=200)
+    if view:
+        return jsonify({
+            **announcement_view.summary_page(query, user, page, size),
+            "counts": counts,
+            "unreadCount": unread_count(user),
+        })
     total = query.count()
     items = (
         query.order_by(Announcement.created_at.desc(), Announcement.id.desc())
@@ -181,6 +203,26 @@ def get_announcements():
     })
 
 
+@bp.get("/announcements/<int:announcement_id>")
+@token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
+def get_announcement(announcement_id):
+    """Un comunicado, con lo mismo que trae en la lista.
+
+    Quien lo pide solo recibe los que puede ver (un residente, los de toda la unidad y los de su
+    torre); uno retirado o de otra torre responde 404. Con ``view=summary`` va sin el contenido del
+    adjunto (en lugar de ``mediaUrl`` dice ``hasMedia``).
+    """
+    view = parse_view(request.args.get("view"))
+    announcement = visible_announcements(g.current_user).filter(
+        Announcement.id == announcement_id
+    ).first()
+    if announcement is None:
+        raise ApiError("Anuncio no encontrado", 404)
+    data = announcement_payloads([announcement], g.current_user)[0]
+    return jsonify({"announcement": announcement_view.without_media(data) if view else data})
+
+
 @bp.post("/announcements")
 @token_required
 @role_required("ADMIN")
@@ -194,6 +236,8 @@ def create_announcement():
     )
     if validation_error:
         return error_response(400, validation_error)
+    if len(data["title"].strip()) > MAX_ANNOUNCEMENT_TITLE:
+        return error_response(400, f"El título no puede pasar de {MAX_ANNOUNCEMENT_TITLE} caracteres.")
     if error := _media_and_event_error(data, "eventDate", "eventTime"):
         return error_response(400, error)
     category = parse_category(data.get("category"))
