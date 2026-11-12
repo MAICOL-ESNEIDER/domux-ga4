@@ -149,10 +149,14 @@ for _name, _function in (
     ("page_exists", page_exists),
     ("page_url", page_url),
     ("unit_brand", unit_brand),
+    ("authorization_method_text", texts.authorization_method_text),
     ("badge_info", texts.badge_info),
     ("deadline_text", texts.deadline_text),
+    ("duration_text", texts.duration_text),
     ("notification_type", texts.notification_type),
     ("plural", texts.plural),
+    ("visit_event_text", texts.visit_event_text),
+    ("visit_type_text", texts.visit_type_text),
 ):
     bp.add_app_template_global(_function, _name)
 

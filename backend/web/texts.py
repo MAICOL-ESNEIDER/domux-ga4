@@ -7,6 +7,8 @@ siempre van acompañados de una palabra, para que el color no sea lo único que 
 
 from datetime import date, datetime
 
+from models import UNCLAIMED_ORANGE_HOURS, UNCLAIMED_RED_HOURS
+
 #: Estado de una PQRS: texto y tono. Como en la app, «abierta» es la que más urge.
 PQRS_STATUSES = {
     "abierta": ("Abierta", "alert"),
@@ -38,6 +40,49 @@ SEMAPHORES = {
     "rojo": ("Vencida", "alert"),
 }
 
+#: Estado de un paquete (HU-088): «pendiente» es el que ya está en la portería esperando a su dueño.
+PACKAGE_STATUSES = {
+    "por_llegar": ("Por llegar", "neutral"),
+    "pendiente": ("En portería", "progress"),
+    "entregado": ("Entregado", "success"),
+}
+
+#: Aviso de un paquete que lleva mucho tiempo sin reclamar (RN-018): naranja y rojo, siempre con palabras.
+PACKAGE_ALERTS = {
+    "naranja": (f"Más de {UNCLAIMED_ORANGE_HOURS} h sin reclamar", "progress"),
+    "rojo": (f"Más de {UNCLAIMED_RED_HOURS} h sin reclamar", "alert"),
+}
+
+#: Autorización de una visita (HU-088): lo que decidió el residente o se confirmó por llamada.
+VISIT_APPROVALS = {
+    "pendiente": ("Esperando autorización", "progress"),
+    "aprobada": ("Aprobada", "success"),
+    "rechazada": ("Rechazada", "alert"),
+}
+
+#: Tipo de visita, como lo elige el guardia al registrarla.
+VISIT_TYPES = {
+    "visitante": "Visitante",
+    "domiciliario": "Domiciliario",
+    "contratista": "Contratista",
+}
+
+#: Qué pasó en cada paso del historial de una visita.
+VISIT_EVENTS = {
+    "solicitud": "Llegó a la portería y se pidió la autorización",
+    "aprobada": "Se aprobó el ingreso",
+    "rechazada": "Se rechazó el ingreso",
+    "entrada": "Entró a la unidad",
+    "salida": "Salió de la unidad",
+}
+
+#: Cómo se autorizó o se registró un paso de la visita.
+AUTHORIZATION_METHODS = {
+    "app": "desde la app",
+    "llamada": "por llamada a la portería",
+    "qr": "con el código QR del residente",
+}
+
 #: De qué trata cada notificación.
 NOTIFICATION_TYPES = {
     "pqrs": "PQRS",
@@ -54,6 +99,9 @@ _KINDS = {
     "reservation": RESERVATION_STATUSES,
     "semaphore": SEMAPHORES,
     "announcement": ANNOUNCEMENT_CATEGORIES,
+    "package": PACKAGE_STATUSES,
+    "package_alert": PACKAGE_ALERTS,
+    "visit": VISIT_APPROVALS,
 }
 
 
@@ -120,3 +168,34 @@ def slot_length_text(minutes):
 def plural(count, singular, plural_form):
     """«1 paquete» o «3 paquetes»."""
     return f"{count} {singular if count == 1 else plural_form}"
+
+
+def duration_text(minutes):
+    """Un tiempo con palabras: «45 min», «2 h 15 min», «3 h», «1 día» o «2 días 3 h». Sin dato, vacío."""
+    if minutes is None:
+        return ""
+    minutes = max(0, int(minutes))
+    days, rest = divmod(minutes, 24 * 60)
+    hours, mins = divmod(rest, 60)
+    if days:
+        base = "1 día" if days == 1 else f"{days} días"
+        return f"{base} {hours} h" if hours else base
+    if hours:
+        return f"{hours} h {mins} min" if mins else f"{hours} h"
+    return f"{mins} min"
+
+
+def visit_type_text(value):
+    """El tipo de visita en palabras: «Domiciliario»."""
+    return VISIT_TYPES.get(value) or str(value or "—").replace("_", " ").capitalize()
+
+
+def visit_event_text(value):
+    """Lo que pasó en un paso del historial de una visita: «Entró a la unidad»."""
+    return VISIT_EVENTS.get(value) or str(value or "—").replace("_", " ").capitalize()
+
+
+def authorization_method_text(value, capital=False):
+    """Cómo se autorizó un paso: «desde la app», «por llamada a la portería»… (con ``capital``, empieza en mayúscula)."""
+    text = AUTHORIZATION_METHODS.get(value, "")
+    return text[:1].upper() + text[1:] if capital else text

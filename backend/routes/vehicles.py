@@ -64,15 +64,22 @@ def register_vehicle_exit(entry_id):
 @token_required
 @role_required("GUARD", "ADMIN")
 def list_vehicle_entries():
-    """Historial de entradas; con inside=true solo los que siguen adentro y con overdue=true los vencidos."""
+    """Historial de entradas; con inside=true solo los que siguen adentro y con overdue=true los vencidos.
+
+    Con counts=true la respuesta trae además ``counts``: cuántas entradas hay adentro, vencidas, ya
+    salidas y en total entre las de esa placa y ese apartamento, para las pestañas de la web (HU-088).
+    """
     run_alerts()
+    plate = (request.args.get("plate") or "").strip()
+    apartment_id = int_arg("apartmentId")
     query = vehicles.entries_query(
         inside=bool_arg("inside"),
         overdue=bool_arg("overdue"),
-        plate=(request.args.get("plate") or "").strip(),
-        apartment_id=int_arg("apartmentId"),
+        plate=plate,
+        apartment_id=apartment_id,
     )
-    return paginated(query, "vehicleEntries", default_size=25)
+    extra = {"counts": vehicles.entry_counts(plate, apartment_id)} if bool_arg("counts") else None
+    return paginated(query, "vehicleEntries", default_size=25, extra=extra)
 
 
 # --- Vehículos de residentes (HU-040) ---------------------------------------

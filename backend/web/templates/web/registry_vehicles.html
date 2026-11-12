@@ -1,0 +1,77 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import badge, pager, registry_tabs, status_tabs %}
+{% set page_title = "Paquetería y visitas" %}
+
+{% block content %}
+{% set tab_args = {"estado": filters.estado} if filters.estado != "todos" else {} %}
+<div class="page-head">
+  <div>
+    <h1>Vehículos de visitantes</h1>
+    <p>{{ plural(total, "entrada", "entradas") }}{% if filters.placa %} con esa placa{% endif %}. Es solo de consulta: las entradas y salidas se registran en la app de portería.</p>
+  </div>
+</div>
+
+{{ registry_tabs("vehiculos") }}
+{{ status_tabs(tabs, "Situación de los vehículos") }}
+
+<form class="filters" method="get" action="{{ url_for('web.registry_vehicles') }}" role="search" aria-label="Buscar por placa">
+  {% if filters.estado != "todos" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
+  <div class="field grow">
+    <label for="placa">Placa</label>
+    <input type="search" id="placa" name="placa" value="{{ filters.placa }}" autocomplete="off" placeholder="Por ejemplo, ABC123">
+  </div>
+  <button type="submit" class="btn">Buscar</button>
+  {% if filters.placa %}<a class="btn btn-quiet" href="{{ url_for('web.registry_vehicles', **tab_args) }}">Quitar búsqueda</a>{% endif %}
+</form>
+{% if hint %}<p class="muted small">{{ hint }}</p>{% endif %}
+
+<section class="card" aria-label="Entradas de vehículos de visitantes">
+  {% if entries %}
+  <div class="table-wrap">
+    <table class="table-stack table-wide">
+      <caption class="sr-only">Entradas de vehículos de visitantes, de la más reciente a la más antigua</caption>
+      <thead>
+        <tr>
+          <th scope="col">Placa</th>
+          <th scope="col">Visitante</th>
+          <th scope="col">Apartamento</th>
+          <th scope="col">Parqueadero</th>
+          <th scope="col">Entró</th>
+          <th scope="col">Salió</th>
+          <th scope="col">Tiempo en la unidad</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td class="nowrap mono"><strong>{{ entry.plate }}</strong></td>
+          <td data-label="Visitante">
+            {{ entry.visitorName or "—" }}
+            {% if entry.visitId %}<br><small><a href="{{ url_for('web.registry_visit_detail', visit_id=entry.visitId) }}">Ver la visita</a></small>{% endif %}
+          </td>
+          <td data-label="Apartamento"><span class="nowrap">{{ entry.apartment or "—" }}</span>{% if entry.residentName %}<br><small class="muted">{{ entry.residentName }}</small>{% endif %}</td>
+          <td data-label="Parqueadero">
+            {% if entry.spotCode %}{{ entry.spotCode }}{% if entry.spotLocation %}<br><small class="muted">{{ entry.spotLocation }}</small>{% endif %}
+            {% else %}Sin parqueadero{% endif %}
+          </td>
+          <td data-label="Entró">{{ entry.enteredAt|date_es }}{% if entry.registeredByName %}<br><small class="muted">{{ entry.registeredByName }}</small>{% endif %}</td>
+          <td data-label="Salió">
+            {% if entry.isInside %}
+            {{ badge("Sigue adentro", "success") }}
+            {% if entry.isOverdue %}<br>{{ badge("Pasó el máximo de " ~ plural(entry.maxDays, "día", "días"), "alert") }}{% endif %}
+            {% else %}
+            {{ entry.exitedAt|date_es }}{% if entry.exitedByName %}<br><small class="muted">{{ entry.exitedByName }}</small>{% endif %}
+            {% endif %}
+          </td>
+          <td data-label="Tiempo en la unidad">{{ duration_text(entry.parkedMinutes) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ pager(page, pages) }}
+  {% else %}
+  <p class="empty">{% if filters.placa %}No hay entradas con esa placa en esta lista.{% else %}{{ empty_text }}{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

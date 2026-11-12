@@ -1,0 +1,131 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import status_badge, badge, pager, attachment, registry_tabs, status_tabs %}
+{% set page_title = "Paquetería y visitas" %}
+
+{% block content %}
+{% set tab_args = {"estado": filters.estado} if filters.estado != "todos" else {} %}
+<div class="inbox-page{% if selected %} has-detail{% endif %}">
+<div class="page-head">
+  <div>
+    <h1>Paquetes</h1>
+    <p>{{ plural(total, "paquete", "paquetes") }}{% if filters.q %} con esa búsqueda{% endif %}. Es solo de consulta: el registro de paquetes se hace en la app de portería.</p>
+  </div>
+</div>
+
+{{ registry_tabs("paquetes") }}
+{{ status_tabs(tabs, "Estado de los paquetes") }}
+
+<div class="inbox">
+
+  {# --- La lista -------------------------------------------------------------------------------- #}
+  <section class="inbox-list" aria-label="Lista de paquetes">
+    <form class="filters" method="get" action="{{ url_for('web.registry_packages') }}" role="search" aria-label="Buscar paquetes">
+      {% if filters.estado != "todos" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
+      <div class="field grow">
+        <label for="q">Buscar</label>
+        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
+               placeholder="Residente, apartamento, transportadora o guía">
+      </div>
+      <button type="submit" class="btn">Buscar</button>
+      {% if filters.q %}<a class="btn btn-quiet" href="{{ url_for('web.registry_packages', **tab_args) }}">Quitar búsqueda</a>{% endif %}
+    </form>
+    {% if hint %}<p class="muted small">{{ hint }}</p>{% endif %}
+
+    <div class="card inbox-card">
+      {% if items %}
+      <ul class="inbox-items no-select">
+        {% for item in items %}
+        {% set current = selected and selected.id == item.id %}
+        <li class="inbox-item{% if current %} is-current{% endif %}">
+          <a class="inbox-link" href="{{ url_for('web.registry_package_detail', package_id=item.id, **list_args) }}"{% if current %} aria-current="true"{% endif %}>
+            <span class="inbox-top">
+              <strong class="inbox-subject">{{ item.description or "Paquete sin descripción" }}</strong>
+              <span class="badges">
+                {{ status_badge("package", item.status) }}
+                {% if item.isDeleted %}{{ badge("En la papelera") }}{% endif %}
+              </span>
+            </span>
+            <span>{{ item.apartment or "Sin apartamento" }} · {{ item.residentName }}</span>
+            {% if item.carrier or item.trackingNumber %}
+            <span class="inbox-meta">{% if item.carrier %}{{ item.carrier }}{% endif %}{% if item.carrier and item.trackingNumber %} · {% endif %}{% if item.trackingNumber %}guía {{ item.trackingNumber }}{% endif %}</span>
+            {% endif %}
+            <span class="inbox-deadline">
+              {% if item.claimAlert %}{{ status_badge("package_alert", item.claimAlert) }}{% endif %}
+              {% if item.hoursWaiting is not none %}
+              <span>{% if item.hoursWaiting >= 1 %}Lleva {{ duration_text(item.hoursWaiting * 60) }} en portería{% else %}Llegó hace menos de 1 hora{% endif %}</span>
+              {% elif item.status == "entregado" %}
+              <span>Entregado el {{ item.deliveredAt|date_es }}{% if item.deliveredTo %} a {{ item.deliveredTo }}{% endif %}</span>
+              {% elif item.arrivedAt %}
+              <span>Llegó el {{ item.arrivedAt|date_es }}</span>
+              {% else %}
+              <span>Registrado el {{ item.createdAt|date_es }}</span>
+              {% endif %}
+            </span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {{ pager(page, pages) }}
+      {% else %}
+      <p class="empty">{% if filters.q %}No hay paquetes que coincidan con esa búsqueda.{% else %}{{ empty_text }}{% endif %}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {# --- El paquete abierto al lado -------------------------------------------------------------- #}
+  <section class="inbox-detail" aria-label="Detalle del paquete">
+    {% if selected %}
+    <article class="card" aria-labelledby="detail-title">
+      <a class="back-link" href="{{ url_for('web.registry_packages', **list_args) }}">‹ Volver a la lista</a>
+      <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.description or "Paquete sin descripción" }}</h2>
+      <p class="badges">
+        {{ status_badge("package", selected.status) }}
+        {% if selected.claimAlert %}{{ status_badge("package_alert", selected.claimAlert) }}{% endif %}
+        {% if selected.isDeleted %}{{ badge("En la papelera") }}{% endif %}
+      </p>
+
+      {% if selected.isDeleted %}
+      <p class="notice notice-info">Este paquete está en la papelera: la portería ya no lo ve en su lista, pero sigue guardado.
+        {%- if selected.deletedAt %} Pasó a la papelera el {{ selected.deletedAt|date_es }}
+          {%- if selected.deletedByName %}; lo quitó {{ selected.deletedByName }}
+          {%- elif selected.status == "entregado" %}; pasó solo, por llevar más de 7 días entregado{% endif %}.
+        {%- endif %}</p>
+      {% endif %}
+
+      <dl class="facts">
+        <dt>Residente</dt><dd>{{ selected.residentName or "—" }}</dd>
+        <dt>Apartamento</dt><dd>{{ selected.apartment or "—" }}</dd>
+        {% if selected.carrier %}<dt>Transportadora</dt><dd>{{ selected.carrier }}</dd>{% endif %}
+        {% if selected.trackingNumber %}<dt>Número de guía</dt><dd class="mono">{{ selected.trackingNumber }}</dd>{% endif %}
+        <dt>Registrado</dt>
+        <dd>{{ selected.createdAt|date_es }}{% if selected.registeredByName %} · por {{ selected.registeredByName }}{% endif %}</dd>
+        {% if selected.arrivedAt %}<dt>Llegó a la portería</dt><dd>{{ selected.arrivedAt|date_es }}</dd>{% endif %}
+        {% if selected.hoursWaiting is not none %}
+        <dt>Tiempo en portería</dt>
+        <dd>{% if selected.hoursWaiting >= 1 %}{{ duration_text(selected.hoursWaiting * 60) }}{% else %}Menos de 1 hora{% endif %}</dd>
+        {% endif %}
+        {% if selected.status == "entregado" %}
+        <dt>Entregado</dt>
+        <dd>{{ selected.deliveredAt|date_es }}{% if selected.deliveredByName %} · lo entregó {{ selected.deliveredByName }}{% endif %}</dd>
+        <dt>Lo recibió</dt><dd>{{ selected.deliveredTo or "No se anotó quién" }}</dd>
+        {% endif %}
+      </dl>
+
+      {% if selected.hasPickupCode %}
+      <p class="muted">El residente generó un código para que otra persona recoja este paquete.</p>
+      {% endif %}
+
+      {% if selected.hasMedia %}
+      <h3>Foto del paquete</h3>
+      {{ attachment(url_for('web.registry_package_photo', package_id=selected.id), selected.mediaType, "Foto del paquete") }}
+      {% endif %}
+    </article>
+    {% else %}
+    <div class="card inbox-placeholder">
+      <p class="empty">Elige un paquete de la lista para ver quién lo registró, cuándo llegó y a quién se entregó.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+</div>
+{% endblock %}

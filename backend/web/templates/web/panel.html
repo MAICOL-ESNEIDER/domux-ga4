@@ -20,7 +20,7 @@
 
 {% set pqrs_link = url_for("web.pqrs_list") if page_exists("web.pqrs_list") else None %}
 {% set reservations_link = url_for("web.reservations_list") if page_exists("web.reservations_list") else None %}
-{% set packages_link = url_for("web.registry_packages") if page_exists("web.registry_packages") else None %}
+{% set packages_link = url_for("web.registry_packages", estado="pendiente") if page_exists("web.registry_packages") else None %}
 
 <section aria-label="Resumen de pendientes" class="grid grid-3 counters">
   {{ counter(

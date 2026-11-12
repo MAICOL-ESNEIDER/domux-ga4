@@ -252,6 +252,13 @@ input[type="checkbox"], input[type="radio"] { width: 1.15rem; height: 1.15rem; a
 }
 .tabs a:hover { background: var(--card); }
 .tabs a[aria-current="page"] { background: var(--card); color: var(--primary); font-weight: 600; }
+/* Una segunda fila de pestañas (por estado) bajo las de la sección: más liviana, con una línea de color en la activa. */
+.tabs.tabs-sub { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0; margin-bottom: 1rem; }
+.tabs.tabs-sub a { border-radius: 8px 8px 0 0; }
+.tabs.tabs-sub a[aria-current="page"] { background: transparent; box-shadow: inset 0 -3px 0 var(--primary); }
+/* Varios avisos de estado seguidos (por ejemplo, «En portería» y «Más de 48 h sin reclamar»). */
+.badges { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 .75rem; }
+.inbox-top .badges { margin: 0; justify-content: flex-end; }
 
 .pager { display: flex; align-items: center; gap: .75rem; justify-content: center; margin-top: 1rem; color: var(--muted); }
 
@@ -313,6 +320,8 @@ dialog .dialog-actions { display: flex; gap: .5rem; justify-content: flex-end; m
 .inbox-detail h3 { margin-top: 1.25rem; }
 .prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 ol.thread { list-style: none; }
+/* Historial de una visita: cada paso lleva su título y debajo quién lo hizo, bien juntos. */
+.thread-events .who-line { margin-bottom: .1rem; }
 .thread .msg.from-admin .who-line strong { color: var(--primary); }
 .attachment { margin: .75rem 0 0; }
 .attachment img, .attachment video { display: block; max-width: 100%; max-height: 420px; border-radius: 12px; }
@@ -382,6 +391,24 @@ progress.reading { display: block; width: 100%; height: 12px; margin-top: .5rem;
   .table-stack td { border: 0; padding: .15rem 0; }
   .table-stack td.actions { display: flex; flex-wrap: wrap; gap: .5rem; padding-top: .5rem; white-space: normal; }
   .table-stack td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); }
+}
+
+/* Una tabla con muchas columnas (.table-wide) también se apila en tablet y en pantallas medianas, porque ahí
+   la última columna quedaría escondida a la derecha. Cada fila es una tarjeta con sus datos en columnas. */
+@media (min-width: 721px) and (max-width: 1279px) {
+  .table-wide thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .table-wide, .table-wide tbody { display: block; width: 100%; }
+  .table-wide tr {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .15rem 1.25rem;
+    padding: .8rem 0; border-bottom: 1px solid var(--line);
+  }
+  .table-wide tr:last-child { border-bottom: 0; }
+  .table-wide td { display: block; border: 0; padding: .15rem 0; }
+  .table-wide td:first-child { grid-column: 1 / -1; }
+  .table-wide td[data-label]::before {
+    display: block; content: attr(data-label); color: var(--muted); font-size: .8rem; letter-spacing: .06em;
+    text-transform: uppercase; font-weight: 600;
+  }
 }
 
 @media (max-width: 640px) {

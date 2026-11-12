@@ -43,6 +43,35 @@ UNCLAIMED_RED_HOURS = 72
 #: Movimientos de un vehículo de residente por la portería (HU-040).
 MOVEMENT_TYPES = ("entrada", "salida")
 
+
+def package_wait(status, is_deleted, arrived_at, now=None):
+    """Cuánto lleva un paquete sin reclamar y su color de alerta: ``(minutos, alerta)`` (RN-018).
+
+    Un paquete que no espera a su dueño (no está «pendiente», está en la papelera o no tiene hora de
+    llegada) da ``(None, None)``. La alerta es «rojo» con más de 72 horas, «naranja» con más de 48 o
+    None. Es la regla de ``PackageItem`` para quien tiene solo las columnas, como las listas livianas.
+    """
+    if status != "pendiente" or is_deleted or arrived_at is None:
+        return None, None
+    minutes = max(0, int(((now or utc_now()) - arrived_at).total_seconds() // 60))
+    if minutes > UNCLAIMED_RED_HOURS * 60:
+        return minutes, "rojo"
+    if minutes > UNCLAIMED_ORANGE_HOURS * 60:
+        return minutes, "naranja"
+    return minutes, None
+
+
+def visit_stay(entered_at, exited_at, expected_stay_minutes, now=None):
+    """Dónde está una visita: ``(está dentro, minutos dentro, pasó la estadía prevista)`` (RN-012).
+
+    Está dentro si entró y todavía no salió; si no, da ``(False, None, False)``. Es la regla de ``Visit``
+    para quien tiene solo las columnas, como las listas livianas.
+    """
+    if entered_at is None or exited_at is not None:
+        return False, None, False
+    minutes = max(0, int(((now or utc_now()) - entered_at).total_seconds() // 60))
+    return True, minutes, expected_stay_minutes is not None and minutes >= expected_stay_minutes
+
 #: Lo que va entre la torre y el código en el texto de un apartamento: «Torre 1 · Apto 101».
 APARTMENT_LABEL_SEPARATOR = " · Apto "
 
@@ -1162,20 +1191,11 @@ class PackageItem(db.Model):
 
     def waiting_minutes(self, now=None):
         """Minutos que lleva en portería sin reclamar; None si no está esperando a su dueño."""
-        if self.status != "pendiente" or self.is_deleted or self.arrived_at is None:
-            return None
-        return max(0, int(((now or utc_now()) - self.arrived_at).total_seconds() // 60))
+        return package_wait(self.status, self.is_deleted, self.arrived_at, now)[0]
 
     def claim_alert(self, now=None):
         """«rojo» con más de 72 horas sin reclamar, «naranja» con más de 48, o None (RN-018)."""
-        minutes = self.waiting_minutes(now)
-        if minutes is None:
-            return None
-        if minutes > UNCLAIMED_RED_HOURS * 60:
-            return "rojo"
-        if minutes > UNCLAIMED_ORANGE_HOURS * 60:
-            return "naranja"
-        return None
+        return package_wait(self.status, self.is_deleted, self.arrived_at, now)[1]
 
     def to_dict(self):
         now = utc_now()
@@ -1316,15 +1336,11 @@ class Visit(db.Model):
 
     def inside_minutes(self, now=None):
         """Minutos que lleva dentro; None si no está dentro."""
-        if not self.is_inside:
-            return None
-        return max(0, int(((now or utc_now()) - self.entered_at).total_seconds() // 60))
+        return visit_stay(self.entered_at, self.exited_at, self.expected_stay_minutes, now)[1]
 
     def is_overstay(self, now=None):
         """Sigue dentro y ya pasó la estadía prevista (RN-012)."""
-        if self.expected_stay_minutes is None or not self.is_inside:
-            return False
-        return self.inside_minutes(now) >= self.expected_stay_minutes
+        return visit_stay(self.entered_at, self.exited_at, self.expected_stay_minutes, now)[2]
 
     def to_dict(self):
         return {

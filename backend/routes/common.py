@@ -74,8 +74,11 @@ def page_args(default_size=25, max_size=100):
     return page, size
 
 
-def paginated(query, key, default_size=25, max_size=100):
-    """Responde una lista paginada: {key: [...], page, pageSize, total, totalPages}."""
+def paginated(query, key, default_size=25, max_size=100, extra=None):
+    """Responde una lista paginada: {key: [...], page, pageSize, total, totalPages}.
+
+    ``extra`` es un diccionario de datos más que van en la misma respuesta (por ejemplo, ``counts``).
+    """
     page, size = page_args(default_size, max_size)
     total = query.count()
     items = query.offset((page - 1) * size).limit(size).all()
@@ -85,6 +88,7 @@ def paginated(query, key, default_size=25, max_size=100):
         "pageSize": size,
         "total": total,
         "totalPages": (total + size - 1) // size,
+        **(extra or {}),
     })
 
 

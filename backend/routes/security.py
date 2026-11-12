@@ -17,12 +17,12 @@ from models import (
     VisitEvent,
     VisitQrPass,
 )
-from routes.common import bool_arg, int_arg, json_body, paginated
-from services import package_service, visit_service
+from routes.common import bool_arg, int_arg, json_body, page_args, paginated
+from services import package_service, package_view, visit_service, visit_view
 from services.alert_service import run_alerts
+from services.list_view import parse_view
 from services.notification_service import notify_user
 from validators import (
-    VALID_PACKAGE_STATUSES,
     require_non_empty_fields,
     validate_iso_date,
     validate_media_fields,
@@ -126,19 +126,22 @@ def delete_push_token():
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_packages():
+    """Lista los paquetes, del más nuevo al más antiguo.
+
+    Sin ``status`` salen los que no están en la papelera; con ``status`` solo los de ese estado
+    (``por_llegar``, ``pendiente`` o ``entregado``) o, con ``papelera``, los de la papelera. Se puede
+    buscar con ``search`` o ``q`` y filtrar por ``residentId`` (un residente solo ve los suyos).
+
+    Con ``view=summary`` entrega la lista liviana de la consulta de la web (HU-088): paginada (``page`` y
+    ``pageSize``), sin la foto (en lugar de ``mediaUrl`` dice ``hasMedia``) y, en ``counts``, cuántos hay
+    de cada estado. Los que esperan en portería salen con el que lleva más tiempo primero; lo demás, de lo
+    más reciente a lo más antiguo. Esa vista también acepta ``status=todos``: los de cualquier estado,
+    también los de la papelera.
+    """
     _cleanup_expired_packages()
     user = g.current_user
-    # Con el residente en la misma consulta y lo demás por lotes, la lista no hace
-    # una consulta por paquete al armar cada respuesta.
-    query = (
-        PackageItem.query.join(User, PackageItem.resident_id == User.id)
-        .options(
-            contains_eager(PackageItem.resident),
-            selectinload(PackageItem.guard),
-            selectinload(PackageItem.delivered_by),
-            selectinload(PackageItem.pickup_codes),
-        )
-    )
+    view = parse_view(request.args.get("view"))
+    query = PackageItem.query.join(User, PackageItem.resident_id == User.id)
     if user.role == "RESIDENT":
         query = query.filter(PackageItem.resident_id == user.id)
         requested_resident_id = request.args.get("residentId", type=int)
@@ -147,33 +150,46 @@ def get_packages():
     elif user.role not in ("ADMIN", "GUARD"):
         return error_response(403, "No tienes permiso para ver los paquetes")
 
-    status = request.args.get("status")
-    if status == "papelera":
-        query = query.filter(PackageItem.is_deleted.is_(True))
-    elif status is None or status in VALID_PACKAGE_STATUSES:
-        query = query.filter(PackageItem.is_deleted.is_(False))
-        if status is not None:
-            query = query.filter(PackageItem.status == status)
-    else:
-        return error_response(400, "Estado de paquete inválido")
+    status = package_view.parse_status(request.args.get("status"), allow_all=bool(view))
     resident_id = request.args.get("residentId", type=int)
     if resident_id is not None and user.role != "RESIDENT":
         query = query.filter(PackageItem.resident_id == resident_id)
-    search = (request.args.get("search") or request.args.get("q") or "").strip()
-    if search:
-        pattern = f"%{search}%"
-        query = query.filter(db.or_(
-            (User.name + " " + User.last_name).ilike(pattern),
-            PackageItem.description.ilike(pattern),
-            PackageItem.delivered_to.ilike(pattern),
-            PackageItem.carrier.ilike(pattern),
-            PackageItem.tracking_number.ilike(pattern),
-            User.name.ilike(pattern),
-            User.last_name.ilike(pattern),
-            User.apartment.ilike(pattern),
-        ))
+    query = package_view.filter_search(
+        query, (request.args.get("search") or request.args.get("q") or "").strip()
+    )
+    if view:
+        page, size = page_args(default_size=25, max_size=100)
+        return jsonify({
+            **package_view.summary_page(package_view.filter_status(query, status), status, page, size),
+            "counts": package_view.status_counts(query),
+        })
+    # Con el residente en la misma consulta y lo demás por lotes, la lista no hace
+    # una consulta por paquete al armar cada respuesta.
+    query = package_view.filter_status(query, status).options(
+        contains_eager(PackageItem.resident),
+        selectinload(PackageItem.guard),
+        selectinload(PackageItem.delivered_by),
+        selectinload(PackageItem.pickup_codes),
+    )
     items = query.order_by(PackageItem.created_at.desc()).all()
     return jsonify({"packages": [item.to_dict() for item in items]})
+
+
+@bp.get("/packages/<int:pkg_id>")
+@token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
+def get_package(pkg_id):
+    """Un paquete, con lo mismo que trae en la lista (también si está en la papelera).
+
+    Un residente solo recibe los suyos; uno ajeno responde 404. Con ``view=summary`` va sin la foto (en
+    lugar de ``mediaUrl`` dice ``hasMedia``) y, si está en la papelera, dice quién lo mandó allá.
+    """
+    view = parse_view(request.args.get("view"))
+    package = db.session.get(PackageItem, pkg_id)
+    user = g.current_user
+    if package is None or (user.role == "RESIDENT" and package.resident_id != user.id):
+        return error_response(404, "Paquete no encontrado")
+    return jsonify({"packageItem": package_view.detail_dict(package) if view else package.to_dict()})
 
 
 @bp.post("/packages")
@@ -386,17 +402,50 @@ def get_visits():
     El administrador y el guardia ven todas; el residente, solo las de su
     apartamento. Se filtra por status, search, apartmentId, from y to (días de
     Colombia) y, con inside=true, solo las que entraron y no tienen salida (HU-032).
+
+    Con ``view=summary`` entrega la lista liviana de la consulta de la web (HU-088): cada visita sin la
+    foto del visitante (en lugar de ``visitorPhotoUrl`` dice ``hasPhoto``) ni sus eventos y, en
+    ``counts``, cuántas hay de cada estado y cuántas están dentro (esos números no cuentan el filtro de
+    estado ni el de inside).
     """
-    query = visit_service.visits_query(
-        g.current_user,
-        status=request.args.get("status"),
-        search=(request.args.get("search") or "").strip(),
-        apartment_id=int_arg("apartmentId"),
-        date_from=request.args.get("from"),
-        date_to=request.args.get("to"),
-        inside=bool_arg("inside"),
-    )
+    view = parse_view(request.args.get("view"))
+    filters = {
+        "status": request.args.get("status"),
+        "search": (request.args.get("search") or "").strip(),
+        "apartment_id": int_arg("apartmentId"),
+        "date_from": request.args.get("from"),
+        "date_to": request.args.get("to"),
+        "inside": bool_arg("inside"),
+    }
+    if view:
+        user = g.current_user
+        page, size = page_args(default_size=50, max_size=200)
+        scope = {**filters, "status": None, "inside": None}
+        return jsonify({
+            **visit_view.summary_page(
+                visit_service.filtered_visits(user, **filters), filters["inside"], page, size
+            ),
+            "counts": visit_view.counts(visit_service.filtered_visits(user, **scope)),
+        })
+    query = visit_service.visits_query(g.current_user, **filters)
     return paginated(query, "visits", default_size=50, max_size=200)
+
+
+@bp.get("/visits/<int:visit_id>")
+@token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
+def get_visit(visit_id):
+    """Una visita con sus eventos (solicitud, autorización, entrada y salida).
+
+    El administrador y el guardia ven cualquiera; el residente, solo las de su apartamento (otra
+    responde 404). Con ``view=summary`` va sin la foto del visitante (en lugar de ``visitorPhotoUrl``
+    dice ``hasPhoto``).
+    """
+    view = parse_view(request.args.get("view"))
+    visit = visit_service.visits_query(g.current_user).filter(Visit.id == visit_id).first()
+    if visit is None:
+        return error_response(404, "Visita no encontrada.")
+    return jsonify({"visit": visit_view.detail_dict(visit) if view else visit.to_dict()})
 
 
 @bp.post("/visits")

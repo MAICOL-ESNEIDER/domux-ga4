@@ -96,21 +96,17 @@ def _day(value, label):
     return parsed
 
 
-def visits_query(
+def filtered_visits(
     user, status=None, search=None, apartment_id=None, date_from=None, date_to=None, inside=None
 ):
-    """Las visitas que puede ver el usuario, con los filtros del historial (HU-030).
+    """Las visitas que puede ver el usuario con los filtros del historial, sin orden y sin datos cargados.
 
-    El administrador y el guardia ven todas; el residente, solo las de su
-    apartamento (CA-HU-030-02). date_from y date_to son días de Colombia,
-    ambos incluidos. inside=True deja las que entraron y no tienen salida
-    (HU-032), de la que lleva más tiempo dentro a la más reciente.
+    El administrador y el guardia ven todas; el residente, solo las de su apartamento (CA-HU-030-02).
+    date_from y date_to son días de Colombia, ambos incluidos. inside=True deja las que entraron y no
+    tienen salida (HU-032). Sirve de base para el historial (``visits_query``) y para la lista liviana
+    de la web (``visit_view``).
     """
-    query = Visit.query.options(
-        selectinload(Visit.resident),
-        selectinload(Visit.guard),
-        selectinload(Visit.events).selectinload(VisitEvent.actor),
-    )
+    query = Visit.query
     if user.role == "RESIDENT":
         if user.apartment_id is None:
             query = query.filter(Visit.resident_id == user.id)
@@ -146,6 +142,22 @@ def visits_query(
             User.last_name.ilike(pattern),
             User.apartment.ilike(pattern),
         ))
+    return query
+
+
+def visits_query(
+    user, status=None, search=None, apartment_id=None, date_from=None, date_to=None, inside=None
+):
+    """Las visitas que puede ver el usuario, con los filtros del historial (HU-030), listas para armar.
+
+    Salen de la más reciente a la más antigua; con inside=True, de la que lleva más tiempo dentro a la
+    más reciente (HU-032).
+    """
+    query = filtered_visits(user, status, search, apartment_id, date_from, date_to, inside).options(
+        selectinload(Visit.resident),
+        selectinload(Visit.guard),
+        selectinload(Visit.events).selectinload(VisitEvent.actor),
+    )
     if inside is True:
         return query.order_by(Visit.entered_at, Visit.id)
     return query.order_by(Visit.created_at.desc(), Visit.id.desc())

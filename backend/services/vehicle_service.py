@@ -304,6 +304,23 @@ def entries_query(inside=None, overdue=None, plate=None, apartment_id=None, now=
     return query.order_by(VisitorVehicleEntry.entered_at.desc(), VisitorVehicleEntry.id.desc())
 
 
+def entry_counts(plate=None, apartment_id=None, now=None):
+    """Cuántas entradas hay en cada situación entre las de esa placa y ese apartamento (HU-088).
+
+    Son los números de la consulta de la web: los que siguen adentro, los que ya pasaron el tiempo
+    máximo, los que ya salieron y el total. Los vencidos también cuentan entre los que están adentro.
+    """
+    def count(**filters):
+        return entries_query(plate=plate, apartment_id=apartment_id, now=now, **filters).order_by(None).count()
+
+    return {
+        "inside": count(inside=True),
+        "overdue": count(overdue=True),
+        "exited": count(inside=False),
+        "all": count(),
+    }
+
+
 def _max_stay():
     """Cuánto puede quedarse un vehículo visitante: 3 días o el plazo de la unidad (RN-015)."""
     return timedelta(days=visitor_parking_max_days())

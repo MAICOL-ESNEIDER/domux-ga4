@@ -52,15 +52,37 @@
 </nav>
 {%- endmacro %}
 
+{# Secciones de «Paquetería y visitas»; «active» es «paquetes», «visitas» o «vehiculos». #}
+{% macro registry_tabs(active) -%}
+<nav class="tabs" aria-label="Secciones de paquetería y visitas">
+  {% for key, label, endpoint in (
+       ("paquetes", "Paquetes", "web.registry_packages"),
+       ("visitas", "Visitas", "web.registry_visits"),
+       ("vehiculos", "Vehículos de visitantes", "web.registry_vehicles"),
+     ) %}
+  <a href="{{ url_for(endpoint) }}"{% if active == key %} aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+{%- endmacro %}
+
+{# Las pestañas por estado de una lista, con su número: «tabs» trae texto, número y enlace de cada una. #}
+{% macro status_tabs(tabs, label) -%}
+<nav class="tabs tabs-sub" aria-label="{{ label }}">
+  {% for tab in tabs %}
+  <a href="{{ tab.url }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }} ({{ tab.count }})</a>
+  {% endfor %}
+</nav>
+{%- endmacro %}
+
 {# Un adjunto (foto, video o audio) que se pide aparte a la web: «url» es la ruta que lo entrega y «kind», su tipo. #}
-{% macro attachment(url, kind) -%}
+{% macro attachment(url, kind, alt="Foto adjunta") -%}
 <figure class="attachment">
   {% if kind == "video" %}
   <video controls preload="metadata" src="{{ url }}">Este navegador no puede reproducir el video.</video>
   {% elif kind == "audio" %}
   <audio controls preload="none" src="{{ url }}">Este navegador no puede reproducir el audio.</audio>
   {% else %}
-  <img src="{{ url }}" alt="Foto adjunta" loading="lazy">
+  <img src="{{ url }}" alt="{{ alt }}" loading="lazy">
   {% endif %}
   <figcaption class="small">
     <a href="{{ url }}" target="_blank" rel="noopener">Abrir {{ {"video": "el video", "audio": "el audio"}.get(kind, "la foto") }} en otra pestaña</a>

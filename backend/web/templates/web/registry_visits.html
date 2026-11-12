@@ -1,0 +1,141 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import status_badge, badge, pager, attachment, registry_tabs, status_tabs %}
+{% set page_title = "Paquetería y visitas" %}
+
+{% block content %}
+{% set filtered = filters.q or filters.desde or filters.hasta %}
+{% set tab_args = {"estado": filters.estado} if filters.estado != "todas" else {} %}
+<div class="inbox-page{% if selected %} has-detail{% endif %}">
+<div class="page-head">
+  <div>
+    <h1>Visitas</h1>
+    <p>{{ plural(total, "visita", "visitas") }}{% if filtered %} con esos filtros{% endif %}. Es solo de consulta: las visitas se registran y se autorizan en las apps de portería y de residentes.</p>
+  </div>
+</div>
+
+{{ registry_tabs("visitas") }}
+{{ status_tabs(tabs, "Estado de las visitas") }}
+
+<div class="inbox">
+
+  {# --- La lista -------------------------------------------------------------------------------- #}
+  <section class="inbox-list" aria-label="Lista de visitas">
+    <form class="filters" method="get" action="{{ url_for('web.registry_visits') }}" role="search" aria-label="Filtrar visitas">
+      {% if filters.estado != "todas" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
+      <div class="field grow">
+        <label for="q">Buscar</label>
+        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
+               placeholder="Visitante, residente o apartamento">
+      </div>
+      <div class="field field-date">
+        <label for="desde">Desde</label>
+        <input type="date" id="desde" name="desde" value="{{ filters.desde }}">
+      </div>
+      <div class="field field-date">
+        <label for="hasta">Hasta</label>
+        <input type="date" id="hasta" name="hasta" value="{{ filters.hasta }}">
+      </div>
+      <button type="submit" class="btn">Filtrar</button>
+      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.registry_visits', **tab_args) }}">Quitar filtros</a>{% endif %}
+    </form>
+    <p class="muted small">Las fechas son las del día en que el visitante llegó a la portería.{% if hint %} {{ hint }}{% endif %}</p>
+
+    <div class="card inbox-card">
+      {% if items %}
+      <ul class="inbox-items no-select">
+        {% for item in items %}
+        {% set current = selected and selected.id == item.id %}
+        <li class="inbox-item{% if current %} is-current{% endif %}">
+          <a class="inbox-link" href="{{ url_for('web.registry_visit_detail', visit_id=item.id, **list_args) }}"{% if current %} aria-current="true"{% endif %}>
+            <span class="inbox-top">
+              <strong class="inbox-subject">{{ item.visitorName }}</strong>
+              <span class="badges">{{ status_badge("visit", item.approvalStatus) }}</span>
+            </span>
+            <span>{{ visit_type_text(item.type) }} · {{ item.apartment or "Sin apartamento" }} · {{ item.residentName }}</span>
+            <span class="inbox-meta">Llegó a la portería el {{ item.createdAt|date_es }}</span>
+            {% if item.isInside or item.exitedAt %}
+            <span class="inbox-deadline">
+              {% if item.isInside %}
+              {{ badge("Dentro · " ~ duration_text(item.insideMinutes), "success") }}
+              {% if item.isOverstay %}{{ badge("Pasó el tiempo previsto", "alert") }}{% endif %}
+              {% else %}
+              <span>Entró el {{ item.enteredAt|date_es }} · salió el {{ item.exitedAt|date_es }}</span>
+              {% endif %}
+            </span>
+            {% endif %}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {{ pager(page, pages) }}
+      {% else %}
+      <p class="empty">{% if filtered %}No hay visitas que coincidan con esos filtros.{% else %}{{ empty_text }}{% endif %}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {# --- La visita abierta al lado --------------------------------------------------------------- #}
+  <section class="inbox-detail" aria-label="Detalle de la visita">
+    {% if selected %}
+    <article class="card" aria-labelledby="detail-title">
+      <a class="back-link" href="{{ url_for('web.registry_visits', **list_args) }}">‹ Volver a la lista</a>
+      <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.visitorName }}</h2>
+      <p class="badges">
+        {{ status_badge("visit", selected.approvalStatus) }}
+        {% if selected.isInside %}{{ badge("Dentro de la unidad", "success") }}{% elif selected.exitedAt %}{{ badge("Ya salió") }}{% endif %}
+        {% if selected.isOverstay %}{{ badge("Pasó el tiempo previsto", "alert") }}{% endif %}
+      </p>
+
+      <dl class="facts">
+        <dt>Tipo</dt><dd>{{ visit_type_text(selected.type) }}</dd>
+        <dt>Residente</dt><dd>{{ selected.residentName or "—" }}</dd>
+        <dt>Apartamento</dt><dd>{{ selected.apartment or "—" }}</dd>
+        {% if selected.description %}<dt>Detalles</dt><dd class="prewrap">{{ selected.description }}</dd>{% endif %}
+        {% if selected.visitorDocument %}<dt>Documento</dt><dd>{{ selected.visitorDocument }}</dd>{% endif %}
+        <dt>Llegó a la portería</dt>
+        <dd>{{ selected.createdAt|date_es }}{% if selected.registeredByName %} · lo registró {{ selected.registeredByName }}{% endif %}</dd>
+        {% if selected.authorizationMethod %}<dt>Autorización</dt><dd>{{ authorization_method_text(selected.authorizationMethod, true) }}</dd>{% endif %}
+        {% if selected.enteredAt %}<dt>Entró</dt><dd>{{ selected.enteredAt|date_es }}</dd>{% endif %}
+        {% if selected.exitedAt %}
+        <dt>Salió</dt>
+        <dd>{{ selected.exitedAt|date_es }}{% if selected.exitReturning %} · dijo que vuelve hoy{% endif %}</dd>
+        {% endif %}
+        {% if selected.isInside %}<dt>Lleva dentro</dt><dd>{{ duration_text(selected.insideMinutes) }}</dd>{% endif %}
+        {% if selected.expectedStayMinutes %}<dt>Estadía prevista</dt><dd>{{ duration_text(selected.expectedStayMinutes) }}</dd>{% endif %}
+      </dl>
+
+      {% if selected.hasPhoto %}
+      <h3>Foto del visitante</h3>
+      {{ attachment(url_for('web.registry_visit_photo', visit_id=selected.id), "image", "Foto del visitante") }}
+      <p class="muted small">Se guardó con el consentimiento del visitante.</p>
+      {% endif %}
+
+      <h3>Historial de la visita</h3>
+      {% if selected.events %}
+      <ol class="thread thread-events">
+        {% for entry in selected.events %}
+        {% set how = authorization_method_text(entry.method) %}
+        <li class="msg">
+          <p class="who-line"><strong>{{ visit_event_text(entry.type) }}</strong> · {{ entry.createdAt|date_es }}</p>
+          <p class="mb-0 muted small">
+            {{ entry.actorName or "Sin dato de quién" }}
+            {%- if entry.type in ("aprobada", "rechazada") and how %} · {{ how }}
+            {%- elif entry.type in ("entrada", "salida") and entry.method != "app" and how %} · visita autorizada {{ how }}{% endif %}
+            {%- if entry.returningToday %} · dijo que vuelve hoy{% endif %}
+          </p>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="muted">Esta visita no tiene pasos registrados.</p>
+      {% endif %}
+    </article>
+    {% else %}
+    <div class="card inbox-placeholder">
+      <p class="empty">Elige una visita de la lista para ver cómo se autorizó, cuándo entró y cuándo salió.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+</div>
+{% endblock %}
