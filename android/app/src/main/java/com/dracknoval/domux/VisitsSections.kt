@@ -271,7 +271,7 @@ private fun VisitCard(
             if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
                 Text("Documento: ${visit.visitorDocument}")
             }
-            MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType)
+            MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType, "Foto del visitante")
             visit.description?.takeIf { it.isNotBlank() }?.let { Text("Pedido: $it") }
             visit.enteredAt?.let { Text("Última entrada: $it") }
             visit.exitedAt?.let { Text("Última salida: $it") }

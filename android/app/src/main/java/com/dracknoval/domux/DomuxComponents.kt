@@ -67,30 +67,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Un adjunto que llegó del servidor, ya visible: la foto en miniatura (se abre en grande), el
+ * video para reproducir y el audio con su reproductor (ver MediaViewer.kt).
+ */
 @Composable
-fun MediaAttachmentChip(mediaUrl: String?, mediaType: String?) {
-    if (mediaUrl.isNullOrBlank()) return
-    val (icon, label) = when (mediaType?.lowercase()) {
-        "image" -> "IMG" to "Imagen adjunta"
-        "video" -> "VID" to "Video adjunto"
-        "audio" -> "AUD" to "Audio adjunto"
-        else -> "FILE" to "Archivo adjunto"
-    }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.secondary,
-        shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(icon, fontSize = 10.sp)
-            Spacer(Modifier.width(7.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium)
-        }
-    }
+fun MediaAttachmentChip(mediaUrl: String?, mediaType: String?, description: String = "Foto adjunta") {
+    MediaAttachment(mediaUrl, mediaType, description)
 }
 
 @Composable

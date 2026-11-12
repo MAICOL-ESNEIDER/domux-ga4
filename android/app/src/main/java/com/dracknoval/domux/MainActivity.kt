@@ -30,6 +30,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.dracknoval.domux.data.AppTempFiles
 import com.dracknoval.domux.data.PushRegistration
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
@@ -42,6 +43,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Al abrir la app se borra lo temporal que haya quedado de la vez anterior (adjuntos abiertos, QR compartido).
+        if (savedInstanceState == null) AppTempFiles.clearAll(this)
         Session.restore(this)
         pendingNotificationRoute = intent.notificationRoute()
         markNotificationOpened(intent)

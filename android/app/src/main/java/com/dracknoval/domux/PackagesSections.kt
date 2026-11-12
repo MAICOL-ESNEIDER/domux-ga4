@@ -235,7 +235,7 @@ private fun PackageCard(
             if (item.eventDate != null || item.eventTime != null) {
                 Text("Registro: ${item.eventDate.orEmpty()} ${item.eventTime.orEmpty()}")
             }
-            MediaAttachmentChip(item.mediaUrl, item.mediaType)
+            MediaAttachmentChip(item.mediaUrl, item.mediaType, "Foto del paquete")
             if (item.status == "entregado" && !item.deliveredTo.isNullOrBlank()) {
                 Text("Recibido por: ${item.deliveredTo}")
             }

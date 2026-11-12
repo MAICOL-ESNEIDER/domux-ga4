@@ -106,6 +106,8 @@ object Session {
     fun clear(context: Context) {
         clear()
         SessionStorage.clear(context)
+        // Al salir no queda nada de la unidad en el celular: ni adjuntos abiertos ni el QR compartido.
+        AppTempFiles.clearAll(context)
     }
 
     fun updateFrom(user: UserData) {

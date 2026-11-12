@@ -262,7 +262,7 @@ private fun AnnouncementCard(
             if (announcement.eventDate != null || announcement.eventTime != null) {
                 Text("Evento: ${announcement.eventDate.orEmpty()} ${announcement.eventTime.orEmpty()}".trim())
             }
-            MediaAttachmentChip(announcement.mediaUrl, announcement.mediaType)
+            MediaAttachmentChip(announcement.mediaUrl, announcement.mediaType, "Foto del comunicado")
             Text(
                 "Por ${announcement.authorName ?: "Administración"} · ${announcement.createdAt.orEmpty()}",
                 style = MaterialTheme.typography.bodySmall
