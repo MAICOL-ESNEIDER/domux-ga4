@@ -467,6 +467,33 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(fcm_message.android.priority, "high")
         self.assertEqual(Notification.query.count(), 1)
 
+    def test_push_of_a_vehicle_alert_opens_the_vehicles_screen(self):
+        """El aviso de un vehículo visitante que pasó el tiempo máximo lleva al guardia a Vehículos."""
+        self.client.post(
+            "/api/push-tokens",
+            headers=self.auth(self.guard),
+            json={"token": "fcm-token-guard", "deviceId": "device-guard"},
+        )
+        with (
+            patch.object(notification_service, "_get_firebase_app", return_value=object()),
+            patch.object(notification_service.messaging, "send_each_for_multicast") as send,
+        ):
+            send.return_value.failure_count = 0
+            notification_service.notify_user(
+                self.guard.id,
+                "Vehículo visitante pasó el tiempo máximo",
+                "El vehículo ABC123 lleva 3 días.",
+                "vehicle",
+            )
+            db.session.commit()
+
+        self.assertEqual(send.call_count, 1)
+        fcm_message = send.call_args.args[0]
+        self.assertEqual(
+            {key: fcm_message.data[key] for key in ("type", "route")},
+            {"type": "vehicle", "route": "vehicles"},
+        )
+
     def test_push_from_rolled_back_notification_is_not_sent_later(self):
         self.client.post(
             "/api/push-tokens",

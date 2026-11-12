@@ -116,7 +116,7 @@ def _queue_push(user_id, title, message, notification_type, notification):
         "reservation": "reservations",
         "package": "registry",
         "visit": "registry",
-        "vehicle": "registry",
+        "vehicle": "vehicles",
         "announcement": "announcements",
     }.get(notification_type, "notifications")
     db.session.info.setdefault("domux_push_queue", []).append({
