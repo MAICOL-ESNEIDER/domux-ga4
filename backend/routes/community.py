@@ -32,6 +32,7 @@ from services.announcement_service import (
     visible_announcements,
 )
 from services.audit_service import add_audit_log
+from services import pqrs_service
 from services.notification_service import notify_residents, notify_user
 from services.excel_service import (
     MIME_XLSX,
@@ -292,7 +293,16 @@ def delete_announcement(announcement_id):
 @token_required
 @role_required("ADMIN", "RESIDENT")
 def get_pqrs():
+    """Las PQRS del residente, o todas las de la unidad si quien consulta es la administración.
+
+    Sin parámetros entrega la lista completa de siempre (con conversación y adjuntos), que es la que
+    usa la app. Con ``view=summary`` entrega la lista liviana de la bandeja de la web: sin
+    conversación ni adjuntos, paginada (``page`` y ``pageSize``) y con las más urgentes primero.
+    Con ``semaphore=verde|amarillo|rojo`` deja solo las que están en curso con ese color de plazo.
+    """
     user = g.current_user
+    view = pqrs_service.parse_view(request.args.get("view"))
+    semaphore = pqrs_service.parse_semaphore(request.args.get("semaphore"))
     query = Pqrs.query.join(User, Pqrs.resident_id == User.id)
     include_archived, error = parse_optional_bool(
         request.args.get("includeArchived"), "includeArchived"
@@ -332,10 +342,33 @@ def get_pqrs():
             Pqrs.category.ilike(pattern),
             User.name.ilike(pattern),
             User.last_name.ilike(pattern),
+            (User.name + " " + User.last_name).ilike(pattern),
             User.apartment.ilike(pattern),
         ))
+    if semaphore is not None:
+        query = pqrs_service.filter_by_semaphore(query, semaphore)
+    if view is not None:
+        page, size = page_args(default_size=25, max_size=100)
+        return jsonify(pqrs_service.summary_page(query, page, size))
     items = query.order_by(Pqrs.created_at.desc()).all()
     return jsonify({"pqrs": [item.to_dict() for item in items]})
+
+
+@bp.get("/pqrs/<int:pqrs_id>")
+@token_required
+@role_required("ADMIN", "RESIDENT")
+def get_pqrs_item(pqrs_id):
+    """Una PQRS con su conversación. Un residente solo ve las suyas.
+
+    Con ``view=summary`` va sin el contenido de los adjuntos (solo dice cuáles mensajes los tienen),
+    para que la web no cargue fotos que no va a mostrar en esa página.
+    """
+    view = pqrs_service.parse_view(request.args.get("view"))
+    pqrs = db.session.get(Pqrs, pqrs_id)
+    if pqrs is None or (g.current_user.role == "RESIDENT" and pqrs.resident_id != g.current_user.id):
+        raise ApiError("PQRS no encontrada", 404)
+    data = pqrs_service.detail_dict(pqrs) if view is not None else pqrs.to_dict()
+    return jsonify({"pqrs": data})
 
 
 @bp.post("/pqrs")

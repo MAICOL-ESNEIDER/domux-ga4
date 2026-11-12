@@ -44,6 +44,30 @@
 </nav>
 {%- endmacro %}
 
+{# Pestañas de las PQRS; «active» es «bandeja» o «nueva». #}
+{% macro pqrs_tabs(active) -%}
+<nav class="tabs" aria-label="PQRS">
+  <a href="{{ url_for('web.pqrs_list') }}"{% if active == "bandeja" %} aria-current="page"{% endif %}>Bandeja</a>
+  <a href="{{ url_for('web.pqrs_new') }}"{% if active == "nueva" %} aria-current="page"{% endif %}>Nueva PQRS</a>
+</nav>
+{%- endmacro %}
+
+{# Un adjunto (foto, video o audio) que se pide aparte a la web: «url» es la ruta que lo entrega y «kind», su tipo. #}
+{% macro attachment(url, kind) -%}
+<figure class="attachment">
+  {% if kind == "video" %}
+  <video controls preload="metadata" src="{{ url }}">Este navegador no puede reproducir el video.</video>
+  {% elif kind == "audio" %}
+  <audio controls preload="none" src="{{ url }}">Este navegador no puede reproducir el audio.</audio>
+  {% else %}
+  <img src="{{ url }}" alt="Foto adjunta" loading="lazy">
+  {% endif %}
+  <figcaption class="small">
+    <a href="{{ url }}" target="_blank" rel="noopener">Abrir {{ {"video": "el video", "audio": "el audio"}.get(kind, "la foto") }} en otra pestaña</a>
+  </figcaption>
+</figure>
+{%- endmacro %}
+
 {# Logo y nombre de la unidad (HU-077) para la barra lateral y el inicio de sesión; sin datos guardados, los de DOMUX. #}
 {% macro brand_parts() -%}
 {% set unit = unit_brand() -%}

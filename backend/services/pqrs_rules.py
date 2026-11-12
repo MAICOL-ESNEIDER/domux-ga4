@@ -5,7 +5,7 @@ sin ciclos de importación.
 """
 
 from business_days import add_business_days, business_days_between
-from time_utils import to_colombia
+from time_utils import colombia_today, to_colombia
 
 #: Plazo en días hábiles para responder una PQRS (HU-073). La RN-025 lo deja «por
 #: tipo»: hoy todos los tipos usan 15; si un tipo necesita otro plazo, se agrega
@@ -61,3 +61,15 @@ def pqrs_semaphore(created_day, today, category=None):
     else:
         color = GREEN
     return {"color": color, "daysRemaining": remaining, "dueDate": due_day.isoformat()}
+
+
+def running_semaphore(status, created_at, category=None, today=None):
+    """Semáforo de una PQRS según como está guardada, o None si su plazo ya no corre.
+
+    ``created_at`` es la hora de radicación como se guarda (UTC, sin zona) y ``today`` el día de
+    Colombia (por defecto, hoy). Una PQRS resuelta deja de correr contra el plazo, así que no tiene
+    semáforo. La usan el modelo, el panel y la bandeja de la web, para que los tres cuenten igual.
+    """
+    if status not in RUNNING_STATUSES or created_at is None:
+        return None
+    return pqrs_semaphore(to_colombia(created_at).date(), today or colombia_today(), category)

@@ -74,7 +74,8 @@ def configure(app):
     def add_security_headers(response):
         if not is_web_path(request.path):
             return response
-        response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+        # Una ruta puede traer una política más estricta propia (los adjuntos de las PQRS); esa no se pisa.
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"

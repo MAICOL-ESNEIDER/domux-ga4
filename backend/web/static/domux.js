@@ -1,8 +1,8 @@
 /*
  * Comportamientos pequeños de la web de administración. Todo funciona también sin este archivo
  * (los formularios se envían igual); aquí solo se agregan comodidades: el menú del celular, la
- * confirmación antes de una acción delicada, los filtros que se aplican al cambiar y la selección
- * de varias filas. Va como archivo aparte porque la política de seguridad no admite scripts dentro
+ * confirmación antes de una acción delicada, los filtros que se aplican al cambiar, la selección
+ * de varias filas y el foco en el detalle que se abre. Va como archivo aparte porque la política de seguridad no admite scripts dentro
  * de la página.
  */
 (function () {
@@ -147,7 +147,7 @@
       if (item.checked) {
         checked += 1;
       }
-      var row = item.closest("tr");
+      var row = item.closest("tr, [data-select-row]");
       if (row) {
         row.classList.toggle("is-selected", item.checked);
       }
@@ -183,4 +183,12 @@
   document.querySelectorAll("[data-select-all]").forEach(function (all) {
     refreshSelection(all.dataset.selectAll);
   });
+
+  // --- Foco al abrir el detalle -----------------------------------------------------------------------
+  // <h2 tabindex="-1" data-focus-on-load>: al abrir una solicitud, el teclado y el lector de pantalla
+  // quedan en su título y no al comienzo de la página.
+  var focusTarget = document.querySelector("[data-focus-on-load]");
+  if (focusTarget) {
+    focusTarget.focus();
+  }
 })();

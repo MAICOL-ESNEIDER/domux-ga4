@@ -1,0 +1,189 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import status_badge, badge, pager, pqrs_tabs, attachment %}
+{% from "web/_forms.html" import select, textarea %}
+{% set page_title = "PQRS" %}
+
+{% block content %}
+{% set filtered = filters.q or filters.estado or filters.tipo or filters.plazo or filters.archivadas %}
+<div class="inbox-page{% if selected %} has-detail{% endif %}">
+<div class="page-head">
+  <div>
+    <h1>PQRS</h1>
+    <p>{{ plural(total, "PQRS", "PQRS") }}{% if filtered %} con esos filtros{% endif %}. Las que siguen sin resolverse van primero, de la más antigua a la más nueva.</p>
+  </div>
+</div>
+
+{{ pqrs_tabs("bandeja") }}
+
+<div class="inbox">
+
+  {# --- La bandeja ------------------------------------------------------------------------------ #}
+  <section class="inbox-list" aria-label="Bandeja de PQRS">
+    <form class="filters" method="get" action="{{ url_for('web.pqrs_list') }}" role="search" aria-label="Filtrar PQRS">
+      <div class="field grow">
+        <label for="q">Buscar</label>
+        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
+               placeholder="Radicado, asunto, residente o apartamento">
+      </div>
+      <div class="field">
+        <label for="estado">Estado</label>
+        <select id="estado" name="estado" data-autosubmit>
+          <option value="">Todos</option>
+          {% for value, label in status_options %}<option value="{{ value }}"{% if filters.estado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="tipo">Tipo</label>
+        <select id="tipo" name="tipo" data-autosubmit>
+          <option value="">Todos</option>
+          {% for value in category_options %}<option value="{{ value }}"{% if filters.tipo == value %} selected{% endif %}>{{ value }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="plazo">Plazo</label>
+        <select id="plazo" name="plazo" data-autosubmit>
+          <option value="">Todos</option>
+          {% for value, label in deadline_options %}<option value="{{ value }}"{% if filters.plazo == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="check">
+        <input type="checkbox" id="archivadas" name="archivadas" value="1"{% if filters.archivadas %} checked{% endif %} data-autosubmit>
+        <label for="archivadas">Incluir archivadas</label>
+      </div>
+      <button type="submit" class="btn">Filtrar</button>
+      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.pqrs_list') }}">Quitar filtros</a>{% endif %}
+    </form>
+
+    <form class="card inbox-card" method="post" action="{{ url_for('web.pqrs_batch', **list_args) }}" aria-label="Bandeja de PQRS">
+      {{ csrf_input() }}
+      {% if items %}
+      <div class="inbox-tools js-only">
+        <div class="check">
+          <input type="checkbox" id="select-all" data-select-all="pqrs">
+          <label for="select-all">Seleccionar todas las de esta página</label>
+        </div>
+      </div>
+      <ul class="inbox-items">
+        {% for item in items %}
+        {% set current = selected and selected.id == item.id %}
+        <li class="inbox-item{% if current %} is-current{% endif %}" data-select-row>
+          {# La etiqueta es toda el área de 44 px: así la casilla se toca con facilidad. #}
+          <label class="inbox-check" for="sel-{{ item.id }}">
+            <input type="checkbox" name="ids" value="{{ item.id }}" id="sel-{{ item.id }}" data-select-item="pqrs"
+                   {%- if item.id in batch.ids %} checked{% endif %}>
+            <span class="sr-only">Seleccionar {{ item.radicado }}: {{ item.subject }}</span>
+          </label>
+          <a class="inbox-link" href="{{ url_for('web.pqrs_detail', pqrs_id=item.id, **list_args) }}"{% if current %} aria-current="true"{% endif %}>
+            <span class="inbox-top">
+              <span><span class="mono small">{{ item.radicado }}</span> <span class="inbox-meta">· {{ item.category }}</span></span>
+              {{ status_badge("pqrs", item.status) }}
+            </span>
+            <strong class="inbox-subject">{{ item.subject }}</strong>
+            <span class="inbox-meta">{{ item.apartment or "Sin apartamento" }} · {{ item.residentName }}</span>
+            {% if item.semaphore or item.attachmentCount or item.createdByAdministration or item.isArchived %}
+            <span class="inbox-deadline">
+              {% if item.semaphore %}{{ status_badge("semaphore", item.semaphore) }}<span>{{ deadline_text(item.daysRemaining, none) }}</span>{% endif %}
+              {% if item.attachmentCount %}<span class="inbox-meta">{{ plural(item.attachmentCount, "adjunto", "adjuntos") }}</span>{% endif %}
+              {% if item.createdByAdministration %}<span class="inbox-meta">Registrada por la administración</span>{% endif %}
+              {% if item.isArchived %}<span class="inbox-meta">Archivada</span>{% endif %}
+            </span>
+            {% endif %}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <details class="batch"{% if batch.open %} open{% endif %}>
+        <summary>Responder varias a la vez</summary>
+        <p class="help">Marca las PQRS de arriba y escribe una sola respuesta para todas. Deben ser del mismo tipo. Cada residente recibe un aviso en la app.</p>
+        {{ select("batchStatus", "Nuevo estado", status_batch_options, value=batch.status, required=True) }}
+        {{ textarea("batchMessage", "Respuesta para todas", batch.message, required=True, rows=4) }}
+        <button type="submit" class="btn" data-needs-selection="pqrs"
+                data-confirm="¿Enviar esta respuesta a todas las PQRS marcadas? Cada residente recibirá un aviso en la app."
+                data-confirm-label="Enviar respuesta" data-confirm-danger="no">
+          <span>Enviar a las <span data-select-count="pqrs">{{ batch.ids|length }}</span> marcadas</span>
+        </button>
+      </details>
+      {{ pager(page, pages) }}
+      {% else %}
+      <p class="empty">{% if filtered %}No hay PQRS que coincidan con esos filtros.{% else %}Todavía no hay PQRS.{% endif %}</p>
+      {% endif %}
+    </form>
+  </section>
+
+  {# --- La solicitud abierta al lado ------------------------------------------------------------ #}
+  <section class="inbox-detail" aria-label="Detalle de la PQRS">
+    {% if selected %}
+    <article class="card" aria-labelledby="detail-title">
+      <a class="back-link" href="{{ url_for('web.pqrs_list', **list_args) }}">‹ Volver a la bandeja</a>
+      <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.subject }}</h2>
+      <p>
+        {{ status_badge("pqrs", selected.status) }}
+        {% if selected.semaphore %}{{ status_badge("semaphore", selected.semaphore) }}{% endif %}
+        {% if selected.isArchived %}{{ badge("Archivada", "neutral") }}{% endif %}
+      </p>
+
+      <dl class="facts">
+        <dt>Radicado</dt><dd class="mono">{{ selected.radicado }}</dd>
+        <dt>Residente</dt><dd>{{ selected.residentName or "—" }}</dd>
+        <dt>Apartamento</dt><dd>{{ selected.apartment or "—" }}</dd>
+        <dt>Tipo</dt><dd>{{ selected.category }}</dd>
+        <dt>Registrada</dt>
+        <dd>{{ selected.createdAt|date_es }}{% if selected.createdByAdministration %} · la registró la administración a nombre del residente{% endif %}</dd>
+        <dt>Plazo</dt>
+        <dd>
+          {% if selected.semaphore %}{{ deadline_text(selected.daysRemaining, selected.dueDate) }}
+          {% else %}Ya no corre: la PQRS está resuelta.{% endif %}
+        </dd>
+        {% if selected.incidentDate %}
+        <dt>Fecha del hecho</dt><dd>{{ selected.incidentDate|date_es }}{% if selected.incidentTime %} {{ selected.incidentTime }}{% endif %}</dd>
+        {% endif %}
+        {% if selected.satisfactionRating %}
+        <dt>Calificación</dt>
+        <dd>{{ selected.satisfactionRating }} de 5{% if selected.satisfactionComment %} · {{ selected.satisfactionComment }}{% endif %}</dd>
+        {% endif %}
+      </dl>
+
+      <h3>Solicitud</h3>
+      <p class="prewrap">{{ selected.message }}</p>
+      {% if selected.hasMedia %}{{ attachment(url_for('web.pqrs_attachment', pqrs_id=selected.id), selected.mediaType) }}{% endif %}
+
+      <h3>Conversación</h3>
+      {% if thread %}
+      <ol class="thread">
+        {% for entry in thread %}
+        <li class="msg{% if entry.authorRole == 'ADMIN' %} from-admin{% endif %}">
+          <p class="who-line">
+            <strong>{{ entry.authorName or role_labels.get(entry.authorRole, "—") }}</strong>
+            · {{ role_labels.get(entry.authorRole, "") }} · {{ entry.createdAt|date_es }}
+          </p>
+          {% if entry.message %}<p class="prewrap mb-0">{{ entry.message }}</p>{% endif %}
+          {% if entry.hasMedia %}{{ attachment(url_for('web.pqrs_message_attachment', pqrs_id=selected.id, message_id=entry.id), entry.mediaType) }}{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="muted">Todavía no hay mensajes en esta conversación.</p>
+      {% endif %}
+
+      <h3 id="reply-title">Responder</h3>
+      <form method="post" action="{{ url_for('web.pqrs_respond', pqrs_id=selected.id, **list_args) }}" aria-labelledby="reply-title">
+        {{ csrf_input() }}
+        {{ select("status", "Nuevo estado", status_reply_options, value=reply.status, required=True,
+                  help="Para cambiar el estado hay que escribir la respuesta que verá el residente.") }}
+        {{ textarea("adminResponse", "Respuesta para el residente", reply.adminResponse, required=True,
+                    help="El residente recibe un aviso en la app con el nuevo estado.") }}
+        <div class="form-actions">
+          <button type="submit" class="btn">Enviar respuesta</button>
+        </div>
+      </form>
+    </article>
+    {% else %}
+    <div class="card inbox-placeholder">
+      <p class="empty">Elige una PQRS de la bandeja para ver la solicitud, su conversación y responderla.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+</div>
+{% endblock %}

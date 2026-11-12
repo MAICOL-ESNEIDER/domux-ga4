@@ -35,6 +35,19 @@
 </div>
 {%- endmacro %}
 
+{# Texto de varias líneas. El contenido va pegado a la etiqueta de apertura para no agregarle un salto de línea. #}
+{% macro textarea(id, label, value="", required=False, help="", rows=5, maxlength=None, extra=None) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label_text(label, required) }}</label>
+  <textarea id="{{ id }}" name="{{ id }}" rows="{{ rows }}"
+            {%- if required %} required{% endif %}
+            {%- if help %} aria-describedby="{{ id }}-help"{% endif %}
+            {{- {"maxlength": maxlength}|xmlattr }}
+            {{- (extra or {})|xmlattr }}>{{ value or "" }}</textarea>
+  {% if help %}<p class="help" id="{{ id }}-help">{{ help }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
 {# Casilla de verificación con su ayuda. #}
 {% macro checkbox(id, label, checked=False, help="") -%}
 <div class="field">

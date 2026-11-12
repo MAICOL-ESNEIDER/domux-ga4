@@ -270,6 +270,67 @@ dialog {
 dialog::backdrop { background: rgba(3, 8, 18, .72); }
 dialog .dialog-actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem; }
 
+/* --- PQRS: la bandeja con la solicitud abierta al lado (UI-103) ----------------------------------- */
+
+.js-only { display: none; }
+.js .js-only { display: block; }
+
+.inbox-list .card, .inbox-detail .card { margin-bottom: 1rem; }
+/* En la bandeja los filtros van compactos: la búsqueda sola, los tres filtros juntos y los botones. */
+.inbox-list .filters { gap: .5rem .75rem; margin-bottom: .75rem; }
+.inbox-list .filters .field { flex: 1 1 100px; min-width: 0; }
+.inbox-list .filters .field.grow { flex: 1 1 100%; }
+.inbox-card { padding: .25rem 0 1rem; }
+.inbox-card > .empty, .inbox-card > .pager { padding-left: 1.25rem; padding-right: 1.25rem; }
+.inbox-tools { padding: .25rem 1.25rem 0; border-bottom: 1px solid var(--line); }
+.inbox-items { list-style: none; margin: 0; padding: 0; }
+.inbox-item { display: flex; align-items: flex-start; border-bottom: 1px solid var(--line); }
+.inbox-item:hover { background: rgba(56, 189, 248, .05); }
+.inbox-item.is-selected { background: rgba(56, 189, 248, .1); }
+.inbox-item.is-current { background: rgba(56, 189, 248, .08); box-shadow: inset 3px 0 0 var(--primary); }
+.inbox-check { flex: none; display: flex; align-items: center; justify-content: center; width: 52px; min-height: 52px; padding-left: .5rem; cursor: pointer; }
+.inbox-check input { margin: 0; }
+.inbox-link {
+  display: flex; flex-direction: column; gap: .2rem; flex: 1 1 auto; min-width: 0;
+  padding: .7rem 1rem .7rem .25rem; color: var(--text); text-decoration: none;
+}
+.inbox-link:hover { color: var(--text); }
+.inbox-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.inbox-subject { overflow-wrap: anywhere; }
+.inbox-meta { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+.inbox-deadline { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem .6rem; font-size: .85rem; color: var(--soft); }
+
+.batch { margin: 1rem 1.25rem 0; padding-top: .5rem; border-top: 1px solid var(--line); }
+.batch summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 600; color: var(--soft); }
+.batch .help { color: var(--muted); font-size: .85rem; }
+
+.back-link { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: .25rem; }
+.inbox-detail h2:focus { outline: none; }
+.inbox-detail h3 { margin-top: 1.25rem; }
+.prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+ol.thread { list-style: none; }
+.thread .msg.from-admin .who-line strong { color: var(--primary); }
+.attachment { margin: .75rem 0 0; }
+.attachment img, .attachment video { display: block; max-width: 100%; max-height: 420px; border-radius: 12px; }
+.attachment audio { width: 100%; }
+.attachment figcaption { margin-top: .35rem; }
+
+/* Pantalla ancha: la bandeja y la solicitud, una al lado de la otra. */
+@media (min-width: 1200px) {
+  .inbox { display: grid; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+  .back-link { display: none; }
+}
+
+/* Pantalla angosta: son dos pantallas; la solicitud reemplaza a la bandeja y se vuelve con el enlace.
+   En la pantalla de la solicitud el título de la página queda solo para lectores de pantalla. */
+@media (max-width: 1199px) {
+  .inbox-page.has-detail .inbox-list, .inbox-page.has-detail .tabs { display: none; }
+  .inbox-page:not(.has-detail) .inbox-detail { display: none; }
+  .inbox-page.has-detail .page-head {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+}
+
 /* --- Inicio de sesión y páginas sin menú ---------------------------------------------------------- */
 
 .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; max-width: none; }

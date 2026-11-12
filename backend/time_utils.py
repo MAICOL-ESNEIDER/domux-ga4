@@ -36,6 +36,11 @@ def to_colombia(value):
     return value.replace(tzinfo=timezone.utc).astimezone(COLOMBIA)
 
 
+def format_colombia(value):
+    """Una hora guardada en UTC como se muestra en la API: «2026-11-10 21:30» (hora de Colombia)."""
+    return to_colombia(value).strftime("%Y-%m-%d %H:%M") if value else None
+
+
 def colombia_day_to_utc(day):
     """El momento, en UTC y sin zona, en que empieza ese día en Colombia.
 

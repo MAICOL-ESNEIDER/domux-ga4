@@ -9,7 +9,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 
 from config import visitor_parking_max_days
 from extensions import db
-from services.pqrs_rules import RUNNING_STATUSES, make_radicado, pqrs_semaphore
+from services.pqrs_rules import make_radicado, running_semaphore
 from services.zone_rules import (
     DEFAULT_CANCEL_DEADLINE_DAYS,
     DEFAULT_CLOSE_TIME,
@@ -20,7 +20,7 @@ from services.zone_rules import (
     DEFAULT_WEEKLY_LIMIT,
     zone_slots,
 )
-from time_utils import colombia_today, to_colombia, utc_now
+from time_utils import colombia_today, format_colombia, utc_now
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
 
@@ -49,7 +49,7 @@ APARTMENT_LABEL_SEPARATOR = " · Apto "
 
 def _fmt(value):
     """Muestra una hora guardada en UTC en la hora de Colombia (ADR-011, TT-031)."""
-    return to_colombia(value).strftime("%Y-%m-%d %H:%M") if value else None
+    return format_colombia(value)
 
 
 def apartment_label(tower_name, code):
@@ -816,11 +816,7 @@ class Pqrs(db.Model):
     @property
     def semaphore(self):
         """El semáforo del plazo (HU-073); None si ya está resuelta, porque deja de correr."""
-        if self.status not in RUNNING_STATUSES or self.created_at is None:
-            return None
-        return pqrs_semaphore(
-            to_colombia(self.created_at).date(), colombia_today(), self.category
-        )
+        return running_semaphore(self.status, self.created_at, self.category)
 
     def to_dict(self):
         latest_rating = self.satisfaction_ratings[-1] if self.satisfaction_ratings else None
