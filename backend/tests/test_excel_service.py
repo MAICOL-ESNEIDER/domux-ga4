@@ -1,7 +1,7 @@
 import base64
 import io
 import unittest
-from datetime import date, timedelta
+from datetime import timedelta
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -28,6 +28,7 @@ from services.excel_service import (
     import_census_from_bytes,
 )
 from structure_fixtures import apartment_for, parking_spot
+from time_utils import colombia_today
 from werkzeug.security import generate_password_hash
 
 
@@ -169,7 +170,7 @@ class ExcelServiceTests(unittest.TestCase):
         reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() + timedelta(days=5)).isoformat(),
+            date=(colombia_today() + timedelta(days=5)).isoformat(),
             time_slot="10:00-12:00",
             status="pendiente",
         )
@@ -243,21 +244,21 @@ class ExcelServiceTests(unittest.TestCase):
         old_reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() - timedelta(days=1)).isoformat(),
+            date=(colombia_today() - timedelta(days=1)).isoformat(),
             time_slot="10:00-12:00",
             status="aprobada",
         )
         rejected_reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() + timedelta(days=3)).isoformat(),
+            date=(colombia_today() + timedelta(days=3)).isoformat(),
             time_slot="12:00-14:00",
             status="rechazada",
         )
         active_reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() + timedelta(days=4)).isoformat(),
+            date=(colombia_today() + timedelta(days=4)).isoformat(),
             time_slot="14:00-16:00",
             status="pendiente",
         )

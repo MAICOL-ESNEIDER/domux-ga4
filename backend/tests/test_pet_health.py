@@ -6,7 +6,7 @@ funerario (DEC-015).
 """
 
 import unittest
-from datetime import date, timedelta
+from datetime import timedelta
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -17,6 +17,7 @@ from auth import generate_token
 from extensions import db
 from models import Pet, User
 from structure_fixtures import apartment_for
+from time_utils import colombia_today
 
 APARTMENT = "Torre 3 · Apto 303"
 
@@ -80,7 +81,7 @@ class PetHealthTests(unittest.TestCase):
         self.assertFalse(saved["dewormingUpToDate"])
 
     def test_invalid_health_data_is_rejected(self):
-        tomorrow = (date.today() + timedelta(days=2)).isoformat()
+        tomorrow = (colombia_today() + timedelta(days=2)).isoformat()
         cases = {
             "al día sin fecha": pet(vaccinesUpToDate=True),
             "fecha futura": pet(dewormingUpToDate=True, lastDewormingDate=tomorrow),

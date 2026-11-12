@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from google.auth.exceptions import DefaultCredentialsError
@@ -10,7 +10,7 @@ import env_setup  # noqa: F401  (va antes de importar la app)
 from app import create_app
 from auth import generate_token
 from extensions import db
-from time_utils import utc_now
+from time_utils import colombia_today, utc_now
 from models import DevicePushToken, Notification, PackageItem, User, Visit, VisitQrPass
 from structure_fixtures import apartment_for
 from services import notification_service
@@ -80,7 +80,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         return self.client.post("/api/visits", headers=self.auth(self.guard), json=data)
 
     def make_qr(self, max_people=1):
-        start = date.today()
+        start = colombia_today()
         end = start + timedelta(days=29)
         response = self.client.post(
             "/api/visits/qr-passes",
@@ -364,13 +364,13 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(VisitQrPass.query.one().to_dict()["registeredPeople"], 1)
 
     def test_qr_rejects_invalid_duration_and_foreign_resident_cannot_revoke(self):
-        today = date.today().isoformat()
+        today = colombia_today().isoformat()
         too_long = self.client.post(
             "/api/visits/qr-passes",
             headers=self.auth(self.resident),
             json={
                 "validFrom": today,
-                "validUntil": (date.today() + timedelta(days=30)).isoformat(),
+                "validUntil": (colombia_today() + timedelta(days=30)).isoformat(),
                 "maxPeople": 2,
             },
         )
@@ -383,7 +383,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(forbidden.status_code, 403)
 
     def test_admin_cannot_create_a_resident_owned_qr_pass(self):
-        today = date.today().isoformat()
+        today = colombia_today().isoformat()
         response = self.client.post(
             "/api/visits/qr-passes",
             headers=self.auth(self.admin),

@@ -6,7 +6,7 @@ pasa la estadía prevista (RN-012) y los nombres de los visitantes en el QR.
 """
 
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -15,7 +15,7 @@ from auth import generate_token
 from extensions import db
 from models import Notification, User, Visit
 from structure_fixtures import apartment_for
-from time_utils import utc_now
+from time_utils import colombia_today, utc_now
 from werkzeug.security import generate_password_hash
 
 
@@ -380,7 +380,7 @@ class VisitTests(unittest.TestCase):
     # --- Nombres de los visitantes en el QR (HU-033) ------------------------
 
     def make_qr(self, max_people=3, **fields):
-        today = date.today()
+        today = colombia_today()
         body = {
             "validFrom": today.isoformat(),
             "validUntil": (today + timedelta(days=5)).isoformat(),
@@ -405,7 +405,7 @@ class VisitTests(unittest.TestCase):
         self.assertEqual(self.make_qr(visitorNames=[])["visitorNames"], [])
 
     def test_the_qr_refuses_bad_names(self):
-        today = date.today()
+        today = colombia_today()
         base = {
             "validFrom": today.isoformat(),
             "validUntil": (today + timedelta(days=5)).isoformat(),

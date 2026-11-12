@@ -1,5 +1,4 @@
 import unittest
-from datetime import date
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -8,6 +7,7 @@ from auth import generate_token
 from extensions import db
 from models import AuditLog, Notification, Pqrs, PqrsMessage, PqrsSatisfaction, User
 from structure_fixtures import apartment_for
+from time_utils import colombia_today
 from werkzeug.security import generate_password_hash
 
 
@@ -105,7 +105,7 @@ class PqrsWorkflowTests(unittest.TestCase):
         )
 
     def test_minor_without_parental_consent_cannot_create_pqrs(self):
-        today = date.today()
+        today = colombia_today()
         try:
             birth_date = today.replace(year=today.year - 15)
         except ValueError:

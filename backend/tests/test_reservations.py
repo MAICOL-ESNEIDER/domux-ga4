@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, timedelta
+from datetime import timedelta
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -8,6 +8,7 @@ from auth import generate_token
 from extensions import db
 from models import AuditLog, CommonArea, Notification, Reservation, ReservationMessage, User
 from structure_fixtures import apartment_for
+from time_utils import colombia_today
 from validators import VALID_TIME_SLOTS
 from werkzeug.security import generate_password_hash
 
@@ -59,7 +60,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         ])
         db.session.commit()
         self.client = self.app.test_client()
-        self.future_date = (date.today() + timedelta(days=3)).isoformat()
+        self.future_date = (colombia_today() + timedelta(days=3)).isoformat()
 
     def tearDown(self):
         db.session.remove()
@@ -106,7 +107,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         )
 
     def test_minor_without_parental_consent_cannot_request_reservation(self):
-        today = date.today()
+        today = colombia_today()
         try:
             birth_date = today.replace(year=today.year - 15)
         except ValueError:
@@ -137,7 +138,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         self.assertEqual(Reservation.query.count(), 1)
 
     def test_resident_is_limited_to_two_active_reservations_per_week(self):
-        week_start = date.today() + timedelta(days=7 - date.today().weekday())
+        week_start = colombia_today() + timedelta(days=7 - colombia_today().weekday())
         first = self.create_request(date=week_start.isoformat(), slot="10:00-12:00")
         second = self.create_request(
             date=(week_start + timedelta(days=2)).isoformat(),
@@ -188,7 +189,7 @@ class ReservationWorkflowTests(unittest.TestCase):
                 time_slot=slot,
                 status="aprobada",
             ))
-        partial_date = (date.today() + timedelta(days=4)).isoformat()
+        partial_date = (colombia_today() + timedelta(days=4)).isoformat()
         db.session.add(Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
@@ -196,7 +197,7 @@ class ReservationWorkflowTests(unittest.TestCase):
             time_slot=VALID_TIME_SLOTS[0],
             status="aprobada",
         ))
-        pending_date = (date.today() + timedelta(days=5)).isoformat()
+        pending_date = (colombia_today() + timedelta(days=5)).isoformat()
         db.session.add(Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
@@ -261,7 +262,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         same_day = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=date.today().isoformat(),
+            date=colombia_today().isoformat(),
             time_slot="12:00-14:00",
             status="aprobada",
         )

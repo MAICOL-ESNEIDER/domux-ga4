@@ -1,5 +1,4 @@
 import unittest
-from datetime import date
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -8,6 +7,7 @@ from auth import generate_token
 from extensions import db
 from models import Pet, ResidentialUnit, User, Vehicle
 from structure_fixtures import apartment_for, parking_spot, storage_room
+from time_utils import colombia_today
 from werkzeug.security import generate_password_hash
 
 
@@ -215,7 +215,7 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual(age_filter.status_code, 200)
         self.assertEqual([user["id"] for user in age_filter.json["users"]], [self.resident.id])
 
-        self.resident.birth_date = date.today().replace(year=date.today().year - 35).isoformat()
+        self.resident.birth_date = colombia_today().replace(year=colombia_today().year - 35).isoformat()
         db.session.commit()
         resident_age_filter = self.client.get(
             "/api/users?minAge=30&maxAge=40",

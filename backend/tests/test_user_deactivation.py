@@ -7,7 +7,7 @@ usar sus QR. Su historial se conserva.
 
 import json
 import unittest
-from datetime import date, timedelta
+from datetime import timedelta
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -18,10 +18,11 @@ from auth import generate_token
 from extensions import db
 from models import AuditLog, DevicePushToken, Notification, User, VisitQrPass
 from structure_fixtures import apartment_for
+from time_utils import colombia_today
 
 
 def days_from_today(days):
-    return (date.today() + timedelta(days=days)).isoformat()
+    return (colombia_today() + timedelta(days=days)).isoformat()
 
 
 class UserDeactivationTests(unittest.TestCase):
