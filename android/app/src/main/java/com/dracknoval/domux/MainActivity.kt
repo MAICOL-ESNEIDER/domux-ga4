@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("registry") { RegistryScreen(navController) }
+                        composable("vehicles") { VehiclesScreen(navController) }
                         composable("createUser") { CreateUserScreen(navController) }
                         composable("structure") { StructureScreen(navController) }
                         composable("profile") { ResidentProfileScreen(navController) }
@@ -135,7 +136,7 @@ class MainActivity : ComponentActivity() {
     private fun Intent.notificationRoute(): String? {
         val route = getStringExtra(EXTRA_NOTIFICATION_ROUTE) ?: getStringExtra("route")
         return route?.takeIf {
-            it in setOf("pqrs", "reservations", "registry", "announcements", "notifications")
+            it in setOf("pqrs", "reservations", "registry", "vehicles", "announcements", "notifications")
         }
     }
 

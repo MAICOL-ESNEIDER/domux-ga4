@@ -364,7 +364,17 @@ data class PackageItem(
     val eventTime: String? = null,
     val deliveredTo: String? = null,
     val isDeleted: Boolean = false,
-    val deletedAt: String? = null
+    val deletedAt: String? = null,
+    // Transportadora y número de guía (HU-047).
+    val carrier: String? = null,
+    val trackingNumber: String? = null,
+    // Cuándo llegó a la portería y cuántas horas lleva sin reclamar; claimAlert es
+    // «naranja» (más de 48 h), «rojo» (más de 72 h) o null (HU-049, RN-018).
+    val arrivedAt: String? = null,
+    val hoursWaiting: Int? = null,
+    val claimAlert: String? = null,
+    // El residente ya generó un código de entrega que sigue vigente (HU-048).
+    val hasPickupCode: Boolean = false
 )
 data class PackagesListResponse(val packages: List<PackageItem>?)
 data class RegisterPackageRequest(
@@ -374,11 +384,24 @@ data class RegisterPackageRequest(
     val mediaType: String? = null,
     val eventDate: String? = null,
     val eventTime: String? = null,
-    val status: String = "pendiente"
+    val status: String = "pendiente",
+    val carrier: String? = null,
+    val trackingNumber: String? = null
 )
 data class RegisterPackageResponse(val message: String?, val packageItem: PackageItem?)
-data class DeliverPackageRequest(val receivedBy: String)
+// pickupCode es el PIN de 6 dígitos o el texto del QR del código de entrega (HU-048).
+data class DeliverPackageRequest(val receivedBy: String, val pickupCode: String? = null)
 data class UpdatePackageStatusRequest(val status: String)
+
+// Código de entrega: el QR y el PIN solo llegan cuando el residente lo genera (HU-048).
+data class PickupCodeData(val qrData: String, val pin: String)
+data class PickupCodeResponse(
+    val message: String?,
+    val pickupCode: PickupCodeData?,
+    val packageItem: PackageItem?
+)
+data class PickupLookupRequest(val code: String)
+data class PickupLookupResponse(val packageItem: PackageItem?)
 
 data class Visit(
     val id: Int,
@@ -400,9 +423,19 @@ data class Visit(
     val exitedAt: String? = null,
     val exitReturning: Boolean = false,
     val qrPassId: Int? = null,
-    val events: List<VisitEvent>? = null
+    val events: List<VisitEvent>? = null,
+    // Estadía que el guardia anotó (en minutos), cuánto lleva adentro y si ya se pasó (HU-031).
+    val expectedStayMinutes: Int? = null,
+    val insideMinutes: Int? = null,
+    val isOverstay: Boolean = false
 )
-data class VisitsListResponse(val visits: List<Visit>?)
+data class VisitsListResponse(
+    val visits: List<Visit>?,
+    val page: Int = 1,
+    val pageSize: Int = 50,
+    val total: Int = 0,
+    val totalPages: Int = 1
+)
 data class VisitEvent(
     val id: Int,
     val type: String,
@@ -419,9 +452,12 @@ data class RegisterVisitRequest(
     val mediaConsent: Boolean = false,
     val mediaUrl: String? = null,
     val mediaType: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    val expectedStayMinutes: Int? = null
 )
 data class RegisterVisitResponse(val message: String?, val visit: Visit?)
+// El cuerpo de la entrada es opcional: solo trae la estadía prevista si el guardia la anota ahora.
+data class VisitEntryRequest(val expectedStayMinutes: Int? = null)
 data class VisitDecisionRequest(val decision: String)
 data class VisitExitRequest(val returningToday: Boolean)
 data class VisitQrPass(
@@ -434,13 +470,16 @@ data class VisitQrPass(
     val remainingPeople: Int,
     val revoked: Boolean,
     val token: String? = null,
-    val qrData: String? = null
+    val qrData: String? = null,
+    // Los nombres que el residente escribió al crear el QR (HU-033).
+    val visitorNames: List<String>? = null
 )
 data class VisitQrPassListResponse(val qrPasses: List<VisitQrPass>?)
 data class CreateVisitQrPassRequest(
     val validFrom: String,
     val validUntil: String,
-    val maxPeople: Int
+    val maxPeople: Int,
+    val visitorNames: List<String>? = null
 )
 data class VisitQrPassResponse(val qrPass: VisitQrPass?)
 data class VisitQrInspectionResponse(
@@ -450,9 +489,15 @@ data class VisitQrInspectionResponse(
     val inside: List<Visit>?,
     val canRegister: Boolean = false,
     val registeredVisits: List<Visit>? = null,
-    val linkableVisits: List<Visit>? = null
+    val linkableVisits: List<Visit>? = null,
+    // Los nombres del QR que todavía no tienen una visita registrada (HU-033).
+    val pendingVisitorNames: List<String>? = null
 )
-data class QrVisitorEntryRequest(val visitorName: String? = null, val visitId: Int? = null)
+data class QrVisitorEntryRequest(
+    val visitorName: String? = null,
+    val visitId: Int? = null,
+    val expectedStayMinutes: Int? = null
+)
 data class QrVisitorExitRequest(val visitId: Int, val returningToday: Boolean)
 
 data class NotificationItem(
@@ -467,7 +512,20 @@ data class NotificationItem(
 data class NotificationsListResponse(val notifications: List<NotificationItem>?)
 data class NotificationResponse(val message: String?, val notification: NotificationItem?)
 
-data class ErrorResponse(val error: String?)
+// Algunos errores traen datos para actuar: el parqueadero libre que se sugiere cuando el elegido
+// ya estaba ocupado, o que ya no queda ninguno libre (HU-039).
+data class ErrorResponse(
+    val error: String?,
+    val noFreeSpots: Boolean? = null,
+    val suggestedSpot: ParkingSpotData? = null
+)
+
+/** Lee los datos extra de un error; null si el cuerpo no se entiende. */
+fun detalleDeError(cuerpoError: String?): ErrorResponse? = try {
+    com.google.gson.Gson().fromJson(cuerpoError, ErrorResponse::class.java)
+} catch (_: Exception) {
+    null
+}
 
 fun mensajeDeError(codigo: Int, cuerpoError: String?): String {
     val detalle = try {

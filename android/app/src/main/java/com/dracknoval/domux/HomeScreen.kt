@@ -142,6 +142,7 @@ fun HomeScreen(navController: NavController) {
             add(HomeModule("PQRS", "Gestión de solicitudes", "◎", "pqrs"))
             add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations"))
             add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry"))
+            add(HomeModule("Vehículos", "Parqueaderos y placas", "◧", "vehicles"))
             add(HomeModule("Usuarios", "Administración", "♙", "createUser"))
             add(HomeModule("Estructura", "Torres y apartamentos", "▦", "structure"))
         } else if (Session.isResident) {
@@ -151,6 +152,7 @@ fun HomeScreen(navController: NavController) {
             add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry"))
         } else if (Session.isGuard) {
             add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry"))
+            add(HomeModule("Vehículos", "Parqueaderos y placas", "◧", "vehicles"))
         }
     }
 

@@ -286,11 +286,32 @@ interface ApiService {
         @Path("id") id: Int
     ): Response<RegisterPackageResponse>
 
+    // El residente dueño genera el código (QR y PIN) para que otra persona recoja su paquete (HU-048).
+    @POST("api/packages/{id}/pickup-code")
+    suspend fun createPickupCode(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<PickupCodeResponse>
+
+    // El guardia escanea el QR del código y el servidor devuelve el paquete (el texto viaja en el cuerpo, no en la dirección).
+    @POST("api/packages/pickup-lookup")
+    suspend fun lookupPickupCode(
+        @Header("Authorization") auth: String,
+        @Body body: PickupLookupRequest
+    ): Response<PickupLookupResponse>
+
     @GET("api/visits")
     suspend fun getVisits(
         @Header("Authorization") auth: String,
         @Query("search") search: String? = null,
-        @Query("status") status: String? = null
+        @Query("status") status: String? = null,
+        @Query("apartmentId") apartmentId: Int? = null,
+        @Query("from") dateFrom: String? = null,
+        @Query("to") dateTo: String? = null,
+        // «true» trae solo las visitas que entraron y siguen adentro (HU-032).
+        @Query("inside") inside: String? = null,
+        @Query("page") page: Int = 1,
+        @Query("pageSize") pageSize: Int = 50
     ): Response<VisitsListResponse>
 
     @POST("api/visits")
@@ -315,7 +336,8 @@ interface ApiService {
     @POST("api/visits/{id}/entry")
     suspend fun registerVisitEntry(
         @Header("Authorization") auth: String,
-        @Path("id") id: Int
+        @Path("id") id: Int,
+        @Body body: VisitEntryRequest
     ): Response<RegisterVisitResponse>
 
     @POST("api/visits/{id}/exit")
@@ -361,6 +383,50 @@ interface ApiService {
         @Path("token") token: String,
         @Body body: QrVisitorExitRequest
     ): Response<RegisterVisitResponse>
+
+    // --- Portería vehicular (HU-035 a HU-041) ---
+
+    @GET("api/parking/visitor-spots")
+    suspend fun getVisitorSpots(
+        @Header("Authorization") auth: String
+    ): Response<VisitorBoardResponse>
+
+    @POST("api/vehicle-entries")
+    suspend fun registerVehicleEntry(
+        @Header("Authorization") auth: String,
+        @Body body: RegisterVehicleEntryRequest
+    ): Response<VehicleEntryResponse>
+
+    @PUT("api/vehicle-entries/{id}/exit")
+    suspend fun registerVehicleExit(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<VehicleEntryResponse>
+
+    @GET("api/vehicle-entries")
+    suspend fun getVehicleEntries(
+        @Header("Authorization") auth: String,
+        // «true» trae solo los que siguen adentro; overdue = «true», solo los que pasaron el tiempo máximo.
+        @Query("inside") inside: String? = null,
+        @Query("overdue") overdue: String? = null,
+        @Query("plate") plate: String? = null,
+        @Query("apartmentId") apartmentId: Int? = null,
+        @Query("page") page: Int = 1,
+        @Query("pageSize") pageSize: Int = 25
+    ): Response<VehicleEntriesListResponse>
+
+    @GET("api/resident-vehicles")
+    suspend fun searchResidentVehicles(
+        @Header("Authorization") auth: String,
+        @Query("search") search: String
+    ): Response<ResidentVehiclesResponse>
+
+    @POST("api/resident-vehicles/{plate}/movements")
+    suspend fun registerResidentMovement(
+        @Header("Authorization") auth: String,
+        @Path("plate") plate: String,
+        @Body body: VehicleMovementRequest
+    ): Response<VehicleMovementResponse>
 
     @GET("api/notifications")
     suspend fun getNotifications(@Header("Authorization") auth: String): Response<NotificationsListResponse>

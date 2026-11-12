@@ -484,6 +484,7 @@ fun DomuxScreenScaffold(
                 add("PQRS" to "pqrs")
                 add("Reservas" to "reservations")
                 add("Paquetería y visitas" to "registry")
+                add("Vehículos" to "vehicles")
                 add("Gestión de usuarios" to "createUser")
                 add("Estructura de la unidad" to "structure")
             } else if (Session.isResident) {
@@ -493,6 +494,7 @@ fun DomuxScreenScaffold(
                 add("Paquetería y visitas" to "registry")
             } else if (Session.isGuard) {
                 add("Paquetería y visitas" to "registry")
+                add("Vehículos" to "vehicles")
             }
         }
         val currentRoute = navController.currentBackStackEntry?.destination?.route?.substringBefore("?")

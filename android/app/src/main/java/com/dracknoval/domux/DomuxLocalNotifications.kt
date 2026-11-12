@@ -103,6 +103,7 @@ object DomuxLocalNotifications {
         "pqrs" -> "pqrs"
         "reservation" -> "reservations"
         "package", "visit" -> "registry"
+        "vehicle" -> "vehicles"
         "announcement" -> "announcements"
         else -> "notifications"
     }
