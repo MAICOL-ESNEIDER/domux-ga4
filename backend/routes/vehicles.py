@@ -12,22 +12,11 @@ from auth import role_required, token_required
 from errors import ApiError
 from extensions import db
 from models import VisitorVehicleEntry
-from routes.common import bool_arg, json_object, paginated, save_changes
+from routes.common import bool_arg, int_arg, json_object, paginated, save_changes
 from services import vehicle_service as vehicles
 from services.alert_service import run_alerts
 
 bp = Blueprint("vehicles", __name__, url_prefix="/api")
-
-
-def _apartment_filter():
-    """El filtro apartmentId de la URL como número entero, o None si no viene."""
-    value = request.args.get("apartmentId")
-    if value in (None, ""):
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        raise ApiError("El filtro 'apartmentId' debe ser un número entero.") from None
 
 
 # --- Parqueaderos de visitantes (HU-037) ------------------------------------
@@ -81,7 +70,7 @@ def list_vehicle_entries():
         inside=bool_arg("inside"),
         overdue=bool_arg("overdue"),
         plate=(request.args.get("plate") or "").strip(),
-        apartment_id=_apartment_filter(),
+        apartment_id=int_arg("apartmentId"),
     )
     return paginated(query, "vehicleEntries", default_size=25)
 

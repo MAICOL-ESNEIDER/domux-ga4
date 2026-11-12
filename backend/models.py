@@ -901,7 +901,29 @@ class PackageItem(db.Model):
 
 
 class Visit(db.Model):
+    """Visita a un apartamento: quién llega, quién la autoriza y cuándo entra y sale.
+
+    expected_stay_minutes es la estadía que el guardia anota al registrarla (HU-031):
+    cuando pasa sin que la visita haya salido, el residente recibe «¿Tu visitante
+    sigue en la unidad?» (RN-012). overstay_alerted_at guarda cuándo se le avisó,
+    para no avisar dos veces; vuelve a quedar vacío cuando la visita reingresa.
+    """
+
     __tablename__ = "visits"
+    __table_args__ = (
+        # Solo las visitas que están dentro con una estadía por vigilar: son las únicas
+        # que busca la alerta, así que el índice es diminuto aunque haya miles de visitas.
+        Index(
+            "ix_visits_pending_overstay",
+            "entered_at",
+            sqlite_where=text(
+                "exited_at IS NULL AND expected_stay_minutes IS NOT NULL AND overstay_alerted_at IS NULL"
+            ),
+            postgresql_where=text(
+                "exited_at IS NULL AND expected_stay_minutes IS NOT NULL AND overstay_alerted_at IS NULL"
+            ),
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
@@ -919,6 +941,8 @@ class Visit(db.Model):
     exited_at = db.Column(db.DateTime, nullable=True)
     exit_returning = db.Column(db.Boolean, default=False, nullable=False)
     qr_pass_id = db.Column(db.Integer, db.ForeignKey("visit_qr_passes.id"), nullable=True, index=True)
+    expected_stay_minutes = db.Column(db.Integer, nullable=True)
+    overstay_alerted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
@@ -930,6 +954,23 @@ class Visit(db.Model):
         cascade="all, delete-orphan",
         order_by="VisitEvent.created_at, VisitEvent.id",
     )
+
+    @property
+    def is_inside(self):
+        """La visita entró y todavía no tiene salida."""
+        return self.entered_at is not None and self.exited_at is None
+
+    def inside_minutes(self, now=None):
+        """Minutos que lleva dentro; None si no está dentro."""
+        if not self.is_inside:
+            return None
+        return max(0, int(((now or utc_now()) - self.entered_at).total_seconds() // 60))
+
+    def is_overstay(self, now=None):
+        """Sigue dentro y ya pasó la estadía prevista (RN-012)."""
+        if self.expected_stay_minutes is None or not self.is_inside:
+            return False
+        return self.inside_minutes(now) >= self.expected_stay_minutes
 
     def to_dict(self):
         return {
@@ -948,6 +989,9 @@ class Visit(db.Model):
             "exitedAt": _fmt(self.exited_at),
             "exitReturning": self.exit_returning,
             "qrPassId": self.qr_pass_id,
+            "expectedStayMinutes": self.expected_stay_minutes,
+            "insideMinutes": self.inside_minutes(),
+            "isOverstay": self.is_overstay(),
             "createdAt": _fmt(self.created_at),
             "events": [event.to_dict() for event in self.events],
             "residentName": self.resident.full_name if self.resident else None,
@@ -957,6 +1001,12 @@ class Visit(db.Model):
 
 
 class VisitQrPass(db.Model):
+    """QR que el residente crea para que sus visitas entren sin llamadas (HU-027, RN-011).
+
+    visitor_names guarda, uno por línea, los nombres que el residente escribió al
+    crearlo (HU-033); el guardia los ve al escanearlo.
+    """
+
     __tablename__ = "visit_qr_passes"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -965,12 +1015,22 @@ class VisitQrPass(db.Model):
     valid_from = db.Column(db.String(10), nullable=False)
     valid_until = db.Column(db.String(10), nullable=False)
     max_people = db.Column(db.Integer, nullable=False)
+    visitor_names = db.Column(db.Text, nullable=True)
     revoked = db.Column(db.Boolean, default=False, nullable=False)
     revoked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     resident = db.relationship("User")
     visits = db.relationship("Visit", back_populates="qr_pass")
+
+    @property
+    def names(self):
+        """Los nombres de visitantes escritos al crear el QR, en una lista."""
+        return [name for name in (self.visitor_names or "").split("\n") if name]
+
+    @names.setter
+    def names(self, values):
+        self.visitor_names = "\n".join(values) or None
 
     def to_dict(self, include_token=False):
         registered_people = len(self.visits)
@@ -980,6 +1040,7 @@ class VisitQrPass(db.Model):
             "validFrom": self.valid_from,
             "validUntil": self.valid_until,
             "maxPeople": self.max_people,
+            "visitorNames": self.names,
             "registeredPeople": registered_people,
             "remainingPeople": max(0, self.max_people - registered_people),
             "revoked": self.revoked,

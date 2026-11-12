@@ -15,7 +15,8 @@ from models import (
     VisitEvent,
     VisitQrPass,
 )
-from routes.common import json_body
+from routes.common import bool_arg, int_arg, json_body, paginated
+from services import visit_service
 from services.alert_service import run_alerts
 from services.notification_service import notify_user
 from validators import (
@@ -311,30 +312,22 @@ def deliver_package(pkg_id):
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_visits():
-    user = g.current_user
-    query = Visit.query
-    if user.role == "RESIDENT":
-        query = query.filter_by(resident_id=user.id)
-    elif user.role in ("ADMIN", "GUARD"):
-        pass
-    else:
-        return error_response(403, "No tienes permiso para ver los ingresos")
-    status = request.args.get("status")
-    if status:
-        if status not in ("pendiente", "aprobada", "rechazada"):
-            return error_response(400, "Estado de visita inválido.")
-        query = query.filter(Visit.approval_status == status)
-    search = (request.args.get("search") or "").strip()
-    if search:
-        pattern = f"%{search}%"
-        query = query.join(User, Visit.resident_id == User.id).filter(db.or_(
-            Visit.visitor_name.ilike(pattern),
-            User.name.ilike(pattern),
-            User.last_name.ilike(pattern),
-            User.apartment.ilike(pattern),
-        ))
-    items = query.order_by(Visit.created_at.desc()).limit(500).all()
-    return jsonify({"visits": [item.to_dict() for item in items]})
+    """Historial de visitas (HU-030).
+
+    El administrador y el guardia ven todas; el residente, solo las de su
+    apartamento. Se filtra por status, search, apartmentId, from y to (días de
+    Colombia) y, con inside=true, solo las que entraron y no tienen salida (HU-032).
+    """
+    query = visit_service.visits_query(
+        g.current_user,
+        status=request.args.get("status"),
+        search=(request.args.get("search") or "").strip(),
+        apartment_id=int_arg("apartmentId"),
+        date_from=request.args.get("from"),
+        date_to=request.args.get("to"),
+        inside=bool_arg("inside"),
+    )
+    return paginated(query, "visits", default_size=50, max_size=200)
 
 
 @bp.post("/visits")
@@ -374,9 +367,11 @@ def register_visit():
     description = data.get("description")
     if description is not None and not isinstance(description, str):
         return error_response(400, "Los detalles del pedido deben ser texto.")
+    stay = visit_service.expected_stay(data.get("expectedStayMinutes"))
     visit = Visit(
         resident_id=resident.id,
         registered_by=g.current_user.id,
+        expected_stay_minutes=stay,
         visitor_name=data["visitorName"].strip(),
         visitor_document=document.strip() if document else None,
         visitor_photo_url=data.get("mediaUrl"),
@@ -452,10 +447,27 @@ def authorize_visit_by_call(visit_id):
     return jsonify({"message": "Autorización telefónica registrada.", "visit": visit.to_dict()})
 
 
+def _start_stay(visit, stay):
+    """Empieza una estadía: la alerta de estadía larga vuelve a quedar pendiente (HU-031).
+
+    Si el guardia anotó una estadía prevista nueva, reemplaza la anterior.
+    """
+    visit.overstay_alerted_at = None
+    if stay is not None:
+        visit.expected_stay_minutes = stay
+
+
 @bp.post("/visits/<int:visit_id>/entry")
 @token_required
 @role_required("GUARD")
 def register_visit_entry(visit_id):
+    # El cuerpo es opcional: solo trae la estadía prevista, si el guardia la anota ahora.
+    data = request.get_json(silent=True)
+    if data is None:
+        data = {}
+    elif not isinstance(data, dict):
+        return error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
+    stay = visit_service.expected_stay(data.get("expectedStayMinutes"))
     visit = db.session.get(Visit, visit_id)
     if visit is None:
         return error_response(404, "Visita no encontrada.")
@@ -473,6 +485,7 @@ def register_visit_entry(visit_id):
     visit.entered_at = utc_now()
     visit.exited_at = None
     visit.exit_returning = False
+    _start_stay(visit, stay)
     method = visit.authorization_method or "app"
     visit.events.append(VisitEvent(
         event_type="entrada",
@@ -551,6 +564,7 @@ def create_visit_qr_pass():
         or not 1 <= max_people <= 2_147_483_647
     ):
         return error_response(400, "El límite de personas debe ser un entero positivo válido.")
+    names = visit_service.clean_visitor_names(data.get("visitorNames"), max_people)
     qr_pass = VisitQrPass(
         resident_id=g.current_user.id,
         token=secrets.token_urlsafe(32),
@@ -558,6 +572,7 @@ def create_visit_qr_pass():
         valid_until=valid_until.isoformat(),
         max_people=max_people,
     )
+    qr_pass.names = names
     db.session.add(qr_pass)
     db.session.commit()
     result = qr_pass.to_dict(include_token=True)
@@ -620,6 +635,7 @@ def inspect_visit_qr(token):
     today = colombia_today().isoformat()
     return jsonify({
         "qrPass": qr_pass.to_dict(),
+        "pendingVisitorNames": visit_service.pending_visitor_names(qr_pass),
         "residentName": qr_pass.resident.full_name,
         "apartment": qr_pass.resident.apartment,
         "canRegister": (
@@ -648,6 +664,7 @@ def enter_visit_qr(token):
     data, failure = json_body()
     if failure:
         return failure
+    stay = visit_service.expected_stay(data.get("expectedStayMinutes"))
     qr_pass, failure = _qr_pass_for_guard(token)
     if failure:
         return failure
@@ -705,6 +722,7 @@ def enter_visit_qr(token):
     visit.entered_at = utc_now()
     visit.exited_at = None
     visit.exit_returning = False
+    _start_stay(visit, stay)
     visit.events.append(VisitEvent(
         event_type="entrada",
         method="qr",

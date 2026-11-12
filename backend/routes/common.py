@@ -54,6 +54,17 @@ def bool_arg(name):
     return value
 
 
+def int_arg(name):
+    """Lee un filtro numérico entero de la URL; sin él, None. Si no es un número, error 400."""
+    value = request.args.get(name)
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        raise ApiError(f"El filtro '{name}' debe ser un número entero.") from None
+
+
 def page_args(default_size=25, max_size=100):
     """Lee page y pageSize de la URL; devuelve (página, tamaño) o lanza un error 400."""
     page = request.args.get("page", default=1, type=int)

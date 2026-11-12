@@ -7,7 +7,7 @@ date.today() daría el día siguiente después de las 7 de la noche: por eso las
 rutas usan colombia_today() y nunca date.today().
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from zoneinfo import ZoneInfo
 
 #: Zona horaria de la unidad residencial. En Windows la aporta el paquete tzdata.
@@ -34,3 +34,12 @@ def to_colombia(value):
     if value is None:
         return None
     return value.replace(tzinfo=timezone.utc).astimezone(COLOMBIA)
+
+
+def colombia_day_to_utc(day):
+    """El momento, en UTC y sin zona, en que empieza ese día en Colombia.
+
+    Sirve para filtrar lo guardado en UTC por días de Colombia: las visitas del
+    día D son las que van de colombia_day_to_utc(D) a colombia_day_to_utc(D + 1 día).
+    """
+    return datetime.combine(day, time.min, tzinfo=COLOMBIA).astimezone(timezone.utc).replace(tzinfo=None)
