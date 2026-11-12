@@ -4,41 +4,71 @@
 
 package com.dracknoval.domux
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.dracknoval.domux.data.LoginRequest
-import com.dracknoval.domux.data.RetrofitClient
-import com.dracknoval.domux.data.Session
-import com.dracknoval.domux.data.PushRegistration
-import com.dracknoval.domux.data.mensajeDeError
-import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.launch
 
+/**
+ * Inicio de sesión (HU-001). La pantalla solo dibuja: la revisión de los campos y la llamada al
+ * servidor están en [LoginViewModel].
+ */
 @Composable
-fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(false) }
-    var attemptedLogin by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+fun LoginScreen(
+    navController: NavController,
+    onLoginComplete: () -> Unit = {},
+    viewModel: LoginViewModel = viewModel()
+) {
+    val state by viewModel.state.collectAsState()
+    val appContext = LocalContext.current.applicationContext
+    // Mostrar u ocultar la contraseña es solo de la pantalla; por defecto va oculta.
+    var showPassword by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(state.loggedIn) {
+        if (state.loggedIn) {
+            navController.navigate("home") { popUpTo("login") { inclusive = true } }
+            onLoginComplete()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -56,7 +86,7 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
         Surface(
             color = Color(0xFF152C4A),
             shape = RoundedCornerShape(50),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E334D))
+            border = BorderStroke(1.dp, Color(0xFF1E334D))
         ) {
             Text(
                 "SISTEMA INTELIGENTE DE OPERACIÓN RESIDENCIAL",
@@ -89,83 +119,50 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
         )
 
         OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
+            value = state.email,
+            onValueChange = viewModel::onEmail,
             label = { Text("Correo") },
             singleLine = true,
-            isError = (attemptedLogin && email.trim().isEmpty()) ||
-                (email.isNotEmpty() && !email.trim().contains("@")),
+            isError = state.emailMissing || state.emailInvalid,
             supportingText = {
-                if (attemptedLogin && email.trim().isEmpty()) Text("El correo es obligatorio")
-                else if (email.isNotEmpty() && !email.trim().contains("@")) Text("Ingresa un correo válido")
+                if (state.emailMissing) Text("El correo es obligatorio")
+                else if (state.emailInvalid) Text("Ingresa un correo válido")
             },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
+            value = state.password,
+            onValueChange = viewModel::onPassword,
             label = { Text("Contraseña") },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            isError = attemptedLogin && password.trim().isEmpty(),
-            supportingText = { if (attemptedLogin && password.trim().isEmpty()) Text("La contraseña es obligatoria") },
+            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                TextButton(onClick = { showPassword = !showPassword }) {
+                    Text(if (showPassword) "Ocultar" else "Mostrar")
+                }
+            },
+            isError = state.passwordMissing,
+            supportingText = { if (state.passwordMissing) Text("La contraseña es obligatoria") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { viewModel.login(appContext) }),
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(24.dp))
 
         Button(
-            onClick = {
-                attemptedLogin = true
-                val normalizedEmail = email.trim().lowercase()
-                if (!normalizedEmail.contains("@") || password.trim().isEmpty()) {
-                    result = "Escribe un correo válido y tu contraseña"
-                    return@Button
-                }
-                loading = true
-                result = ""
-                scope.launch {
-                    try {
-                        val response = RetrofitClient.api.login(LoginRequest(normalizedEmail, password))
-                        if (response.isSuccessful) {
-                            val user = response.body()?.user
-                            if (user == null) {
-                                result = "⚠️ El servidor no envió los datos del usuario"
-                            } else {
-                                val accessToken = response.body()?.token
-                                if (accessToken.isNullOrBlank()) {
-                                    result = "El servidor no envió el token de sesión."
-                                    return@launch
-                                }
-                                Session.token = accessToken
-                                Session.updateFrom(user)
-                                Session.persist(context)
-                                PushRegistration.registerAfterAuthentication(context.applicationContext)
-                                navController.navigate("home") {
-                                    popUpTo("login") { inclusive = true }
-                                }
-                                onLoginComplete()
-                            }
-                        } else {
-                            result = "❌ ${mensajeDeError(response.code(), response.errorBody()?.string())}"
-                        }
-                    } catch (exception: Exception) {
-                        result = "⚠️ No se pudo conectar con el servidor: ${exception.message}"
-                    } finally {
-                        loading = false
-                    }
-                }
-            },
-            enabled = !loading,
+            onClick = { viewModel.login(appContext) },
+            enabled = !state.busy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (loading) "Entrando..." else "Entrar")
+            Text(if (state.busy) "Entrando..." else "Entrar")
         }
 
-        if (result.isNotEmpty()) {
+        if (state.message.isNotBlank()) {
             Spacer(Modifier.height(20.dp))
-            Text(result)
+            DomuxMessageBanner(state.message, state.messageIsError) { viewModel.dismissMessage() }
         }
     }
 }

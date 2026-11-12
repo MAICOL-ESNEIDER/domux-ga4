@@ -1,5 +1,12 @@
 package com.dracknoval.domux
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,9 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,13 +31,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,16 +45,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dracknoval.domux.data.ComplexInfoStore
 import com.dracknoval.domux.data.NotificationItem
-import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
-import com.dracknoval.domux.data.mensajeDeError
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
 private data class HomeModule(
     val title: String,
@@ -58,23 +61,23 @@ private data class HomeModule(
     val route: String
 )
 
+/** true si el celular no deja mostrar avisos: desde Android 13 hay que pedir el permiso. */
+private fun notificationPermissionMissing(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+        PackageManager.PERMISSION_GRANTED
+
+/**
+ * Inicio de la app (HU-002 y HU-065). La pantalla dibuja y lleva el reloj de la revisión cada 30
+ * segundos mientras está a la vista; los datos están en [HomeViewModel].
+ */
 @Composable
-fun HomeScreen(navController: NavController) {
-    var unreadCount by remember { mutableIntStateOf(0) }
-    // Comunicados vigentes que el residente aún no ha abierto (HU-059).
-    var unreadAnnouncements by remember { mutableIntStateOf(0) }
-    var notifications by remember { mutableStateOf<List<NotificationItem>>(emptyList()) }
-    var notificationError by remember { mutableStateOf<String?>(null) }
-    var notificationActionMessage by remember { mutableStateOf<String?>(null) }
-    var showNotifications by remember { mutableStateOf(false) }
-    var permissionRequested by remember { mutableStateOf(false) }
-    val knownNotificationIds = remember(Session.userId) { mutableStateOf<Set<Int>?>(null) }
+fun HomeScreen(navController: NavController, viewModel: HomeViewModel = viewModel()) {
+    val state by viewModel.state.collectAsState()
+    var permissionRequested by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) notificationError = "Activa el permiso de notificaciones para recibir avisos locales."
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.setPermissionMissing(!granted)
     }
     val backStackEntry by navController.currentBackStackEntryFlow.collectAsState(
         initial = navController.currentBackStackEntry
@@ -94,66 +97,24 @@ fun HomeScreen(navController: NavController) {
         if (currentRoute == "home" && Session.token != null) ComplexInfoStore.refresh()
     }
 
+    // Mientras el inicio está a la vista se revisa cada 30 segundos si llegó algo nuevo; lo nuevo se
+    // muestra como aviso del celular.
     LaunchedEffect(currentRoute, Session.userId) {
         if (currentRoute != "home") return@LaunchedEffect
-        if (
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            !permissionRequested
-        ) {
+        // El permiso se pide una sola vez; si ya se pidió, solo se recuerda (y se quita el
+        // recordatorio si la persona lo activó desde los ajustes del celular).
+        if (!notificationPermissionMissing(context)) {
+            viewModel.setPermissionMissing(false)
+        } else if (!permissionRequested) {
             permissionRequested = true
-            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.setPermissionMissing(true)
         }
         while (isActive) {
-            try {
-                val response = RetrofitClient.api.getNotifications(Session.bearer())
-                if (response.isSuccessful) {
-                    val currentNotifications = response.body()?.notifications.orEmpty()
-                    notifications = currentNotifications
-                    unreadCount = currentNotifications.count { !it.isRead }
-                    val currentIds = currentNotifications.mapTo(mutableSetOf()) { it.id }
-                    val previousIds = knownNotificationIds.value
-                    if (previousIds != null) {
-                        currentNotifications
-                            .filter { !it.isRead && it.id !in previousIds }
-                            .distinctBy { it.id }
-                            .forEach { notification ->
-                            if (DomuxLocalNotifications.show(context, notification)) {
-                                notificationError = null
-                            } else if (
-                                android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                                androidx.core.content.ContextCompat.checkSelfPermission(
-                                    context,
-                                    android.Manifest.permission.POST_NOTIFICATIONS
-                                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                            ) {
-                                notificationError = "Activa el permiso de notificaciones para recibir avisos locales."
-                            }
-                        }
-                    }
-                    knownNotificationIds.value = knownNotificationIds.value.orEmpty() + currentIds
-                    if (notificationError?.startsWith("No se pudo") == true) notificationError = null
-                } else {
-                    notificationError = "No se pudo actualizar el contador de notificaciones."
-                }
-            } catch (exception: Exception) {
-                notificationError = "Sin conexión para actualizar notificaciones: ${exception.message}"
-            }
-            if (Session.isResident) {
-                // Con una sola fila basta: el servidor siempre responde cuántos comunicados le faltan por leer.
-                try {
-                    val announcements = RetrofitClient.api.getAnnouncements(Session.bearer(), pageSize = 1)
-                    if (announcements.isSuccessful) {
-                        unreadAnnouncements = announcements.body()?.unreadCount ?: 0
-                    }
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (_: Exception) {
-                    // Si falla se conserva el número anterior y se vuelve a intentar en la próxima vuelta.
-                }
+            viewModel.refresh().forEach { notification ->
+                if (DomuxLocalNotifications.show(context, notification)) viewModel.setPermissionMissing(false)
+                else if (notificationPermissionMissing(context)) viewModel.setPermissionMissing(true)
             }
             delay(30_000)
         }
@@ -188,14 +149,14 @@ fun HomeScreen(navController: NavController) {
                 Surface(
                     modifier = Modifier
                         .size(42.dp)
-                        .semantics { contentDescription = "Notificaciones, $unreadCount sin leer" },
+                        .semantics { contentDescription = "Notificaciones, ${state.unreadCount} sin leer" },
                     color = Color(0xFF152C4A),
                     shape = CircleShape,
-                    onClick = { showNotifications = true }
+                    onClick = { viewModel.openNotifications() }
                 ) {
                     Box(contentAlignment = Alignment.Center) { Text("🔔", fontSize = 18.sp) }
                 }
-                if (unreadCount > 0) {
+                if (state.unreadCount > 0) {
                     Surface(
                         modifier = Modifier.align(Alignment.TopEnd),
                         color = Color(0xFF450A0A),
@@ -203,7 +164,7 @@ fun HomeScreen(navController: NavController) {
                         shape = CircleShape
                     ) {
                         Text(
-                            unreadCount.coerceAtMost(99).toString(),
+                            state.unreadCount.coerceAtMost(99).toString(),
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold
@@ -226,7 +187,7 @@ fun HomeScreen(navController: NavController) {
             modifier = Modifier.fillMaxWidth(),
             color = Color(0xFF091426),
             shape = RoundedCornerShape(24.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E334D))
+            border = BorderStroke(1.dp, Color(0xFF1E334D))
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
@@ -298,120 +259,113 @@ fun HomeScreen(navController: NavController) {
                         detail = module.detail,
                         icon = module.icon,
                         modifier = Modifier.weight(1f),
-                        badge = if (module.route == "announcements") unreadAnnouncements else 0
+                        badge = if (module.route == "announcements") state.unreadAnnouncements else 0
                     ) { navController.navigate(module.route) }
                 }
                 if (rowModules.size == 1) Spacer(Modifier.weight(1f))
             }
         }
 
-        notificationError?.let {
+        // Avisos pequeños: no tapan nada y se quitan solos cuando el problema se arregla.
+        if (state.permissionMissing) {
+            Text(
+                "Activa el permiso de notificaciones del celular para recibir avisos de DOMUX.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        state.syncProblem?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
         }
 
-        if (showNotifications) {
-        Dialog(
-            onDismissRequest = { showNotifications = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        if (state.showNotifications) {
+            NotificationsDialog(
+                state = state,
+                onMarkRead = viewModel::markRead,
+                onDismissMessage = viewModel::dismissMessage,
+                onOpenInbox = {
+                    viewModel.closeNotifications()
+                    navController.navigate("notifications")
+                },
+                onClose = viewModel::closeNotifications
+            )
+        }
+    }
+}
+
+/** Vista rápida de las notificaciones desde la campana del inicio (HU-064). */
+@Composable
+private fun NotificationsDialog(
+    state: HomeUiState,
+    onMarkRead: (NotificationItem) -> Unit,
+    onDismissMessage: () -> Unit,
+    onOpenInbox: () -> Unit,
+    onClose: () -> Unit
+) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            color = Color(0xFF091426),
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.dp, Color(0xFF1E334D))
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                color = Color(0xFF091426),
-                shape = RoundedCornerShape(24.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E334D))
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text("Notificaciones", style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        if (unreadCount == 0) "Todo al día" else "$unreadCount sin leer",
-                        color = Color(0xFF94A3B8),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    if (notifications.isEmpty()) {
-                        Text("No tienes notificaciones todavía.", color = Color(0xFFCBD5E1))
-                    } else {
-                        LazyColumn(Modifier.heightIn(max = 380.dp)) {
-                            items(notifications, key = { it.id }) { item ->
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    color = Color(0xFF0F1E33),
-                                    shape = RoundedCornerShape(16.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E334D))
+                Text("Notificaciones", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    if (state.unreadCount == 0) "Todo al día" else "${state.unreadCount} sin leer",
+                    color = Color(0xFF94A3B8),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                DomuxMessageBanner(state.message, state.messageIsError, onDismiss = onDismissMessage)
+                if (state.notifications.isEmpty()) {
+                    Text("No tienes notificaciones todavía.", color = Color(0xFFCBD5E1))
+                } else {
+                    LazyColumn(Modifier.heightIn(max = 380.dp)) {
+                        items(state.notifications, key = { it.id }) { item ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                color = Color(0xFF0F1E33),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, Color(0xFF1E334D))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Column(
-                                        modifier = Modifier.padding(14.dp),
-                                        verticalArrangement = Arrangement.spacedBy(5.dp)
-                                    ) {
-                                        Text(item.title, fontWeight = FontWeight.SemiBold)
-                                        Text(item.message, color = Color(0xFFCBD5E1))
-                                        Text(
-                                            "${item.type} · ${item.createdAt.orEmpty()}",
-                                            color = Color(0xFF94A3B8),
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                        if (!item.isRead) {
-                                            TextButton(
-                                                onClick = {
-                                                    scope.launch {
-                                                        try {
-                                                            val response = RetrofitClient.api.markNotificationRead(
-                                                                Session.bearer(),
-                                                                item.id
-                                                            )
-                                                            if (response.isSuccessful) {
-                                                                notifications = notifications.map {
-                                                                    if (it.id == item.id) it.copy(isRead = true) else it
-                                                                }
-                                                                unreadCount = notifications.count { !it.isRead }
-                                                                notificationActionMessage = null
-                                                            } else {
-                                                                notificationActionMessage = mensajeDeError(
-                                                                    response.code(),
-                                                                    response.errorBody()?.string()
-                                                                )
-                                                            }
-                                                        } catch (exception: Exception) {
-                                                            notificationActionMessage =
-                                                                "No se pudo marcar como leída: ${exception.message}"
-                                                        }
-                                                    }
-                                                }
-                                            ) {
-                                                Text("Marcar como leída")
-                                            }
+                                    Text(item.title, fontWeight = FontWeight.SemiBold)
+                                    Text(item.message, color = Color(0xFFCBD5E1))
+                                    Text(
+                                        item.createdAt.orEmpty(),
+                                        color = Color(0xFF94A3B8),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    if (!item.isRead) {
+                                        TextButton(onClick = { onMarkRead(item) }, enabled = !state.busy) {
+                                            Text("Marcar como leída")
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    notificationActionMessage?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = {
-                                showNotifications = false
-                                navController.navigate("notifications")
-                            }
-                        ) { Text("Ver bandeja completa") }
-                        TextButton(onClick = { showNotifications = false }) { Text("Cerrar") }
-                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onOpenInbox) { Text("Ver bandeja completa") }
+                    TextButton(onClick = onClose) { Text("Cerrar") }
                 }
             }
         }
     }
-}
 }

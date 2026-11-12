@@ -1,79 +1,39 @@
 package com.dracknoval.domux
 
-import androidx.compose.foundation.layout.*
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.navigation.NavController
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.core.content.ContextCompat
-import com.dracknoval.domux.data.ApartmentOption
-import com.dracknoval.domux.data.CreateUserRequest
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import com.dracknoval.domux.data.ExcelFileResponse
 import com.dracknoval.domux.data.ImportCensusRequest
-import com.dracknoval.domux.data.ResetPasswordRequest
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
-import com.dracknoval.domux.data.SetPinRequest
-import com.dracknoval.domux.data.UpdateUserRequest
 import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import android.net.Uri
-import java.text.ParsePosition
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
-
-private val occupancyOptions = listOf(
-    "propietario" to "Propietario",
-    "arrendatario" to "Arrendatario",
-    "residente" to "Residente"
-)
-private val passwordSpecialChars = setOf('@', '$', '!', '%', '*', '?', '&', '#', '.', '_', '-')
-
-private fun ageFromIsoDate(value: String): Int? {
-    val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
-    val position = ParsePosition(0)
-    val birthDate = format.parse(value, position)
-    if (birthDate == null || position.index != value.length) return null
-    val birth = Calendar.getInstance().apply { time = birthDate }
-    val today = Calendar.getInstance()
-    var age = today.get(Calendar.YEAR) - birth.get(Calendar.YEAR)
-    val birthdayHasNotOccurred =
-        today.get(Calendar.MONTH) < birth.get(Calendar.MONTH) ||
-            (today.get(Calendar.MONTH) == birth.get(Calendar.MONTH) &&
-                today.get(Calendar.DAY_OF_MONTH) < birth.get(Calendar.DAY_OF_MONTH))
-    if (birthdayHasNotOccurred) age--
-    return age.takeIf { it >= 0 }
-}
-
-private fun validStrongPassword(value: String): Boolean =
-    value.length >= 8 &&
-        value.any { it in 'A'..'Z' } &&
-        value.any { it in 'a'..'z' } &&
-        value.any { it in '0'..'9' } &&
-        value.any { it in passwordSpecialChars } &&
-        value.all {
-            it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' ||
-                it in passwordSpecialChars
-        }
 
 private fun nextFilter(value: Boolean?): Boolean? = when (value) {
     null -> true
@@ -91,97 +51,15 @@ private fun isCancellation(e: Throwable): Boolean =
     e is CancellationException ||
         e.message?.contains("left the composition", ignoreCase = true) == true
 
+private const val PASSWORD_RULE = "Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo."
+
+/**
+ * Gestión de usuarios (HU-011 y HU-012). La pantalla solo dibuja: la lista, los filtros, crear,
+ * editar, la contraseña y el PIN están en [UsersViewModel].
+ */
 @Composable
-fun CreateUserScreen(navController: NavController) {
-    var users by remember { mutableStateOf<List<UserData>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var busy by remember { mutableStateOf(false) }
-    var attemptedSubmit by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
-    var userSearch by remember { mutableStateOf("") }
-    var apartmentFrom by remember { mutableStateOf("") }
-    var apartmentTo by remember { mutableStateOf("") }
-    var minAge by remember { mutableStateOf("") }
-    var maxAge by remember { mutableStateOf("") }
-    var occupancyFilter by remember { mutableStateOf("") }
-    var activeFilter by remember { mutableStateOf<Boolean?>(null) }
-    var petsFilter by remember { mutableStateOf<Boolean?>(null) }
-    var vehiclesFilter by remember { mutableStateOf<Boolean?>(null) }
-    var parkingFilter by remember { mutableStateOf<Boolean?>(null) }
-    var storageFilter by remember { mutableStateOf<Boolean?>(null) }
-    var currentPage by remember { mutableIntStateOf(1) }
-    var totalPages by remember { mutableIntStateOf(1) }
-    var totalUsers by remember { mutableIntStateOf(0) }
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var showAdvancedFilters by remember { mutableStateOf(false) }
-    var consentConfirmed by remember { mutableStateOf(false) }
-    var birthDate by remember { mutableStateOf("") }
-    var parentalConsent by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("") }
-    var lastName by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var documentId by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var role by remember { mutableStateOf("RESIDENT") }
-    // El residente se vincula a un apartamento que ya existe en la estructura de la unidad (HU-017).
-    var apartment by remember { mutableStateOf<ApartmentOption?>(null) }
-    var occupancyType by remember { mutableStateOf("propietario") }
-    var editUser by remember { mutableStateOf<UserData?>(null) }
-    var resetUser by remember { mutableStateOf<UserData?>(null) }
-    var resetPassword by remember { mutableStateOf("") }
-    // PIN de 4 dígitos del guardia (HU-010): a quién se le está asignando y lo que se escribe.
-    var pinUser by remember { mutableStateOf<UserData?>(null) }
-    var pinValue by remember { mutableStateOf("") }
-    var pinBusy by remember { mutableStateOf(false) }
-    var pinError by remember { mutableStateOf("") }
-    var pendingUserUpdate by remember { mutableStateOf<Pair<Int, UpdateUserRequest>?>(null) }
-    var pendingPasswordReset by remember { mutableStateOf<Pair<Int, String>?>(null) }
-    val scope = rememberCoroutineScope()
-
-    suspend fun loadUsers(page: Int = currentPage) {
-        loading = true
-        try {
-            val response = RetrofitClient.api.getUsers(
-                auth = Session.bearer(),
-                page = page,
-                search = userSearch.trim().takeIf(String::isNotEmpty),
-                occupancyType = occupancyFilter.takeIf(String::isNotEmpty),
-                apartmentFrom = apartmentFrom.takeIf(String::isNotBlank),
-                apartmentTo = apartmentTo.takeIf(String::isNotBlank),
-                hasPets = petsFilter?.toString(),
-                hasVehicles = vehiclesFilter?.toString(),
-                hasParking = parkingFilter?.toString(),
-                hasStorage = storageFilter?.toString(),
-                minAge = minAge.takeIf(String::isNotBlank),
-                maxAge = maxAge.takeIf(String::isNotBlank),
-                isActive = activeFilter?.toString()
-            )
-            if (response.isSuccessful) {
-                val result = response.body()
-                users = result?.users.orEmpty()
-                currentPage = result?.page ?: page
-                totalPages = (result?.totalPages ?: 1).coerceAtLeast(1)
-                totalUsers = result?.total ?: 0
-            }
-            else message = mensajeDeError(response.code(), response.errorBody()?.string())
-        } catch (exception: Exception) {
-            if (isCancellation(exception)) {
-                if (exception is CancellationException) throw exception else return
-            }
-            message = "No se pudo cargar la lista de usuarios: ${exception.message}"
-        } finally {
-            loading = false
-        }
-    }
-
-    LaunchedEffect(
-        userSearch, apartmentFrom, apartmentTo, minAge, maxAge,
-        occupancyFilter, activeFilter, petsFilter, vehiclesFilter, parkingFilter, storageFilter
-    ) {
-        delay(350)
-        loadUsers(1)
-    }
+fun CreateUserScreen(navController: NavController, viewModel: UsersViewModel = viewModel()) {
+    val state by viewModel.state.collectAsState()
 
     DomuxScreenScaffold(title = "Gestión de usuarios", navController = navController) { padding ->
         Column(
@@ -189,80 +67,107 @@ fun CreateUserScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DomuxSectionTabs(
-                listOf("Usuarios ($totalUsers)", "Crear usuario", "Censo Excel"),
-                selectedTab
-            ) { selectedTab = it }
-            if (message.isNotBlank()) DomuxFeedbackBanner(message) { message = "" }
-            if (selectedTab == 1) {
-                Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                ) {
+                listOf("Usuarios (${state.total})", "Crear usuario", "Censo Excel"),
+                state.selectedTab,
+                viewModel::selectTab
+            )
+            DomuxMessageBanner(state.message, state.messageIsError) { viewModel.dismissMessage() }
+            when (state.selectedTab) {
+                0 -> UsersList(state, viewModel, navController)
+                1 -> CreateUserForm(state, viewModel)
+                // El censo por Excel pasa a la web; mientras tanto sigue aquí como estaba.
+                else -> CensusExcelPanel { viewModel.load(1) }
+            }
+        }
+    }
+
+    state.editing?.let { EditUserDialog(it, state, viewModel) }
+    state.resetting?.let { ResetPasswordDialog(it, state, viewModel) }
+    state.pinFor?.let { GuardPinDialog(it, state, viewModel) }
+    if (state.pendingUpdate != null) {
+        DomuxConfirmDialog(
+            title = "Confirmar cambios del usuario",
+            message = "Se guardarán los cambios realizados en este perfil. ¿Deseas continuar?",
+            confirmLabel = "Confirmar y guardar",
+            onConfirm = viewModel::confirmUpdate,
+            onDismiss = viewModel::cancelPendingUpdate
+        )
+    }
+    if (state.pendingReset != null) {
+        DomuxConfirmDialog(
+            title = "Confirmar restablecimiento",
+            message = "La contraseña de este usuario será reemplazada. Esta acción no se puede deshacer.",
+            confirmLabel = "Restablecer",
+            danger = true,
+            onConfirm = viewModel::confirmReset,
+            onDismiss = viewModel::cancelPendingReset
+        )
+    }
+}
+
+@Composable
+private fun CreateUserForm(state: UsersUiState, viewModel: UsersViewModel) {
+    val form = state.form
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         DomuxCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("Crear usuario", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("RESIDENT", "GUARD", "ADMIN").forEach { option ->
+                    roleOptions.forEach { (value, label) ->
                         FilterChip(
-                            selected = role == option,
-                            onClick = { role = option },
-                            label = { Text(if (option == "RESIDENT") "Residente" else if (option == "GUARD") "Guardia" else "Admin") }
+                            selected = form.role == value,
+                            onClick = { viewModel.updateForm { it.copy(role = value) } },
+                            label = { Text(label) }
                         )
                     }
                 }
-                UserInput(name, { name = it }, "Nombre", required = true, showMissingError = attemptedSubmit)
-                UserInput(lastName, { lastName = it }, "Apellido", required = true, showMissingError = attemptedSubmit)
-                UserInput(email, { email = it }, "Correo", required = true, showMissingError = attemptedSubmit)
-                UserInput(phone, { phone = it }, "Teléfono", required = true, showMissingError = attemptedSubmit)
-                UserInput(documentId, { documentId = it }, "Documento", required = true, showMissingError = attemptedSubmit)
-                UserInput(password, { password = it }, "Contraseña temporal", required = true, password = true, showMissingError = attemptedSubmit)
-                Text(
-                    "Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.",
-                    style = MaterialTheme.typography.bodySmall
+                UserInput(form.name, { v -> viewModel.updateForm { it.copy(name = v) } }, "Nombre", required = true, showMissingError = form.attempted)
+                UserInput(form.lastName, { v -> viewModel.updateForm { it.copy(lastName = v) } }, "Apellido", required = true, showMissingError = form.attempted)
+                UserInput(form.email, { v -> viewModel.updateForm { it.copy(email = v) } }, "Correo", required = true, showMissingError = form.attempted)
+                UserInput(form.phone, { v -> viewModel.updateForm { it.copy(phone = v) } }, "Teléfono", required = true, showMissingError = form.attempted)
+                UserInput(form.documentId, { v -> viewModel.updateForm { it.copy(documentId = v) } }, "Documento", required = true, showMissingError = form.attempted)
+                UserInput(
+                    form.password, { v -> viewModel.updateForm { it.copy(password = v) } }, "Contraseña temporal",
+                    required = true, password = true, showMissingError = form.attempted
                 )
-                if (role == "RESIDENT") {
+                Text(PASSWORD_RULE, style = MaterialTheme.typography.bodySmall)
+                if (form.isResident) {
                     ApartmentPickerField(
                         label = "Apartamento *",
-                        selected = apartment,
-                        onSelect = { apartment = it },
-                        errorText = if (attemptedSubmit && apartment == null) {
-                            "Elige el apartamento del residente."
-                        } else {
-                            null
-                        }
+                        selected = form.apartment,
+                        onSelect = { option -> viewModel.updateForm { it.copy(apartment = option) } },
+                        errorText = if (form.attempted && form.apartment == null) "Elige el apartamento del residente." else null
                     )
                     DatePickerField(
-                        "Fecha de nacimiento (AAAA-MM-DD)",
-                        birthDate,
-                        { birthDate = it },
-                        allowPastDates = true
+                        "Fecha de nacimiento",
+                        form.birthDate,
+                        { v -> viewModel.updateForm { it.copy(birthDate = v) } },
+                        allowFutureDates = false
                     )
-                    if (ageFromIsoDate(birthDate)?.let { it < 18 } == true) {
+                    if (form.isMinor) {
                         Text(
                             "Usuario menor de 18 años: por defecto tendrá cuenta en Modo Consulta (sin crear reservas ni PQRS).",
                             color = MaterialTheme.colorScheme.error
                         )
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = parentalConsent,
-                                onCheckedChange = { parentalConsent = it }
-                            )
-                            Text("Cuenta con autorización de los padres/acudientes para solicitar reservas")
-                        }
+                        DomuxCheckRow(
+                            "Cuenta con autorización de los padres/acudientes para solicitar reservas",
+                            form.parentalConsent
+                        ) { checked -> viewModel.updateForm { it.copy(parentalConsent = checked) } }
                     }
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Checkbox(checked = consentConfirmed, onCheckedChange = { consentConfirmed = it })
-                        Text("El residente autorizó el tratamiento de sus datos para gestionar la vivienda.")
-                    }
-                    if (attemptedSubmit && !consentConfirmed) {
+                    DomuxCheckRow(
+                        "El residente autorizó el tratamiento de sus datos para gestionar la vivienda.",
+                        form.consentConfirmed
+                    ) { checked -> viewModel.updateForm { it.copy(consentConfirmed = checked) } }
+                    if (form.attempted && !form.consentConfirmed) {
                         Text("Confirma la autorización del residente.", color = MaterialTheme.colorScheme.error)
                     }
                     Text("Tipo de tenencia")
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         occupancyOptions.forEach { (value, label) ->
                             FilterChip(
-                                selected = occupancyType == value,
-                                onClick = { occupancyType = value },
+                                selected = form.occupancyType == value,
+                                onClick = { viewModel.updateForm { it.copy(occupancyType = value) } },
                                 label = { Text(label) }
                             )
                         }
@@ -270,518 +175,326 @@ fun CreateUserScreen(navController: NavController) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Button(
-                    enabled = !busy,
-                    onClick = {
-                        attemptedSubmit = true
-                        if (listOf(name, lastName, email, phone, documentId).any { it.trim().isEmpty() } ||
-                            (role == "RESIDENT" && apartment == null) ||
-                            (role == "RESIDENT" && !consentConfirmed) ||
-                            !email.trim().contains("@") || !validStrongPassword(password)
-                        ) {
-                            message = "Completa todos los campos obligatorios y revisa la contraseña."
-                            return@Button
-                        }
-                        busy = true
-                        message = ""
-                        scope.launch {
-                            try {
-                                val response = RetrofitClient.api.createUser(
-                                    Session.bearer(),
-                                    CreateUserRequest(
-                                        name.trim(), email.trim().lowercase(), password, role,
-                                        if (role == "RESIDENT") apartment?.id else null,
-                                        lastName.trim(), phone.trim(), documentId.trim(), occupancyType,
-                                        role == "RESIDENT" && consentConfirmed,
-                                        birthDate.trim().takeIf { it.isNotEmpty() },
-                                        role == "RESIDENT" && parentalConsent
-                                    )
-                                )
-                                if (response.isSuccessful) {
-                                    name = ""; lastName = ""; email = ""; phone = ""; documentId = ""
-                                    password = ""; apartment = null
-                                    consentConfirmed = false
-                                    birthDate = ""
-                                    parentalConsent = false
-                                    attemptedSubmit = false
-                                    message = "Usuario creado exitosamente."
-                                    selectedTab = 0
-                                    loadUsers(1)
-                                } else message = mensajeDeError(response.code(), response.errorBody()?.string())
-                            } catch (exception: Exception) {
-                                if (isCancellation(exception)) {
-                                    if (exception is CancellationException) throw exception else return@launch
-                                }
-                                message = "No se pudo crear el usuario: ${exception.message}"
-                            } finally {
-                                busy = false
-                            }
-                        }
-                    },
+                    enabled = !state.busy,
+                    onClick = { viewModel.createUser() },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text(if (busy) "Guardando..." else "Crear usuario") }
-            }
-        }
-            }
-            } else if (selectedTab == 0) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = userSearch,
-                                onValueChange = { userSearch = it },
-                                label = { Text("Buscar por nombre, correo, teléfono, documento o apartamento") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            TextButton(onClick = { showAdvancedFilters = !showAdvancedFilters }) {
-                                Text(
-                                    if (showAdvancedFilters) "Ocultar filtros avanzados"
-                                    else "Mostrar filtros avanzados"
-                                )
-                            }
-                            if (showAdvancedFilters) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedTextField(
-                                        value = apartmentFrom,
-                                        onValueChange = { apartmentFrom = it },
-                                        label = { Text("Apto desde") },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    OutlinedTextField(
-                                        value = apartmentTo,
-                                        onValueChange = { apartmentTo = it },
-                                        label = { Text("Apto hasta") },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    occupancyOptions.forEach { (value, label) ->
-                                        FilterChip(
-                                            selected = occupancyFilter == value,
-                                            onClick = {
-                                                occupancyFilter = if (occupancyFilter == value) "" else value
-                                            },
-                                            label = { Text(label) }
-                                        )
-                                    }
-                                }
-                                Row(
-                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    FilterChip(
-                                        selected = activeFilter == true,
-                                        onClick = { activeFilter = nextFilter(activeFilter) },
-                                        label = { Text("Estado: ${filterLabel(activeFilter)}") }
-                                    )
-                                    FilterChip(
-                                        selected = petsFilter == true,
-                                        onClick = { petsFilter = nextFilter(petsFilter) },
-                                        label = { Text("Mascotas: ${filterLabel(petsFilter)}") }
-                                    )
-                                    FilterChip(
-                                        selected = vehiclesFilter == true,
-                                        onClick = { vehiclesFilter = nextFilter(vehiclesFilter) },
-                                        label = { Text("Vehículos: ${filterLabel(vehiclesFilter)}") }
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    FilterChip(
-                                        selected = parkingFilter == true,
-                                        onClick = { parkingFilter = nextFilter(parkingFilter) },
-                                        label = { Text("Parqueadero: ${filterLabel(parkingFilter)}") }
-                                    )
-                                    FilterChip(
-                                        selected = storageFilter == true,
-                                        onClick = { storageFilter = nextFilter(storageFilter) },
-                                        label = { Text("Cuarto útil: ${filterLabel(storageFilter)}") }
-                                    )
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedTextField(
-                                        value = minAge,
-                                        onValueChange = { minAge = it.filter(Char::isDigit) },
-                                        label = { Text("Edad mínima") },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    OutlinedTextField(
-                                        value = maxAge,
-                                        onValueChange = { maxAge = it.filter(Char::isDigit) },
-                                        label = { Text("Edad máxima") },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                            }
-                            Text("$totalUsers usuarios - página $currentPage de $totalPages")
-                        }
-                    }
-                    if (loading) {
-                        item {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                    if (!loading && users.isEmpty()) {
-                        item {
-                            DomuxCard(Modifier.fillMaxWidth()) {
-                                Text(
-                                    "No se encontraron usuarios.",
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            }
-                        }
-                    }
-                    items(users, key = { it.id }) { user ->
-                        DomuxCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(14.dp)) {
-                                Text(user.fullName ?: user.name, style = MaterialTheme.typography.titleMedium)
-                                if (user.isMinor) {
-                                    DomuxStatusBadge(
-                                        if (user.parentalConsent) "Menor (Con permiso parental)"
-                                        else "Menor (Modo consulta)",
-                                        if (user.parentalConsent) DomuxBadgeTone.PROGRESS
-                                        else DomuxBadgeTone.ALERT
-                                    )
-                                    user.age?.let { Text("Edad: $it años") }
-                                }
-                                Text(user.email)
-                                Text("Teléfono: ${user.phone.orEmpty()} · Documento: ${user.documentId.orEmpty()}")
-                                Text("Rol: ${user.role} · Apto: ${user.apartment ?: "—"}")
-                                Text(
-                                    "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
-                                        if (user.isActive) "Activo" else "Inactivo"
-                                )
-                                if (user.role == "GUARD") {
-                                    Text(if (user.hasPin) "PIN de turno: asignado" else "PIN de turno: sin asignar")
-                                }
-                                Row(Modifier.horizontalScroll(rememberScrollState())) {
-                                    TextButton(onClick = { editUser = user }) { Text("Editar") }
-                                    TextButton(onClick = {
-                                        resetUser = user
-                                        resetPassword = ""
-                                    }) { Text("Restablecer contraseña") }
-                                    if (user.role == "GUARD") {
-                                        TextButton(onClick = {
-                                            pinUser = user
-                                            pinValue = ""
-                                            pinError = ""
-                                        }) { Text(if (user.hasPin) "Cambiar PIN" else "Asignar PIN") }
-                                    }
-                                    if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
-                                        TextButton(onClick = {
-                                            navController.navigate("unitProfile/${Uri.encode(user.apartment)}")
-                                        }) { Text("Ficha del hogar") }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            TextButton(
-                                enabled = currentPage > 1 && !loading,
-                                onClick = { scope.launch { loadUsers(currentPage - 1) } }
-                            ) { Text("Anterior") }
-                            TextButton(
-                                enabled = currentPage < totalPages && !loading,
-                                onClick = { scope.launch { loadUsers(currentPage + 1) } }
-                            ) { Text("Siguiente") }
-                        }
-                    }
-
-                }
-            } else if (selectedTab == 2) {
-                CensusExcelPanel {
-                    loadUsers(1)
-                }
+                ) { Text(if (state.busy) "Guardando..." else "Crear usuario") }
             }
         }
     }
+}
 
-    editUser?.let { user ->
-        var eName by remember(user.id) {
-            mutableStateOf(
-                user.firstName?.takeIf { it.isNotBlank() }
-                    ?: user.name.removeSuffix(user.lastName.orEmpty()).trim()
-            )
+@Composable
+private fun UsersList(state: UsersUiState, viewModel: UsersViewModel, navController: NavController) {
+    val filters = state.filters
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = filters.search,
+                    onValueChange = { v -> viewModel.updateFilters { it.copy(search = v) } },
+                    label = { Text("Buscar por nombre, correo, teléfono, documento o apartamento") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                TextButton(onClick = viewModel::toggleAdvancedFilters) {
+                    Text(if (state.showAdvancedFilters) "Ocultar filtros avanzados" else "Mostrar filtros avanzados")
+                }
+                if (state.showAdvancedFilters) AdvancedFilters(filters, viewModel)
+                Text("${state.total} usuarios - página ${state.page} de ${state.totalPages}")
+            }
         }
-        var eLastName by remember(user.id) { mutableStateOf(user.lastName.orEmpty()) }
-        var eEmail by remember(user.id) { mutableStateOf(user.email) }
-        var ePhone by remember(user.id) { mutableStateOf(user.phone.orEmpty()) }
-        var eDocument by remember(user.id) { mutableStateOf(user.documentId.orEmpty()) }
-        val initialApartmentId = user.apartmentId
-        var eApartment by remember(user.id) {
-            mutableStateOf<ApartmentOption?>(
-                if (initialApartmentId != null) {
-                    ApartmentOption(initialApartmentId, user.apartment.orEmpty())
-                } else {
-                    null
-                }
-            )
+        if (state.loading) {
+            item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
         }
-        var eRole by remember(user.id) { mutableStateOf(user.role) }
-        var eOccupancy by remember(user.id) { mutableStateOf(user.occupancyType ?: "propietario") }
-        var eActive by remember(user.id) { mutableStateOf(user.isActive) }
-        var eConsent by remember(user.id) { mutableStateOf(false) }
-        var eBirthDate by remember(user.id) { mutableStateOf(user.birthDate.orEmpty()) }
-        var eParentalConsent by remember(user.id) { mutableStateOf(user.parentalConsent) }
-        var attemptedEdit by remember(user.id) { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = { editUser = null },
-            title = { Text("Editar usuario") },
-            text = {
-                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                    UserInput(eName, { eName = it }, "Nombre", true, showMissingError = attemptedEdit)
-                    UserInput(eLastName, { eLastName = it }, "Apellido", true, showMissingError = attemptedEdit)
-                    UserInput(eEmail, { eEmail = it }, "Correo", true, showMissingError = attemptedEdit)
-                    UserInput(ePhone, { ePhone = it }, "Teléfono", true, showMissingError = attemptedEdit)
-                    UserInput(eDocument, { eDocument = it }, "Documento", true, showMissingError = attemptedEdit)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("RESIDENT", "GUARD", "ADMIN").forEach { option ->
-                            FilterChip(selected = eRole == option, onClick = { eRole = option }, label = { Text(option) })
-                        }
-                    }
-                    if (eRole == "RESIDENT") {
-                        ApartmentPickerField(
-                            label = "Apartamento *",
-                            selected = eApartment,
-                            onSelect = { eApartment = it },
-                            errorText = if (attemptedEdit && eApartment == null) {
-                                "Elige el apartamento del residente."
-                            } else {
-                                null
-                            }
-                        )
-                        DatePickerField(
-                            "Fecha de nacimiento (AAAA-MM-DD)",
-                            eBirthDate,
-                            { eBirthDate = it },
-                            allowPastDates = true
-                        )
-                        if (ageFromIsoDate(eBirthDate)?.let { it < 18 } == true) {
-                            Text(
-                                "Usuario menor de 18 años: por defecto tendrá cuenta en Modo Consulta (sin crear reservas ni PQRS).",
-                                color = MaterialTheme.colorScheme.error
-                            )
-                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Checkbox(
-                                    eParentalConsent,
-                                    { eParentalConsent = it }
-                                )
-                                Text("Cuenta con autorización de los padres/acudientes para solicitar reservas")
-                            }
-                        }
-                        if (user.role != "RESIDENT") {
-                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Checkbox(eConsent, { eConsent = it })
-                                Text("El residente autorizó el tratamiento de sus datos.")
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            occupancyOptions.forEach { (value, label) ->
-                                FilterChip(selected = eOccupancy == value, onClick = { eOccupancy = value }, label = { Text(label) })
-                            }
-                        }
-                    }
-                    Row {
-                        Checkbox(eActive, { eActive = it })
-                        Text("Cuenta activa", Modifier.padding(top = 12.dp))
-                    }
+        if (!state.loading && state.users.isEmpty()) {
+            item {
+                DomuxCard(Modifier.fillMaxWidth()) {
+                    Text("No se encontraron usuarios.", modifier = Modifier.padding(16.dp))
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    attemptedEdit = true
-                    if (listOf(eName, eLastName, eEmail, ePhone, eDocument).any { it.trim().isEmpty() } ||
-                        !eEmail.trim().contains("@") || (eRole == "RESIDENT" && eApartment == null) ||
-                        (eRole == "RESIDENT" && user.role != "RESIDENT" && !eConsent)
-                    ) {
-                        message = "Completa los campos obligatorios."
-                        return@TextButton
-                    }
-                    pendingUserUpdate = user.id to UpdateUserRequest(
-                        eName.trim(), eLastName.trim(), eEmail.trim().lowercase(),
-                        ePhone.trim(), eDocument.trim(), eRole,
-                        if (eRole == "RESIDENT") eApartment?.id else null,
-                        eOccupancy.takeIf { eRole == "RESIDENT" }, eActive,
-                        true.takeIf { eRole == "RESIDENT" && user.role != "RESIDENT" },
-                        eBirthDate.trim().takeIf { it.isNotEmpty() },
-                        eParentalConsent.takeIf { eRole == "RESIDENT" }
-                    )
-                }) { Text("Guardar") }
-            },
-            dismissButton = { TextButton(onClick = { editUser = null }) { Text("Cancelar") } }
-        )
-    }
-
-    resetUser?.let { user ->
-        var attemptedReset by remember(user.id) { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = { resetUser = null },
-            title = { Text("Restablecer contraseña") },
-            text = {
-                Column {
-                    Text("Se cambiará la contraseña de ${user.email}.")
-                    UserInput(
-                        resetPassword, { resetPassword = it }, "Nueva contraseña", true,
-                        password = true, showMissingError = attemptedReset
-                    )
-                    Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.", style = MaterialTheme.typography.bodySmall)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    attemptedReset = true
-                    if (!validStrongPassword(resetPassword)) {
-                        message = "La contraseña no cumple los requisitos."
-                        return@TextButton
-                    }
-                    pendingPasswordReset = user.id to resetPassword
-                }) { Text("Continuar") }
-            },
-            dismissButton = { TextButton(onClick = { resetUser = null }) { Text("Cancelar") } }
-        )
-    }
-
-    pinUser?.let { user ->
-        AlertDialog(
-            onDismissRequest = { if (!pinBusy) pinUser = null },
-            title = { Text(if (user.hasPin) "Cambiar PIN del guardia" else "Asignar PIN al guardia") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "PIN de 4 dígitos para ${user.fullName ?: user.name}. Lo usará en la tablet " +
-                            "de portería al recibir el turno. Después no se puede ver: solo cambiarlo."
-                    )
-                    OutlinedTextField(
-                        value = pinValue,
-                        onValueChange = { pinValue = it.filter(Char::isDigit).take(4) },
-                        label = { Text("PIN de 4 dígitos") },
-                        singleLine = true,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (pinError.isNotBlank()) {
-                        Text(
-                            pinError,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            },
-            confirmButton = {
+            }
+        }
+        items(state.users, key = { it.id }) { user ->
+            UserCard(user, viewModel, navController)
+        }
+        item {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(
-                    enabled = !pinBusy,
-                    onClick = {
-                        if (pinValue.length != 4) {
-                            pinError = "El PIN tiene exactamente 4 dígitos."
-                            return@TextButton
-                        }
-                        pinBusy = true
-                        pinError = ""
-                        scope.launch {
-                            try {
-                                val response = RetrofitClient.api.setGuardPin(
-                                    Session.bearer(), user.id, SetPinRequest(pinValue)
-                                )
-                                if (response.isSuccessful) {
-                                    pinUser = null
-                                    pinValue = ""
-                                    message = "PIN guardado."
-                                    loadUsers()
-                                } else {
-                                    pinError = mensajeDeError(response.code(), response.errorBody()?.string())
-                                }
-                            } catch (exception: Exception) {
-                                if (isCancellation(exception)) {
-                                    if (exception is CancellationException) throw exception else return@launch
-                                }
-                                pinError = "No se pudo guardar el PIN: ${exception.message}"
-                            } finally {
-                                pinBusy = false
-                            }
-                        }
-                    }
-                ) { Text(if (pinBusy) "Guardando..." else "Guardar PIN") }
-            },
-            dismissButton = {
-                TextButton(enabled = !pinBusy, onClick = { pinUser = null }) { Text("Cancelar") }
+                    enabled = state.page > 1 && !state.loading,
+                    onClick = viewModel::previousPage
+                ) { Text("Anterior") }
+                TextButton(
+                    enabled = state.page < state.totalPages && !state.loading,
+                    onClick = viewModel::nextPage
+                ) { Text("Siguiente") }
             }
+        }
+    }
+}
+
+@Composable
+private fun AdvancedFilters(filters: UserFilters, viewModel: UsersViewModel) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = filters.apartmentFrom,
+            onValueChange = { v -> viewModel.updateFilters { it.copy(apartmentFrom = v) } },
+            label = { Text("Apto desde") },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+        )
+        OutlinedTextField(
+            value = filters.apartmentTo,
+            onValueChange = { v -> viewModel.updateFilters { it.copy(apartmentTo = v) } },
+            label = { Text("Apto hasta") },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
         )
     }
+    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        occupancyOptions.forEach { (value, label) ->
+            FilterChip(
+                selected = filters.occupancy == value,
+                onClick = { viewModel.updateFilters { it.copy(occupancy = if (it.occupancy == value) "" else value) } },
+                label = { Text(label) }
+            )
+        }
+    }
+    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        FilterChip(
+            selected = filters.active == true,
+            onClick = { viewModel.updateFilters { it.copy(active = nextFilter(it.active)) } },
+            label = { Text("Activo: ${filterLabel(filters.active)}") }
+        )
+        FilterChip(
+            selected = filters.pets == true,
+            onClick = { viewModel.updateFilters { it.copy(pets = nextFilter(it.pets)) } },
+            label = { Text("Mascotas: ${filterLabel(filters.pets)}") }
+        )
+        FilterChip(
+            selected = filters.vehicles == true,
+            onClick = { viewModel.updateFilters { it.copy(vehicles = nextFilter(it.vehicles)) } },
+            label = { Text("Vehículos: ${filterLabel(filters.vehicles)}") }
+        )
+    }
+    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        FilterChip(
+            selected = filters.parking == true,
+            onClick = { viewModel.updateFilters { it.copy(parking = nextFilter(it.parking)) } },
+            label = { Text("Parqueadero: ${filterLabel(filters.parking)}") }
+        )
+        FilterChip(
+            selected = filters.storage == true,
+            onClick = { viewModel.updateFilters { it.copy(storage = nextFilter(it.storage)) } },
+            label = { Text("Cuarto útil: ${filterLabel(filters.storage)}") }
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = filters.minAge,
+            onValueChange = { v -> viewModel.updateFilters { it.copy(minAge = v.filter(Char::isDigit).take(3)) } },
+            label = { Text("Edad mínima") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f)
+        )
+        OutlinedTextField(
+            value = filters.maxAge,
+            onValueChange = { v -> viewModel.updateFilters { it.copy(maxAge = v.filter(Char::isDigit).take(3)) } },
+            label = { Text("Edad máxima") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
 
-    pendingUserUpdate?.let { (userId, update) ->
-        DomuxConfirmDialog(
-            title = "Confirmar cambios del usuario",
-            message = "Se guardarán los cambios realizados en este perfil. ¿Deseas continuar?",
-            confirmLabel = "Confirmar y guardar",
-            onConfirm = {
-                pendingUserUpdate = null
-                scope.launch {
-                    try {
-                        val response = RetrofitClient.api.updateUser(Session.bearer(), userId, update)
-                        message = if (response.isSuccessful) "Usuario actualizado."
-                        else mensajeDeError(response.code(), response.errorBody()?.string())
-                        if (response.isSuccessful) {
-                            editUser = null
-                            loadUsers()
-                        }
-                    } catch (exception: Exception) {
-                        if (isCancellation(exception)) {
-                            if (exception is CancellationException) throw exception else return@launch
-                        }
-                        message = "No se pudo actualizar: ${exception.message}"
+@Composable
+private fun UserCard(user: UserData, viewModel: UsersViewModel, navController: NavController) {
+    DomuxCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(user.fullName ?: user.name, style = MaterialTheme.typography.titleMedium)
+            if (user.isMinor) {
+                DomuxStatusBadge(
+                    if (user.parentalConsent) "Menor (Con permiso parental)" else "Menor (Modo consulta)",
+                    if (user.parentalConsent) DomuxBadgeTone.PROGRESS else DomuxBadgeTone.ALERT
+                )
+                user.age?.let { Text("Edad: $it años") }
+            }
+            Text(user.email)
+            Text("Teléfono: ${user.phone.orEmpty()} · Documento: ${user.documentId.orEmpty()}")
+            Text("Rol: ${roleLabel(user.role)} · Apto: ${user.apartment ?: "—"}")
+            Text(
+                "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
+                    if (user.isActive) "Activo" else "Inactivo"
+            )
+            if (user.role == "GUARD") {
+                Text(if (user.hasPin) "PIN de turno: asignado" else "PIN de turno: sin asignar")
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                TextButton(onClick = { viewModel.startEdit(user) }) { Text("Editar") }
+                TextButton(onClick = { viewModel.startReset(user) }) { Text("Restablecer contraseña") }
+                if (user.role == "GUARD") {
+                    TextButton(onClick = { viewModel.startPin(user) }) {
+                        Text(if (user.hasPin) "Cambiar PIN" else "Asignar PIN")
                     }
                 }
-            },
-            onDismiss = { pendingUserUpdate = null }
-        )
+                if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
+                    TextButton(onClick = { navController.navigate("unitProfile/${Uri.encode(user.apartment)}") }) {
+                        Text("Ficha del hogar")
+                    }
+                }
+            }
+        }
     }
+}
 
-    pendingPasswordReset?.let { (userId, newPassword) ->
-        DomuxConfirmDialog(
-            title = "Confirmar restablecimiento",
-            message = "La contraseña de este usuario será reemplazada. Esta acción no se puede deshacer.",
-            confirmLabel = "Restablecer",
-            danger = true,
-            onConfirm = {
-                pendingPasswordReset = null
-                scope.launch {
-                    try {
-                        val response = RetrofitClient.api.resetUserPassword(
-                            Session.bearer(), userId, ResetPasswordRequest(newPassword)
+@Composable
+private fun EditUserDialog(user: UserData, state: UsersUiState, viewModel: UsersViewModel) {
+    var draft by remember(user.id) { mutableStateOf(UserEditDraft.from(user)) }
+    var attempted by remember(user.id) { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = viewModel::cancelEdit,
+        title = { Text("Editar usuario") },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                UserInput(draft.name, { v -> draft = draft.copy(name = v) }, "Nombre", true, showMissingError = attempted)
+                UserInput(draft.lastName, { v -> draft = draft.copy(lastName = v) }, "Apellido", true, showMissingError = attempted)
+                UserInput(draft.email, { v -> draft = draft.copy(email = v) }, "Correo", true, showMissingError = attempted)
+                UserInput(draft.phone, { v -> draft = draft.copy(phone = v) }, "Teléfono", true, showMissingError = attempted)
+                UserInput(draft.documentId, { v -> draft = draft.copy(documentId = v) }, "Documento", true, showMissingError = attempted)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    roleOptions.forEach { (value, label) ->
+                        FilterChip(selected = draft.role == value, onClick = { draft = draft.copy(role = value) }, label = { Text(label) })
+                    }
+                }
+                if (draft.role == "RESIDENT") {
+                    ApartmentPickerField(
+                        label = "Apartamento *",
+                        selected = draft.apartment,
+                        onSelect = { option -> draft = draft.copy(apartment = option) },
+                        errorText = if (attempted && draft.apartment == null) "Elige el apartamento del residente." else null
+                    )
+                    DatePickerField(
+                        "Fecha de nacimiento",
+                        draft.birthDate,
+                        { v -> draft = draft.copy(birthDate = v) },
+                        allowFutureDates = false
+                    )
+                    if (draft.isMinor) {
+                        Text(
+                            "Usuario menor de 18 años: por defecto tendrá cuenta en Modo Consulta (sin crear reservas ni PQRS).",
+                            color = MaterialTheme.colorScheme.error
                         )
-                        message = if (response.isSuccessful) "Contraseña restablecida."
-                        else mensajeDeError(response.code(), response.errorBody()?.string())
-                        if (response.isSuccessful) resetUser = null
-                    } catch (exception: Exception) {
-                        if (isCancellation(exception)) {
-                            if (exception is CancellationException) throw exception else return@launch
+                        DomuxCheckRow(
+                            "Cuenta con autorización de los padres/acudientes para solicitar reservas",
+                            draft.parentalConsent
+                        ) { checked -> draft = draft.copy(parentalConsent = checked) }
+                    }
+                    if (user.role != "RESIDENT") {
+                        DomuxCheckRow("El residente autorizó el tratamiento de sus datos.", draft.consent) { checked ->
+                            draft = draft.copy(consent = checked)
                         }
-                        message = "No se pudo restablecer la contraseña: ${exception.message}"
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        occupancyOptions.forEach { (value, label) ->
+                            FilterChip(
+                                selected = draft.occupancyType == value,
+                                onClick = { draft = draft.copy(occupancyType = value) },
+                                label = { Text(label) }
+                            )
+                        }
                     }
                 }
-            },
-            onDismiss = { pendingPasswordReset = null }
-        )
-    }
+                DomuxCheckRow("Cuenta activa", draft.active) { checked -> draft = draft.copy(active = checked) }
+                if (state.editError.isNotBlank()) {
+                    Text(state.editError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !state.busy,
+                onClick = {
+                    attempted = true
+                    viewModel.requestUpdate(user, draft)
+                }
+            ) { Text(if (state.busy) "Guardando..." else "Guardar") }
+        },
+        dismissButton = { TextButton(onClick = viewModel::cancelEdit) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+private fun ResetPasswordDialog(user: UserData, state: UsersUiState, viewModel: UsersViewModel) {
+    var newPassword by remember(user.id) { mutableStateOf("") }
+    var attempted by remember(user.id) { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = viewModel::cancelReset,
+        title = { Text("Restablecer contraseña") },
+        text = {
+            Column {
+                Text("Se cambiará la contraseña de ${user.email}.")
+                UserInput(
+                    newPassword, { newPassword = it }, "Nueva contraseña", true,
+                    password = true, showMissingError = attempted
+                )
+                Text(PASSWORD_RULE, style = MaterialTheme.typography.bodySmall)
+                if (state.resetError.isNotBlank()) {
+                    Text(state.resetError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !state.busy,
+                onClick = {
+                    attempted = true
+                    viewModel.requestReset(user, newPassword)
+                }
+            ) { Text(if (state.busy) "Guardando..." else "Continuar") }
+        },
+        dismissButton = { TextButton(onClick = viewModel::cancelReset) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+private fun GuardPinDialog(user: UserData, state: UsersUiState, viewModel: UsersViewModel) {
+    var pin by remember(user.id) { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = viewModel::cancelPin,
+        title = { Text(if (user.hasPin) "Cambiar PIN del guardia" else "Asignar PIN al guardia") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "PIN de 4 dígitos para ${user.fullName ?: user.name}. Lo usará en la tablet " +
+                        "de portería al recibir el turno. Después no se puede ver: solo cambiarlo."
+                )
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it.filter(Char::isDigit).take(4) },
+                    label = { Text("PIN de 4 dígitos") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (state.pinError.isNotBlank()) {
+                    Text(state.pinError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !state.busy, onClick = { viewModel.savePin(pin) }) {
+                Text(if (state.busy) "Guardando..." else "Guardar PIN")
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !state.busy, onClick = viewModel::cancelPin) { Text("Cancelar") }
+        }
+    )
 }
 
 @Composable
@@ -944,6 +657,8 @@ private fun UserInput(
     password: Boolean = false,
     showMissingError: Boolean = false
 ) {
+    // La contraseña va oculta; «Mostrar» deja revisarla antes de entregarla.
+    var visible by remember { mutableStateOf(false) }
     val missing = required && showMissingError && value.trim().isEmpty()
     val invalidEmail = label == "Correo" && value.isNotEmpty() && !value.trim().contains("@")
     val invalidPassword = password && value.isNotEmpty() && !validStrongPassword(value)
@@ -958,8 +673,18 @@ private fun UserInput(
             else if (invalidEmail) Text("Ingresa un correo válido")
             else if (invalidPassword) Text("Usa 8 caracteres con mayúscula, minúscula, número y símbolo")
         },
-        visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation()
-        else androidx.compose.ui.text.input.VisualTransformation.None,
+        visualTransformation = if (password && !visible) PasswordVisualTransformation() else VisualTransformation.None,
+        trailingIcon = if (password) {
+            { TextButton(onClick = { visible = !visible }) { Text(if (visible) "Ocultar" else "Mostrar") } }
+        } else null,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = when {
+                password -> KeyboardType.Password
+                label == "Correo" -> KeyboardType.Email
+                label == "Teléfono" -> KeyboardType.Phone
+                else -> KeyboardType.Text
+            }
+        ),
         modifier = Modifier.fillMaxWidth()
     )
 }

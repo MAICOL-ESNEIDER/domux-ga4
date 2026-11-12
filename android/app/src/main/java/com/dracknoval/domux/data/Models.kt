@@ -584,6 +584,7 @@ data class NotificationItem(
 )
 data class NotificationsListResponse(val notifications: List<NotificationItem>?)
 data class NotificationResponse(val message: String?, val notification: NotificationItem?)
+data class ReadAllNotificationsResponse(val message: String?, val updatedCount: Int?)
 
 // Algunos errores traen datos para actuar: el parqueadero libre que se sugiere cuando el elegido
 // ya estaba ocupado, o que ya no queda ninguno libre (HU-039).

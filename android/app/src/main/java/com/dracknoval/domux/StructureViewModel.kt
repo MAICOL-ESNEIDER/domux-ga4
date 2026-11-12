@@ -230,7 +230,7 @@ class StructureViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             _state.update { it.copy(busy = true, message = "") }
-            val response = attempt(failure, request)
+            val response = attempt(failure, request = request)
             if (response != null) {
                 showSuccess(success)
                 // La ventana se cierra enseguida; las listas se recargan mientras tanto.

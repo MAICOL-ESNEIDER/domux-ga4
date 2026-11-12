@@ -36,12 +36,18 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
 
+/**
+ * Botón que abre el calendario del celular y devuelve la fecha como AAAA-MM-DD, para que nadie
+ * tenga que escribirla a mano. [allowFutureDates] en false sirve para fechas que ya pasaron,
+ * como un nacimiento o la última vacuna.
+ */
 @Composable
 fun DatePickerField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    allowPastDates: Boolean = true
+    allowPastDates: Boolean = true,
+    allowFutureDates: Boolean = true
 ) {
     val context = LocalContext.current
     OutlinedButton(
@@ -57,6 +63,7 @@ fun DatePickerField(
                 calendar.get(Calendar.DAY_OF_MONTH)
             ).apply {
                 if (!allowPastDates) datePicker.minDate = System.currentTimeMillis()
+                if (!allowFutureDates) datePicker.maxDate = System.currentTimeMillis()
             }.show()
         },
         modifier = Modifier.fillMaxWidth()

@@ -18,11 +18,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalDrawerSheet
@@ -50,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
@@ -227,28 +230,35 @@ fun DomuxBrandMark(size: Dp = 54.dp) {
     }
 }
 
+/**
+ * Casilla con su texto: se marca tocando cualquiera de los dos (no solo el cuadrito) y el lector
+ * de pantalla los anuncia juntos como una casilla.
+ */
 @Composable
-fun DomuxFeedbackBanner(message: String, onDismiss: (() -> Unit)? = null) {
-        if (message.isBlank()) return
-
-        val errorPrefixes = listOf(
-            "No se", "Error", "Falta", "Completa", "Escribe", "Selecciona", "Elige",
-            "Revisa", "Confirma", "La contraseña", "El ", "Sin conexión", "Ocurrió", "❌", "⚠"
-        )
-        val confirmations = listOf(
-            "creado", "actualizado", "actualizada", "actualizadas", "publicado", "eliminado",
-            "enviada", "enviado", "guardada", "guardado", "registrado", "registrada",
-            "entregado", "restaurado", "restablecida", "revocado", "autorizado",
-            "aprobada", "vinculado", "papelera"
-        )
-        val isSuccess = errorPrefixes.none { message.startsWith(it, ignoreCase = true) } &&
-            confirmations.any { message.contains(it, ignoreCase = true) }
-        DomuxMessageBanner(message, isError = !isSuccess, onDismiss = onDismiss)
+fun DomuxCheckRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Checkbox, onValueChange = onCheckedChange)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null)
+        Text(label, Modifier.padding(start = 8.dp))
     }
+}
 
-/** Aviso verde (acierto) o rojo (error); quien lo usa ya sabe de cuál de los dos se trata. */
+/**
+ * Aviso verde (acierto) o rojo (error); quien lo usa ya sabe de cuál de los dos se trata.
+ * En las pantallas largas va fuera de la parte que se desplaza, para que siempre se vea.
+ */
 @Composable
-fun DomuxMessageBanner(message: String, isError: Boolean, onDismiss: (() -> Unit)? = null) {
+fun DomuxMessageBanner(
+    message: String,
+    isError: Boolean,
+    modifier: Modifier = Modifier,
+    onDismiss: (() -> Unit)? = null
+) {
         if (message.isBlank()) return
 
         val background = if (isError) Color(0xFF450A0A) else Color(0xFF052E16)
@@ -256,7 +266,7 @@ fun DomuxMessageBanner(message: String, isError: Boolean, onDismiss: (() -> Unit
         val outline = if (isError) Color(0xFFEF4444) else Color(0xFF10B981)
 
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth(),
             color = background,
             contentColor = foreground,
             shape = RoundedCornerShape(16.dp),

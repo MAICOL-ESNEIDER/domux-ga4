@@ -463,6 +463,10 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Path("id") id: Int
     ): Response<NotificationResponse>
+
+    // Marca como leídas todas las notificaciones de quien consulta, en una sola llamada (HU-064).
+    @PUT("api/notifications/read-all")
+    suspend fun markAllNotificationsRead(@Header("Authorization") auth: String): Response<ReadAllNotificationsResponse>
 }
 
 data class GenericMessageResponse(val message: String?)
