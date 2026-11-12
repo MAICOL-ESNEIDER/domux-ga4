@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import Index, event, false, select, text
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import declared_attr
+from sqlalchemy.orm import declared_attr, deferred
 from sqlalchemy.orm.attributes import set_committed_value
 
 from config import visitor_parking_max_days
@@ -429,6 +429,60 @@ class StorageRoom(RetirableMixin, db.Model):
             "code": self.code,
             "apartmentId": self.apartment_id,
             "apartment": self.apartment.label if self.apartment else None,
+        }
+
+
+class ComplexProfile(db.Model):
+    """Datos de la unidad residencial (el conjunto) que muestran la app y la web (HU-077).
+
+    Hay una sola fila (id 1) y nace la primera vez que la administración guarda los datos:
+    mientras no exista, la app y la web usan sus textos por defecto. No es la ficha del hogar
+    de un apartamento (esa es ResidentialUnit).
+
+    El logo se guarda como los bytes de una imagen PNG, JPG o WebP revisada al guardar.
+    logo_sha256 es su huella: sirve de versión para que la app y el navegador sepan cuándo
+    cambió y solo lo descarguen de nuevo en ese caso.
+    """
+
+    __tablename__ = "complex_profile"
+
+    #: La única fila que existe.
+    SINGLE_ID = 1
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    nit = db.Column(db.String(25), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+    portal_phone = db.Column(db.String(25), nullable=True)
+    # «deferred»: los bytes del logo se leen solo cuando alguien los pide, no en cada consulta.
+    logo = deferred(db.Column(db.LargeBinary, nullable=True))
+    logo_type = db.Column(db.String(20), nullable=True)
+    logo_sha256 = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_complex_profile_updated_by_id_users"),
+        nullable=True,
+    )
+
+    @property
+    def has_logo(self):
+        return self.logo_sha256 is not None
+
+    @property
+    def logo_version(self):
+        """Un texto corto que cambia solo cuando cambia el logo (sirve para no descargarlo de nuevo)."""
+        return self.logo_sha256[:12] if self.logo_sha256 else None
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "nit": self.nit,
+            "address": self.address,
+            "portalPhone": self.portal_phone,
+            "hasLogo": self.has_logo,
+            "logoVersion": self.logo_version,
+            "updatedAt": _fmt(self.updated_at),
         }
 
 

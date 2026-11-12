@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
+import com.dracknoval.domux.data.ComplexInfoStore
 import com.dracknoval.domux.data.NotificationItem
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
@@ -85,6 +86,12 @@ fun HomeScreen(navController: NavController) {
         userName
     } else {
         listOf(userName, lastName).filter(String::isNotBlank).joinToString(" ")
+    }
+
+    // Los datos de la unidad (HU-077) se piden al abrir el inicio: si la administración los
+    // cambió en la web, aquí se ven la próxima vez que se entra.
+    LaunchedEffect(currentRoute, Session.userId) {
+        if (currentRoute == "home" && Session.token != null) ComplexInfoStore.refresh()
     }
 
     LaunchedEffect(currentRoute, Session.userId) {
@@ -226,7 +233,17 @@ fun HomeScreen(navController: NavController) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("CENTRO DE CONTROL", color = Color(0xFF38BDF8), fontSize = 11.sp, letterSpacing = 1.5.sp)
-                Text("Altos de DOMUX", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (ComplexInfoStore.logo != null) ComplexLogo(size = 56.dp, describe = false)
+                    Text(
+                        ComplexInfoStore.displayName,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     "Hola, $greetingName",
                     color = Color(0xFFCBD5E1)
@@ -247,6 +264,24 @@ fun HomeScreen(navController: NavController) {
                         style = MaterialTheme.typography.bodySmall
                     )
                     DomuxStatusBadge("Operación estable")
+                }
+                // Dirección y NIT de la unidad, y el teléfono de portería para llamar con un toque.
+                val complexDetails = listOfNotNull(
+                    ComplexInfoStore.info?.address,
+                    ComplexInfoStore.info?.nit?.let { "NIT $it" }
+                )
+                if (complexDetails.isNotEmpty()) {
+                    Text(
+                        complexDetails.joinToString(" · "),
+                        color = Color(0xFF94A3B8),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                val portalPhone = ComplexInfoStore.info?.portalPhone
+                if (portalPhone != null && !Session.isGuard) {
+                    TextButton(onClick = { dialPortal(context, portalPhone) }) {
+                        Text("Llamar a portería · $portalPhone")
+                    }
                 }
             }
         }

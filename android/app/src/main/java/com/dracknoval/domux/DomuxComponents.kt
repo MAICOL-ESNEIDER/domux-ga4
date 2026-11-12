@@ -539,7 +539,7 @@ fun DomuxScreenScaffold(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            DomuxBrandMark(size = 48.dp)
+                            ComplexLogo(size = 48.dp)
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(

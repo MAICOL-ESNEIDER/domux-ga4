@@ -9,6 +9,7 @@ from markupsafe import Markup
 
 from extensions import db
 from models import Notification
+from services import unit_service
 from web import bp, texts
 from web.security import csrf_token, current_admin
 
@@ -93,6 +94,24 @@ def unread_notifications():
     return g.unread_count
 
 
+def unit_brand():
+    """El nombre y el logo de la unidad para el encabezado (HU-077); sin datos guardados, vienen vacíos.
+
+    Se consulta una sola vez por página. Si la administración no los ha guardado, la página usa el
+    nombre y el logo de DOMUX.
+    """
+    if "unit_brand" not in g:
+        profile = unit_service.get_profile()
+        g.unit_brand = {
+            "name": profile.name if profile is not None else None,
+            "logo_url": (
+                url_for("web.unit_logo", v=profile.logo_version)
+                if profile is not None and profile.has_logo else None
+            ),
+        }
+    return g.unit_brand
+
+
 def menu_groups():
     """Los grupos del menú con sus páginas, marcando en la que está la persona."""
     current = request.endpoint or ""
@@ -129,6 +148,7 @@ for _name, _function in (
     ("menu_groups", menu_groups),
     ("page_exists", page_exists),
     ("page_url", page_url),
+    ("unit_brand", unit_brand),
     ("badge_info", texts.badge_info),
     ("deadline_text", texts.deadline_text),
     ("notification_type", texts.notification_type),

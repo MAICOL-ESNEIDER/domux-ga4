@@ -67,7 +67,7 @@ def configure(app):
         # Cada página parte sin datos de la anterior. (En el servidor ya es así; en las pruebas,
         # que comparten un solo contexto, hace falta limpiarlos.)
         if is_web_path(request.path):
-            for key in ("web_user", "unread_count"):
+            for key in ("web_user", "unread_count", "unit_brand"):
                 g.pop(key, None)
 
     @app.after_request
@@ -82,9 +82,9 @@ def configure(app):
         if is_production():
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         # Las páginas llevan datos de residentes: el navegador no debe guardarlas. Los archivos de
-        # diseño (CSS, JS, logo) los guarda y los revalida en cada visita (si no cambiaron, el
-        # servidor responde 304 sin volver a enviarlos), así un cambio de diseño llega al instante.
-        if request.endpoint != "web.static":
+        # diseño (CSS, JS) y el logo de la unidad los guarda y los revalida en cada visita (si no
+        # cambiaron, el servidor responde 304 sin volver a enviarlos), así un cambio llega al instante.
+        if request.endpoint not in ("web.static", "web.unit_logo"):
             response.headers["Cache-Control"] = "no-store"
         return response
 

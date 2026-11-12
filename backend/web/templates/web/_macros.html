@@ -43,3 +43,10 @@
   {% endfor %}
 </nav>
 {%- endmacro %}
+
+{# Logo y nombre de la unidad (HU-077) para la barra lateral y el inicio de sesión; sin datos guardados, los de DOMUX. #}
+{% macro brand_parts() -%}
+{% set unit = unit_brand() -%}
+<img src="{{ unit.logo_url or url_for('web.static', filename='img/domux-logo.svg') }}" alt="" width="40" height="40">
+<span class="brand-text"><strong{% if unit.name %} class="unit-name"{% endif %}>{{ unit.name or "DOMUX" }}</strong><small>{% if unit.name %}DOMUX · {% endif %}Administración</small></span>
+{%- endmacro %}

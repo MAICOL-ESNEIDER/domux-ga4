@@ -1,4 +1,4 @@
-<!doctype html>
+{% from "web/_macros.html" import brand_parts %}<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -16,10 +16,7 @@
 {% if web_user %}
 <div class="shell">
   <nav class="sidebar" id="menu" aria-label="Menú principal">
-    <a class="brand" href="{{ url_for('web.panel') }}">
-      <img src="{{ url_for('web.static', filename='img/domux-logo.svg') }}" alt="" width="40" height="40">
-      <span class="brand-text"><strong>DOMUX</strong><small>Administración</small></span>
-    </a>
+    <a class="brand" href="{{ url_for('web.panel') }}">{{ brand_parts() }}</a>
     {% for group in menu_groups() %}
       {% if group.title %}<p class="nav-group">{{ group.title }}</p>{% endif %}
       <ul>

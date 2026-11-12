@@ -100,6 +100,7 @@ object Session {
         apartment = null
         isMinor = false
         parentalConsent = false
+        ComplexInfoStore.clear()
     }
 
     fun clear(context: Context) {

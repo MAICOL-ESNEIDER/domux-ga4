@@ -1,0 +1,52 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import field, checkbox %}
+{% set page_title = "Datos de la unidad" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Datos de la unidad</h1>
+    <p>Así se identifica el conjunto en la app y en esta web. Los ven los residentes, la portería y la administración.</p>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('web.unit_data') }}" enctype="multipart/form-data"
+      class="card form-narrow" aria-label="Datos de la unidad">
+  {{ csrf_input() }}
+  {{ field("name", "Nombre de la unidad", values.name, required=True, maxlength=120,
+           help="Por ejemplo: Altos de DOMUX. Es el nombre que ven todos al abrir la app.") }}
+  {{ field("nit", "NIT", values.nit, maxlength=25,
+           help="Con o sin puntos. Si lo escribes con el dígito de verificación (900.123.456-8) lo revisamos para atrapar errores de digitación.") }}
+  {{ field("address", "Dirección", values.address, maxlength=200, autocomplete="street-address",
+           help="Por ejemplo: Calle 10 # 20-30, Medellín.") }}
+  {{ field("portalPhone", "Teléfono de portería", values.portalPhone, type="tel", maxlength=25,
+           help="Entre 7 y 15 números. Los residentes lo ven en la app para llamar a la portería.") }}
+
+  <div class="field">
+    <span class="label" id="logo-title">Logo</span>
+    {% if unit.hasLogo %}
+    <img class="logo-preview" src="{{ url_for('web.unit_logo', v=unit.logoVersion) }}"
+         alt="Logo actual de la unidad" width="96" height="96">
+    {% else %}
+    <p class="muted">Todavía no hay un logo: se muestra el de DOMUX.</p>
+    {% endif %}
+    <label for="logo">{% if unit.hasLogo %}Cambiar el logo{% else %}Subir un logo{% endif %}</label>
+    <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp"
+           aria-describedby="logo-help">
+    <p class="help" id="logo-help">
+      Imagen PNG, JPG o WebP de hasta 512 KB. Se ve mejor si es cuadrada. No se aceptan archivos SVG.
+    </p>
+  </div>
+  {% if unit.hasLogo %}
+  {{ checkbox("removeLogo", "Quitar el logo actual", help="Si no subes uno nuevo, la web y la app vuelven a mostrar el logo de DOMUX.") }}
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn">Guardar los datos</button>
+    <a class="btn btn-quiet" href="{{ url_for('web.panel') }}">Cancelar</a>
+  </div>
+  {% if unit.updatedAt %}
+  <p class="small muted mt-1">Última actualización: {{ unit.updatedAt }}.</p>
+  {% endif %}
+</form>
+{% endblock %}

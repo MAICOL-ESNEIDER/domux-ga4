@@ -1,11 +1,9 @@
 {% extends "web/base.html" %}
+{% from "web/_macros.html" import brand_parts %}
 {% set page_title = "Iniciar sesión" %}
 
 {% block content %}
-<div class="brand">
-  <img src="{{ url_for('web.static', filename='img/domux-logo.svg') }}" alt="" width="40" height="40">
-  <span class="brand-text"><strong>DOMUX</strong><small>Administración</small></span>
-</div>
+<div class="brand">{{ brand_parts() }}</div>
 
 <h1>Iniciar sesión</h1>
 <p class="lead">Esta página es solo para la administración del conjunto.</p>

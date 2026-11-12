@@ -1,5 +1,6 @@
 package com.dracknoval.domux.data
 
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -82,6 +83,13 @@ interface ApiService {
 
     @GET("api/profile/unit")
     suspend fun getMyUnit(@Header("Authorization") auth: String): Response<ResidentialUnitResponse>
+
+    // Datos de la unidad residencial (HU-077): nombre, NIT, dirección, teléfono de portería y logo.
+    @GET("api/unit-info")
+    suspend fun getComplexInfo(@Header("Authorization") auth: String): Response<ComplexInfoResponse>
+
+    @GET("api/unit-info/logo")
+    suspend fun getComplexLogo(@Header("Authorization") auth: String): Response<ResponseBody>
 
     @POST("api/users")
     suspend fun createUser(

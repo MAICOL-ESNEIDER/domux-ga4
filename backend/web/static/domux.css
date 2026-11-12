@@ -90,8 +90,10 @@ small, .small { font-size: .875rem; }
 
 .brand { display: flex; align-items: center; gap: .75rem; padding: 0 .5rem 1.25rem; color: var(--text); text-decoration: none; }
 .brand:hover { color: var(--text); }
-.brand img { width: 40px; height: 40px; }
-.brand-text strong { display: block; letter-spacing: .12em; font-size: 1.05rem; }
+.brand img { width: 40px; height: 40px; flex: none; object-fit: contain; }
+.brand-text { min-width: 0; }
+.brand-text strong { display: block; letter-spacing: .12em; font-size: 1.05rem; overflow-wrap: anywhere; }
+.brand-text strong.unit-name { letter-spacing: .02em; line-height: 1.25; font-size: 1rem; }
 .brand-text small { display: block; font-size: .8rem; color: var(--muted); }
 
 .nav-group {
@@ -199,6 +201,7 @@ td.actions form { display: inline; }
 
 form.inline { display: inline; margin: 0; }
 .form-narrow { max-width: 720px; }
+.logo-preview { display: block; width: 96px; height: 96px; object-fit: contain; margin-bottom: .75rem; padding: .25rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .form-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.25rem; }
 .check + .help { margin: -.25rem 0 0 1.75rem; }
 [hidden] { display: none !important; }

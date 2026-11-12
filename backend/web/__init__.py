@@ -36,6 +36,7 @@ def init_web(app):
         views_panel,
         views_reservations,
         views_structure,
+        views_unit,
         views_users,
     )
 
