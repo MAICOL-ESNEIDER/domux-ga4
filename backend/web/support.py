@@ -26,3 +26,19 @@ def paginate(items, page, size=25):
     page = min(max(page or 1, 1), total_pages)
     start = (page - 1) * size
     return page, total_pages, items[start:start + size]
+
+
+def fetch_all(api, path, key, max_pages=20, **params):
+    """Todas las filas de una lista paginada de la API, página por página, para llenar una lista desplegable.
+
+    Devuelve ``(filas, fallo)``: ``fallo`` es la respuesta con error si alguna página no cargó.
+    """
+    rows = []
+    for page in range(1, max_pages + 1):
+        result = api.get(path, page=page, pageSize=100, **params)
+        if not result.ok:
+            return rows, result
+        rows.extend(result.get(key, []))
+        if page >= result.get("totalPages", 1):
+            break
+    return rows, None

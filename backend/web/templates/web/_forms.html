@@ -1,0 +1,48 @@
+{# Piezas de formulario: cada campo con su etiqueta, su ayuda y el «obligatorio» también para lectores de pantalla. #}
+
+{% macro label_text(label, required) -%}
+{{ label }}{% if required %} <span class="req" aria-hidden="true">*</span><span class="sr-only">(obligatorio)</span>{% endif %}
+{%- endmacro %}
+
+{# Campo de una línea. «extra» agrega atributos (pattern, inputmode, data-…). Una contraseña nunca vuelve escrita. #}
+{% macro field(id, label, value="", type="text", required=False, help="", maxlength=None, autocomplete="off", extra=None) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label_text(label, required) }}</label>
+  <input id="{{ id }}" name="{{ id }}" type="{{ type }}"
+         {%- if type != "password" and value is not none %} value="{{ value }}"{% endif %}
+         {%- if required %} required{% endif %}
+         {%- if help %} aria-describedby="{{ id }}-help"{% endif %}
+         {{- {"maxlength": maxlength, "autocomplete": autocomplete}|xmlattr }}
+         {{- (extra or {})|xmlattr }}>
+  {% if help %}<p class="help" id="{{ id }}-help">{{ help }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Lista desplegable. «options» es una lista de (valor, texto); «blank» es el texto de la opción vacía. #}
+{% macro select(id, label, options, value="", required=False, help="", blank=None, extra=None) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label_text(label, required) }}</label>
+  <select id="{{ id }}" name="{{ id }}"
+          {%- if required %} required{% endif %}
+          {%- if help %} aria-describedby="{{ id }}-help"{% endif %}
+          {{- (extra or {})|xmlattr }}>
+    {% if blank %}<option value="">{{ blank }}</option>{% endif %}
+    {% for option_value, option_label in options %}
+    <option value="{{ option_value }}"{% if option_value|string == value|string %} selected{% endif %}>{{ option_label }}</option>
+    {% endfor %}
+  </select>
+  {% if help %}<p class="help" id="{{ id }}-help">{{ help }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Casilla de verificación con su ayuda. #}
+{% macro checkbox(id, label, checked=False, help="") -%}
+<div class="field">
+  <div class="check">
+    <input type="checkbox" id="{{ id }}" name="{{ id }}" value="1"{% if checked %} checked{% endif %}
+           {%- if help %} aria-describedby="{{ id }}-help"{% endif %}>
+    <label for="{{ id }}">{{ label }}</label>
+  </div>
+  {% if help %}<p class="help" id="{{ id }}-help">{{ help }}</p>{% endif %}
+</div>
+{%- endmacro %}

@@ -42,6 +42,13 @@ def list_towers():
     return jsonify({"towers": [tower.to_dict() for tower in structure.active_towers()]})
 
 
+@bp.get("/towers/<int:tower_id>")
+@token_required
+@role_required("ADMIN")
+def get_tower(tower_id):
+    return jsonify({"tower": _active(Tower, tower_id).to_dict()})
+
+
 @bp.post("/towers")
 @token_required
 @role_required("ADMIN")
@@ -83,6 +90,13 @@ def list_apartments():
         search=(request.args.get("search") or "").strip(),
     )
     return paginated(query, "apartments", default_size=50)
+
+
+@bp.get("/apartments/<int:apartment_id>")
+@token_required
+@role_required("ADMIN")
+def get_apartment(apartment_id):
+    return jsonify({"apartment": _active(Apartment, apartment_id).to_dict()})
 
 
 @bp.post("/apartments")
@@ -148,6 +162,13 @@ def list_parking_spots():
     return paginated(query, "parkingSpots", default_size=50)
 
 
+@bp.get("/parking-spots/<int:spot_id>")
+@token_required
+@role_required("ADMIN")
+def get_parking_spot(spot_id):
+    return jsonify({"parkingSpot": _active(ParkingSpot, spot_id).to_dict()})
+
+
 @bp.post("/parking-spots")
 @token_required
 @role_required("ADMIN")
@@ -186,6 +207,13 @@ def list_storage_rooms():
         search=(request.args.get("search") or "").strip(),
     )
     return paginated(query, "storageRooms", default_size=50)
+
+
+@bp.get("/storage-rooms/<int:room_id>")
+@token_required
+@role_required("ADMIN")
+def get_storage_room(room_id):
+    return jsonify({"storageRoom": _active(StorageRoom, room_id).to_dict()})
 
 
 @bp.post("/storage-rooms")

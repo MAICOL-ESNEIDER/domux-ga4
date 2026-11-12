@@ -35,6 +35,8 @@ def init_web(app):
         views_notifications,
         views_panel,
         views_reservations,
+        views_structure,
+        views_users,
     )
 
     app.register_blueprint(bp)

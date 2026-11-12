@@ -1,0 +1,47 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import structure_tabs %}
+{% set page_title = "Estructura de la unidad" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Estructura de la unidad</h1>
+    <p>Las torres, los apartamentos, los parqueaderos y los cuartos útiles de la unidad.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('web.tower_new') }}">Crear torre</a>
+  </div>
+</div>
+
+{{ structure_tabs("torres") }}
+
+<section class="card" aria-label="Torres">
+  {% if towers %}
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">Torres de la unidad</caption>
+      <thead>
+        <tr>
+          <th scope="col">Torre</th>
+          <th scope="col">Pisos</th>
+          <th scope="col">Apartamentos</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tower in towers %}
+        <tr>
+          <td><a href="{{ url_for('web.tower_edit', tower_id=tower.id) }}">{{ tower.name }}</a></td>
+          <td>{{ plural(tower.floors, "piso", "pisos") }}</td>
+          <td><a href="{{ url_for('web.structure_apartments', torre=tower.id) }}">{{ plural(tower.apartmentCount, "apartamento", "apartamentos") }}</a></td>
+          <td class="actions"><a class="btn btn-quiet btn-small" href="{{ url_for('web.tower_edit', tower_id=tower.id) }}">Editar</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">Todavía no hay torres. Empieza creando la primera.</p>
+  {% endif %}
+</section>
+{% endblock %}

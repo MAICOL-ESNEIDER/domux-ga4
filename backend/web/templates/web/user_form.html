@@ -1,0 +1,116 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import badge %}
+{% from "web/_forms.html" import field, select, checkbox %}
+{% set page_title = ("Editar usuario" if user else "Crear usuario") %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if user %}{{ user.fullName }}{% else %}Crear usuario{% endif %}</h1>
+    <p>{% if user %}{{ role_labels.get(user.role, user.role) }} · {% if user.isActive %}cuenta activa{% else %}cuenta desactivada{% endif %}{% else %}Escribe los datos de la persona. Los campos con * son obligatorios.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ url_for('web.users_list') }}">Volver a la lista</a>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('web.user_edit', user_id=user.id) if user else url_for('web.user_new') }}" class="card" aria-label="Datos del usuario">
+  {{ csrf_input() }}
+  <h2>Datos</h2>
+  <div class="form-row">
+    {{ select("role", "Rol", role_options, values.role, required=True, extra={"data-role-select": ""}) }}
+    {{ field("name", "Nombre", values.name, required=True, maxlength=80) }}
+    {{ field("lastName", "Apellido", values.lastName, maxlength=80) }}
+  </div>
+  <div class="form-row">
+    {{ field("email", "Correo", values.email, type="email", required=True, maxlength=120, help="Con este correo entra la persona.") }}
+    {{ field("phone", "Teléfono", values.phone, type="tel", maxlength=20, extra={"inputmode": "tel"}) }}
+    {{ field("documentId", "Documento", values.documentId, maxlength=30) }}
+  </div>
+  <div class="form-row">
+    {{ field("birthDate", "Fecha de nacimiento", values.birthDate, type="date") }}
+    {% if not user %}
+    {{ field("password", "Contraseña temporal", type="password", required=True, autocomplete="new-password",
+             help="Mínimo 8 caracteres con una mayúscula, una minúscula, un número y un carácter especial (@$!%*?&#._-). Dásela a la persona por un medio seguro.") }}
+    {% endif %}
+  </div>
+
+  <div data-role-only="RESIDENT">
+    <h3>Datos del residente</h3>
+    <div class="form-row">
+      {{ select("apartmentId", "Apartamento", apartment_options, values.apartmentId, blank="Elige un apartamento",
+                help="Si no aparece, créalo antes en la estructura de la unidad.") }}
+      {{ select("occupancyType", "Tipo de residente", occupancy_options, values.occupancyType) }}
+    </div>
+    {{ checkbox("parentalConsent", "Tiene la autorización de su acudiente", values.parentalConsent,
+                help="Solo aplica si es menor de edad.") }}
+    {% if not user or user.role != "RESIDENT" %}
+    {{ checkbox("dataProcessingConsent", "La persona autorizó el tratamiento de sus datos personales", values.dataProcessingConsent,
+                help="Es obligatorio para registrar a un residente.") }}
+    {% else %}
+    <p class="muted">Autorización de tratamiento de datos: {% if user.dataProcessingConsent %}registrada{% else %}sin registrar{% endif %}.</p>
+    {% endif %}
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn">{% if user %}Guardar cambios{% else %}Crear usuario{% endif %}</button>
+    <a class="btn btn-quiet" href="{{ url_for('web.users_list') }}">Cancelar</a>
+  </div>
+</form>
+
+{% if user %}
+<section class="card" aria-labelledby="account-state">
+  <h2 id="account-state">Estado de la cuenta</h2>
+  {% if user.isActive %}
+  <p>La cuenta está activa. Si la desactivas, la persona ya no puede entrar; sus códigos QR vigentes se anulan y su historial se conserva.</p>
+  <form method="post" action="{{ url_for('web.user_state', user_id=user.id) }}">
+    {{ csrf_input() }}
+    <input type="hidden" name="activo" value="0">
+    <button type="submit" class="btn btn-danger"
+            data-confirm="¿Desactivar a {{ user.fullName }}? Ya no podrá entrar y sus códigos QR vigentes se anularán. Su historial se conserva."
+            data-confirm-label="Desactivar">Desactivar cuenta</button>
+  </form>
+  {% else %}
+  <p>La cuenta está desactivada: la persona no puede entrar. Su historial se conserva.</p>
+  <form method="post" action="{{ url_for('web.user_state', user_id=user.id) }}">
+    {{ csrf_input() }}
+    <input type="hidden" name="activo" value="1">
+    <button type="submit" class="btn">Reactivar cuenta</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="reset-password">
+  <h2 id="reset-password">Restablecer la contraseña</h2>
+  <p>Escribe una contraseña nueva. Esto también quita el bloqueo por intentos fallidos.</p>
+  <form method="post" action="{{ url_for('web.user_password', user_id=user.id) }}">
+    {{ csrf_input() }}
+    <div class="form-row">
+      {{ field("password", "Contraseña nueva", type="password", required=True, autocomplete="new-password",
+               help="Mínimo 8 caracteres con una mayúscula, una minúscula, un número y un carácter especial (@$!%*?&#._-).") }}
+      {{ field("password2", "Repite la contraseña", type="password", required=True, autocomplete="new-password") }}
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-outline">Restablecer contraseña</button>
+    </div>
+  </form>
+</section>
+
+{% if user.role == "GUARD" %}
+<section class="card" aria-labelledby="guard-pin">
+  <h2 id="guard-pin">PIN de turno</h2>
+  <p>{% if user.hasPin %}Este guardia ya tiene PIN. Si escribes uno nuevo, reemplaza al anterior.{% else %}Este guardia todavía no tiene PIN: sin él no puede tomar el turno en la tablet.{% endif %} Son exactamente 4 dígitos.</p>
+  <form method="post" action="{{ url_for('web.user_pin', user_id=user.id) }}">
+    {{ csrf_input() }}
+    <div class="form-row">
+      {{ field("pin", "PIN de 4 dígitos", type="password", required=True, autocomplete="off", maxlength=4,
+               extra={"inputmode": "numeric", "pattern": "[0-9]{4}"}) }}
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-outline">{% if user.hasPin %}Cambiar PIN{% else %}Asignar PIN{% endif %}</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -285,6 +285,18 @@ def get_users():
     })
 
 
+@bp.get("/users/<int:user_id>")
+@bp.get("/admin/users/<int:user_id>")
+@token_required
+@role_required("ADMIN")
+def get_user(user_id):
+    """Un usuario por su id: con él la web de administración abre la ficha para editarlo."""
+    user = db.session.get(User, user_id)
+    if user is None:
+        return error_response(404, "Usuario no encontrado")
+    return jsonify({"user": user.to_dict()})
+
+
 @bp.post("/users")
 @bp.post("/admin/users")
 @token_required
@@ -392,6 +404,17 @@ def update_user(user_id):
     user = db.session.get(User, user_id)
     if user is None:
         return error_response(404, "Usuario no encontrado")
+    # Quien administra no se cierra la puerta a sí mismo: si el único administrador se desactivara
+    # o se cambiara el rol, nadie podría volver a entrar para arreglarlo.
+    if user.id == g.current_user.id:
+        if data.get("isActive") is False:
+            return error_response(
+                409, "No puedes desactivar tu propia cuenta. Pídele a otro administrador que lo haga."
+            )
+        if "role" in data and _normalize_role(data["role"]) != user.role:
+            return error_response(
+                409, "No puedes cambiar tu propio rol. Pídele a otro administrador que lo haga."
+            )
 
     if "birthDate" in data:
         if error := validate_iso_date(data["birthDate"]):

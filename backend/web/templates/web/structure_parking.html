@@ -1,0 +1,76 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import structure_tabs, pager, badge %}
+{% set page_title = "Parqueaderos" %}
+
+{% block content %}
+{% set filtered = filters.tipo or filters.asignado or filters.q %}
+<div class="page-head">
+  <div>
+    <h1>Parqueaderos</h1>
+    <p>{{ plural(total, "parqueadero", "parqueaderos") }}{% if filtered %} con esos filtros{% endif %}.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('web.parking_new') }}">Crear parqueadero</a>
+  </div>
+</div>
+
+{{ structure_tabs("parqueaderos") }}
+
+<form class="filters" method="get" action="{{ url_for('web.structure_parking') }}" role="search" aria-label="Filtrar parqueaderos">
+  <div class="field">
+    <label for="tipo">Tipo</label>
+    <select id="tipo" name="tipo" data-autosubmit>
+      <option value="">Todos</option>
+      {% for value, label in kind_options %}<option value="{{ value }}"{% if filters.tipo == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="asignado">Asignación</label>
+    <select id="asignado" name="asignado" data-autosubmit>
+      <option value="">Todos</option>
+      {% for value, label in assigned_options %}<option value="{{ value }}"{% if filters.asignado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field grow">
+    <label for="q">Buscar</label>
+    <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off" placeholder="Código o ubicación">
+  </div>
+  <button type="submit" class="btn">Filtrar</button>
+  {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.structure_parking') }}">Quitar filtros</a>{% endif %}
+</form>
+
+<section class="card" aria-label="Lista de parqueaderos">
+  {% if spots %}
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">Parqueaderos de la unidad</caption>
+      <thead>
+        <tr>
+          <th scope="col">Código</th>
+          <th scope="col">Tipo</th>
+          <th scope="col">Ubicación</th>
+          <th scope="col">Apartamento</th>
+          <th scope="col">Estado</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for spot in spots %}
+        <tr>
+          <td><a href="{{ url_for('web.parking_edit', spot_id=spot.id) }}">{{ spot.code }}</a></td>
+          <td data-label="Tipo">{{ "De visitantes" if spot.type == "visitante" else "De residente" }}</td>
+          <td data-label="Ubicación">{{ spot.location }}</td>
+          <td data-label="Apartamento">{{ spot.apartment or "—" }}</td>
+          <td data-label="Estado">{% if spot.type == "visitante" %}{% if spot.isOccupied %}{{ badge("Ocupado", "progress") }}{% else %}{{ badge("Libre", "success") }}{% endif %}{% else %}—{% endif %}</td>
+          <td class="actions"><a class="btn btn-quiet btn-small" href="{{ url_for('web.parking_edit', spot_id=spot.id) }}">Editar</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ pager(page, pages) }}
+  {% else %}
+  <p class="empty">{% if filtered %}No hay parqueaderos con esos filtros.{% else %}Todavía no hay parqueaderos.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

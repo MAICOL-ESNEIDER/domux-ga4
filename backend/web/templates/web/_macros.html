@@ -29,3 +29,17 @@
 </nav>
 {% endif %}
 {%- endmacro %}
+
+{# Pestañas de la estructura de la unidad; «active» es la que se está viendo. #}
+{% macro structure_tabs(active) -%}
+<nav class="tabs" aria-label="Estructura de la unidad">
+  {% for key, label, endpoint in (
+       ("torres", "Torres", "web.structure_towers"),
+       ("apartamentos", "Apartamentos", "web.structure_apartments"),
+       ("parqueaderos", "Parqueaderos", "web.structure_parking"),
+       ("cuartos", "Cuartos útiles", "web.structure_storage"),
+     ) %}
+  <a href="{{ url_for(endpoint) }}"{% if active == key %} aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+{%- endmacro %}

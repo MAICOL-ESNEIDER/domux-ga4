@@ -1,0 +1,63 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import structure_tabs, pager %}
+{% set page_title = "Cuartos útiles" %}
+
+{% block content %}
+{% set filtered = filters.asignado or filters.q %}
+<div class="page-head">
+  <div>
+    <h1>Cuartos útiles</h1>
+    <p>{{ plural(total, "cuarto útil", "cuartos útiles") }}{% if filtered %} con esos filtros{% endif %}.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('web.storage_new') }}">Crear cuarto útil</a>
+  </div>
+</div>
+
+{{ structure_tabs("cuartos") }}
+
+<form class="filters" method="get" action="{{ url_for('web.structure_storage') }}" role="search" aria-label="Filtrar cuartos útiles">
+  <div class="field">
+    <label for="asignado">Asignación</label>
+    <select id="asignado" name="asignado" data-autosubmit>
+      <option value="">Todos</option>
+      {% for value, label in assigned_options %}<option value="{{ value }}"{% if filters.asignado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field grow">
+    <label for="q">Buscar</label>
+    <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off" placeholder="Código del cuarto">
+  </div>
+  <button type="submit" class="btn">Filtrar</button>
+  {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.structure_storage') }}">Quitar filtros</a>{% endif %}
+</form>
+
+<section class="card" aria-label="Lista de cuartos útiles">
+  {% if rooms %}
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">Cuartos útiles de la unidad</caption>
+      <thead>
+        <tr>
+          <th scope="col">Código</th>
+          <th scope="col">Apartamento</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for room in rooms %}
+        <tr>
+          <td><a href="{{ url_for('web.storage_edit', room_id=room.id) }}">{{ room.code }}</a></td>
+          <td data-label="Apartamento">{{ room.apartment or "Sin asignar" }}</td>
+          <td class="actions"><a class="btn btn-quiet btn-small" href="{{ url_for('web.storage_edit', room_id=room.id) }}">Editar</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ pager(page, pages) }}
+  {% else %}
+  <p class="empty">{% if filtered %}No hay cuartos útiles con esos filtros.{% else %}Todavía no hay cuartos útiles.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

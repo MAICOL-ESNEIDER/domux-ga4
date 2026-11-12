@@ -1,0 +1,42 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import field, select %}
+{% set page_title = title %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p>{{ intro }}</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ back }}">Volver</a>
+  </div>
+</div>
+
+<form method="post" action="{{ action }}" class="card form-narrow" aria-label="{{ title }}">
+  {{ csrf_input() }}
+  {% for item in fields %}
+    {% if item.kind == "select" %}
+    {{ select(item.id, item.label, item.options, item.value, required=item.required, help=item.help, blank=item.blank) }}
+    {% else %}
+    {{ field(item.id, item.label, item.value, type=item.kind, required=item.required, help=item.help,
+             maxlength=item.maxlength, extra=item.extra) }}
+    {% endif %}
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit" class="btn">{{ submit }}</button>
+    <a class="btn btn-quiet" href="{{ back }}">Cancelar</a>
+  </div>
+</form>
+
+{% if retire %}
+<section class="card form-narrow" aria-labelledby="retire-title">
+  <h2 id="retire-title">{{ retire.label }}</h2>
+  <p>{{ retire.explanation }}</p>
+  <form method="post" action="{{ retire.action }}">
+    {{ csrf_input() }}
+    <button type="submit" class="btn btn-danger" data-confirm="{{ retire.confirm }}" data-confirm-label="Retirar">{{ retire.label }}</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

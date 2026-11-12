@@ -113,6 +113,20 @@
     });
   });
 
+  // --- Campos que solo aplican a un rol -----------------------------------------------------------
+  // <select data-role-select> y bloques <div data-role-only="RESIDENT">: el bloque se esconde si el
+  // rol elegido es otro. Sin JavaScript se ven todos y el servidor ignora los que no corresponden.
+  var roleSelect = document.querySelector("[data-role-select]");
+  if (roleSelect) {
+    var refreshRoleFields = function () {
+      document.querySelectorAll("[data-role-only]").forEach(function (block) {
+        block.hidden = block.dataset.roleOnly.split(" ").indexOf(roleSelect.value) === -1;
+      });
+    };
+    roleSelect.addEventListener("change", refreshRoleFields);
+    refreshRoleFields();
+  }
+
   // --- Filtros que se aplican al cambiar ------------------------------------------------------------
   // <select data-autosubmit> dentro de un formulario GET.
   document.addEventListener("change", function (event) {
