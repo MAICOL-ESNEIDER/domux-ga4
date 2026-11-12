@@ -27,6 +27,7 @@
         <li>
           <a href="{{ page.url }}"{% if page.active %} aria-current="page"{% endif %}>
             <span class="nav-icon">{{ icon(page.icon) }}</span>{{ page.label }}
+            {% if page.badge %}<span class="nav-badge"><span class="sr-only">Sin leer: </span>{{ page.badge }}</span>{% endif %}
           </a>
         </li>
         {% endfor %}

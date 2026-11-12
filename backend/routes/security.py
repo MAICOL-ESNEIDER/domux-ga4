@@ -859,3 +859,18 @@ def mark_notification_read(notification_id):
     notification.is_read = True
     db.session.commit()
     return jsonify({"message": "Notificación marcada como leída", "notification": notification.to_dict()})
+
+
+@bp.put("/notifications/read-all")
+@token_required
+@role_required("ADMIN", "GUARD", "RESIDENT")
+def mark_all_notifications_read():
+    """Marca como leídas todas las notificaciones de quien consulta, en una sola instrucción."""
+    updated = Notification.query.filter_by(user_id=g.current_user.id, is_read=False).update(
+        {"is_read": True}, synchronize_session=False
+    )
+    db.session.commit()
+    return jsonify({
+        "message": "Notificaciones marcadas como leídas" if updated else "No tenías notificaciones sin leer",
+        "updatedCount": updated,
+    })

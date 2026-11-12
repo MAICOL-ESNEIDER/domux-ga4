@@ -32,7 +32,9 @@ def init_web(app):
     from web import (  # noqa: F401
         pages,
         views_auth,
+        views_notifications,
         views_panel,
+        views_reservations,
     )
 
     app.register_blueprint(bp)

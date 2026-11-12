@@ -62,6 +62,14 @@ def configure(app):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=SESSION_HOURS),
     )
 
+    @app.before_request
+    def start_web_request():
+        # Cada página parte sin datos de la anterior. (En el servidor ya es así; en las pruebas,
+        # que comparten un solo contexto, hace falta limpiarlos.)
+        if is_web_path(request.path):
+            for key in ("web_user", "unread_count"):
+                g.pop(key, None)
+
     @app.after_request
     def add_security_headers(response):
         if not is_web_path(request.path):

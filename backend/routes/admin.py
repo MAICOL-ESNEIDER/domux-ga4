@@ -36,6 +36,7 @@ from services.structure_service import (
     ensure_unit,
     find_apartment,
 )
+from services.summary_service import admin_summary
 from validators import (
     HOUSEHOLD_RELATIONSHIPS,
     OCCUPANCY_TYPES,
@@ -106,6 +107,14 @@ def post_import_census():
         # Las cuentas nuevas nacen con una clave al azar que nadie conoce (sin contraseña común).
         message += " Los residentes nuevos aún no tienen contraseña: asígnala desde la lista de usuarios."
     return jsonify({"message": message, **result})
+
+
+@bp.get("/admin/summary")
+@token_required
+@role_required("ADMIN")
+def get_admin_summary():
+    """Lo pendiente de hoy: contadores y las PQRS y reservas más urgentes (HU-081)."""
+    return jsonify(admin_summary(g.current_user))
 
 
 @bp.get("/admin/export/legal-report")

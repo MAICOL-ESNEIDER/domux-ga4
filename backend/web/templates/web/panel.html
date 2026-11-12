@@ -1,11 +1,122 @@
 {% extends "web/base.html" %}
+{% from "web/_macros.html" import counter, status_badge, badge %}
 {% set page_title = "Inicio" %}
 
 {% block content %}
 <div class="page-head">
   <div>
     <h1>Hola, {{ web_user.name }}</h1>
-    <p>Aquí vas a ver lo que hay que atender hoy.</p>
+    <p>Esto es lo que hay por atender hoy, {{ today | date_es }}.</p>
+  </div>
+  <div class="actions">
+    {% if page_exists("web.announcement_new") %}<a class="btn" href="{{ url_for('web.announcement_new') }}">Publicar comunicado</a>{% endif %}
+    {% if page_exists("web.user_new") %}<a class="btn btn-outline" href="{{ url_for('web.user_new') }}">Crear usuario</a>{% endif %}
   </div>
 </div>
+
+{% if not loaded %}
+<p class="empty">No pudimos cargar lo pendiente. Recarga la página en un momento.</p>
+{% else %}
+
+{% set pqrs_link = url_for("web.pqrs_list") if page_exists("web.pqrs_list") else None %}
+{% set reservations_link = url_for("web.reservations_list") if page_exists("web.reservations_list") else None %}
+{% set packages_link = url_for("web.registry_packages") if page_exists("web.registry_packages") else None %}
+
+<section aria-label="Resumen de pendientes" class="grid grid-3 counters">
+  {{ counter(
+       counts.pqrsOpen, "PQRS abiertas",
+       (plural(counts.pqrsOverdue, "vencida", "vencidas") ~ " · " ~ plural(counts.pqrsDueSoon, "por vencer", "por vencer"))
+         if counts.pqrsOpen else "Todo al día",
+       pqrs_link, "is-alert" if counts.pqrsOverdue else ("is-warn" if counts.pqrsDueSoon else "")) }}
+  {{ counter(
+       counts.reservationsPending, "Reservas por aprobar",
+       "Esperan tu decisión" if counts.reservationsPending else "Ninguna pendiente",
+       reservations_link, "is-warn" if counts.reservationsPending else "") }}
+  {{ counter(
+       counts.packagesOver48, "Paquetes con más de 48 horas",
+       (plural(counts.packagesOver72, "lleva", "llevan") ~ " más de 72 horas") if counts.packagesOver72 else "Sin reclamar en portería",
+       packages_link, "is-alert" if counts.packagesOver72 else ("is-warn" if counts.packagesOver48 else "")) }}
+</section>
+
+<section class="card" aria-labelledby="urgent-pqrs">
+  <h2 id="urgent-pqrs">PQRS más urgentes</h2>
+  {% if urgent_pqrs %}
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">PQRS en curso, de la más urgente a la menos urgente</caption>
+      <thead>
+        <tr>
+          <th scope="col">Radicado</th>
+          <th scope="col">Asunto</th>
+          <th scope="col">Apartamento</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Plazo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in urgent_pqrs %}
+        <tr>
+          <td class="nowrap mono">
+            {% if page_exists("web.pqrs_detail") %}<a href="{{ url_for('web.pqrs_detail', pqrs_id=row.id) }}">{{ row.radicado }}</a>{% else %}{{ row.radicado }}{% endif %}
+          </td>
+          <td>{{ row.subject }}<br><small class="muted">{{ row.category }}</small></td>
+          <td>{{ row.apartment or "—" }}<br><small class="muted">{{ row.residentName }}</small></td>
+          <td>{{ status_badge("pqrs", row.status) }}</td>
+          <td>
+            {{ status_badge("semaphore", row.semaphore) }}
+            <br><small>{{ deadline_text(row.daysRemaining, row.dueDate) }}</small>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pqrs_link %}<p class="mt-1 mb-0"><a href="{{ pqrs_link }}">Ver todas las PQRS</a></p>{% endif %}
+  {% else %}
+  <p class="empty">No hay PQRS en trámite. Todo está al día.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="pending-reservations">
+  <h2 id="pending-reservations">Reservas por aprobar</h2>
+  {% if pending_reservations %}
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">Reservas que esperan tu decisión, las de fecha más próxima primero</caption>
+      <thead>
+        <tr>
+          <th scope="col">Zona</th>
+          <th scope="col">Fecha y franja</th>
+          <th scope="col">Residente</th>
+          <th scope="col"><span class="sr-only">Decisión</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in pending_reservations %}
+        <tr>
+          <td>{{ row.commonAreaName or "—" }}{% if row.attendees %}<br><small class="muted">{{ plural(row.attendees, "persona", "personas") }}</small>{% endif %}</td>
+          <td>{{ row.date | date_es }}<br><small class="muted">{{ row.timeSlot }}</small></td>
+          <td>{{ row.residentName }}<br><small class="muted">{{ row.apartment or "—" }}</small></td>
+          <td class="actions">
+            <form method="post" action="{{ url_for('web.reservation_decide', res_id=row.id) }}" class="inline">
+              {{ csrf_input() }}
+              <input type="hidden" name="next" value="{{ url_for('web.panel') }}">
+              <button type="submit" class="btn btn-small" name="decision" value="aprobada">Aprobar</button>
+              <button type="submit" class="btn btn-danger btn-small" name="decision" value="rechazada"
+                      data-confirm="¿Rechazar la reserva de {{ row.residentName }}? Se le avisará al residente."
+                      data-confirm-label="Rechazar">Rechazar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if reservations_link %}<p class="mt-1 mb-0"><a href="{{ reservations_link }}">Ver todas las reservas</a></p>{% endif %}
+  {% else %}
+  <p class="empty">No hay reservas esperando decisión.</p>
+  {% endif %}
+</section>
+
+{% endif %}
 {% endblock %}

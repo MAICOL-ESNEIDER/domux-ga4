@@ -8,7 +8,8 @@ from flask import current_app, g, render_template, request, url_for
 from markupsafe import Markup
 
 from extensions import db
-from web import bp
+from models import Notification
+from web import bp, texts
 from web.security import csrf_token, current_admin
 
 #: El menú de la barra lateral. Es el mismo de la app, agrupado como lo aprobó el equipo (DEC-097):
@@ -71,6 +72,27 @@ def csrf_input():
     return Markup('<input type="hidden" name="csrf_token" value="{}">').format(csrf_token())
 
 
+def page_exists(endpoint):
+    """Dice si la web ya tiene esa página (para no mostrar enlaces a lo que todavía no existe)."""
+    return endpoint in current_app.view_functions
+
+
+def page_url(page):
+    """La dirección de esta misma página en otra página de la lista, conservando los filtros."""
+    values = {**(request.view_args or {}), **request.args.to_dict(), "page": page}
+    return url_for(request.endpoint, **values)
+
+
+def unread_notifications():
+    """Cuántas notificaciones sin leer tiene el administrador de la sesión (se consulta una vez por página)."""
+    user = g.get("web_user")
+    if user is None:
+        return 0
+    if "unread_count" not in g:
+        g.unread_count = Notification.query.filter_by(user_id=user.id, is_read=False).count()
+    return g.unread_count
+
+
 def menu_groups():
     """Los grupos del menú con sus páginas, marcando en la que está la persona."""
     current = request.endpoint or ""
@@ -78,13 +100,15 @@ def menu_groups():
     for title, pages in MENU:
         items = []
         for label, endpoint, icon_name, prefix in pages:
-            if endpoint not in current_app.view_functions:
+            if not page_exists(endpoint):
                 continue
             items.append({
                 "label": label,
                 "url": url_for(endpoint),
                 "icon": icon_name,
                 "active": current.startswith(prefix),
+                # Los avisos sin leer se ven desde cualquier página.
+                "badge": unread_notifications() if endpoint == "web.notifications_list" else 0,
             })
         if items:
             groups.append({"title": title, "pages": items})
@@ -94,13 +118,25 @@ def menu_groups():
 @bp.app_context_processor
 def inject_layout():
     """Lo que toda plantilla de la web puede usar sin que cada página lo pase."""
-    return {
-        "csrf_input": csrf_input,
-        "icon": icon,
-        "menu_groups": menu_groups,
-        "web_user": g.get("web_user"),
-        "role_labels": ROLE_LABELS,
-    }
+    return {"web_user": g.get("web_user"), "role_labels": ROLE_LABELS}
+
+
+# Funciones disponibles en todas las plantillas, también dentro de los macros importados (los
+# macros no ven el contexto de la página, pero sí lo global).
+for _name, _function in (
+    ("csrf_input", csrf_input),
+    ("icon", icon),
+    ("menu_groups", menu_groups),
+    ("page_exists", page_exists),
+    ("page_url", page_url),
+    ("badge_info", texts.badge_info),
+    ("deadline_text", texts.deadline_text),
+    ("notification_type", texts.notification_type),
+    ("plural", texts.plural),
+):
+    bp.add_app_template_global(_function, _name)
+
+bp.add_app_template_filter(texts.date_es, "date_es")
 
 
 # --- Errores con el mismo diseño ------------------------------------------------------------------

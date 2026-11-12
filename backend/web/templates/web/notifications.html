@@ -1,0 +1,55 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import badge, pager %}
+{% set page_title = "Notificaciones" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Notificaciones</h1>
+    <p>{% if unread_total %}{{ plural(unread_total, "aviso sin leer", "avisos sin leer") }}{% else %}Estás al día.{% endif %}</p>
+  </div>
+  <div class="actions">
+    {% if unread_total %}
+    <form method="post" action="{{ url_for('web.notifications_read_all') }}" class="inline">
+      {{ csrf_input() }}
+      <button type="submit" class="btn btn-outline">Marcar todas como leídas</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Filtro de notificaciones">
+  <a href="{{ url_for('web.notifications_list') }}"{% if not only_unread %} aria-current="page"{% endif %}>Todas</a>
+  <a href="{{ url_for('web.notifications_list', filtro='sin-leer') }}"{% if only_unread %} aria-current="page"{% endif %}>Sin leer</a>
+</nav>
+
+<section class="card">
+  {% if rows %}
+  <ul class="list">
+    {% for item in rows %}
+    <li class="notification{% if not item.isRead %} is-unread{% endif %}">
+      <div class="grow">
+        <p class="mb-0">
+          <strong>{{ item.title }}</strong>
+          {{ badge(notification_type(item.type)) }}
+          {% if not item.isRead %}{{ badge("Nueva", "progress") }}{% endif %}
+        </p>
+        <p class="mb-0">{{ item.message }}</p>
+        <small class="muted">{{ item.createdAt | date_es }}</small>
+      </div>
+      {% if not item.isRead %}
+      <form method="post" action="{{ url_for('web.notification_read', notification_id=item.id) }}" class="inline">
+        {{ csrf_input() }}
+        {% if only_unread %}<input type="hidden" name="filtro" value="sin-leer">{% endif %}
+        <button type="submit" class="btn btn-quiet btn-small">Marcar como leída</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {{ pager(page, pages) }}
+  {% else %}
+  <p class="empty">{% if only_unread %}No tienes notificaciones sin leer.{% else %}Todavía no tienes notificaciones.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

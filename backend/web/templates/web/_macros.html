@@ -1,0 +1,31 @@
+{# Piezas que se repiten en varias páginas. #}
+
+{% macro badge(text, tone="neutral") -%}
+<span class="badge badge-{{ tone }}">{{ text }}</span>
+{%- endmacro %}
+
+{# Aviso de estado con el texto y el tono de la app: status_badge("pqrs", "abierta"). #}
+{% macro status_badge(kind, value) -%}
+{% set info = badge_info(kind, value) -%}
+<span class="badge badge-{{ info.tone }}">{{ info.label }}</span>
+{%- endmacro %}
+
+{# Contador grande del panel; si trae «href» es un enlace a la lista. #}
+{% macro counter(number, label, hint="", href=None, tone="") -%}
+{% if href %}<a class="counter {{ tone }}" href="{{ href }}">{% else %}<div class="counter {{ tone }}">{% endif %}
+  <span class="number">{{ number }}</span>
+  <span class="label">{{ label }}</span>
+  {% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+{% if href %}</a>{% else %}</div>{% endif %}
+{%- endmacro %}
+
+{# Botones «Anterior» y «Siguiente» de una lista paginada. #}
+{% macro pager(page, pages) -%}
+{% if pages > 1 %}
+<nav class="pager" aria-label="Páginas de la lista">
+  {% if page > 1 %}<a class="btn btn-quiet btn-small" href="{{ page_url(page - 1) }}">‹ Anterior</a>{% endif %}
+  <span>Página {{ page }} de {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-quiet btn-small" href="{{ page_url(page + 1) }}">Siguiente ›</a>{% endif %}
+</nav>
+{% endif %}
+{%- endmacro %}

@@ -147,6 +147,8 @@ main:focus { outline: none; }
 .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .split { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
 
+.counters { margin-bottom: 1.25rem; }
+
 .counter {
   display: block; text-decoration: none; color: var(--text);
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.25rem;
@@ -172,6 +174,9 @@ td.actions form { display: inline; }
 .list > li:last-child { border-bottom: 0; }
 
 .empty { color: var(--muted); padding: 1.25rem 0; text-align: center; }
+
+.notification { display: flex; gap: 1rem; align-items: flex-start; justify-content: space-between; }
+.notification.is-unread { box-shadow: inset 3px 0 0 var(--primary); padding-left: .85rem; }
 
 /* --- Botones, formularios y avisos -------------------------------------------------------------- */
 
@@ -287,8 +292,22 @@ dialog .dialog-actions { display: flex; gap: .5rem; justify-content: flex-end; m
   .menu-open body::after { content: ""; position: fixed; inset: 0; background: rgba(3, 8, 18, .6); z-index: 30; }
 }
 
+@media (max-width: 720px) {
+  /* Una tabla con .table-stack muestra cada fila como una tarjeta: nada queda escondido a la derecha.
+     Los encabezados siguen en la página para quien usa lector de pantalla. */
+  .table-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .table-stack, .table-stack tbody, .table-stack tr, .table-stack td { display: block; width: 100%; }
+  .table-stack tr { padding: .7rem 0; border-bottom: 1px solid var(--line); }
+  .table-stack tr:last-child { border-bottom: 0; }
+  .table-stack td { border: 0; padding: .15rem 0; }
+  .table-stack td.actions { display: flex; flex-wrap: wrap; gap: .5rem; padding-top: .5rem; white-space: normal; }
+}
+
 @media (max-width: 640px) {
   .who-name { display: none; }
+  /* El botón de cada aviso pasa debajo del texto para que no quede apretado. */
+  .notification { flex-direction: column; gap: .5rem; }
+  .notification form { align-self: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {
