@@ -203,7 +203,7 @@ def seed_if_empty():
     db.session.commit()
 
     db.session.add_all([
-        CommonArea(name="Salón social", capacity=40),
+        CommonArea(name="Salón social", capacity=40, allow_full_day=True),
         CommonArea(name="Gimnasio", capacity=15),
         CommonArea(name="Cancha múltiple", capacity=20),
         CommonArea(name="Zona BBQ", capacity=25),
