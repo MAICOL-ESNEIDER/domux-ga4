@@ -75,7 +75,7 @@ fun PackageListSection(
         add("En portería" to "pendiente")
         add("Por llegar" to "por_llegar")
         add("Entregados" to "entregado")
-        if (canRegister) add("Papelera" to "papelera")
+        if (canRegister) add("Archivados" to "archivados")
     }
     // Paquetes que llevan más de 48 horas esperando en la portería (HU-049, RN-018).
     val unclaimed = state.packages.filter { !it.isDeleted && it.claimAlert != null }
@@ -136,9 +136,9 @@ fun PackageListSection(
                             Text(
                                 when {
                                     state.loading -> "Cargando paquetes..."
-                                    state.statusFilter == "papelera" ->
-                                        "La papelera está vacía. Los paquetes entregados no se borran: " +
-                                            "quedan guardados y aquí se pueden restaurar."
+                                    state.statusFilter == "archivados" ->
+                                        "No hay paquetes archivados. Los paquetes no se borran: " +
+                                            "quedan guardados aquí y se pueden sacar de «Archivados»."
                                     filtering -> "No hay paquetes que coincidan con el filtro o búsqueda actual."
                                     else -> "Aún no hay paquetes registrados en el sistema."
                                 },
@@ -208,7 +208,7 @@ private fun PackageCard(
             ) {
                 Text(item.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
                 if (item.isDeleted) {
-                    DomuxStatusBadge("En papelera", DomuxBadgeTone.ALERT)
+                    DomuxStatusBadge("Archivado", DomuxBadgeTone.PROGRESS)
                 } else {
                     DomuxStatusBadge(
                         statusLabel,
@@ -242,8 +242,8 @@ private fun PackageCard(
             }
             if (canRegister) {
                 if (item.isDeleted) {
-                    // Los paquetes nunca se borran para siempre (DEC-090): solo se restauran.
-                    TextButton(onClick = onRestore, enabled = !busy) { Text("Restaurar") }
+                    // Los paquetes nunca se borran para siempre (DEC-090): solo se sacan de «Archivados».
+                    TextButton(onClick = onRestore, enabled = !busy) { Text("Sacar de archivados") }
                 } else {
                     if (item.status == "por_llegar") {
                         TextButton(onClick = { onStatusChange("pendiente") }, enabled = !busy) {
@@ -253,7 +253,7 @@ private fun PackageCard(
                     if (item.status != "entregado") {
                         TextButton(onClick = onDeliver, enabled = !busy) { Text("Marcar entregado") }
                     }
-                    TextButton(onClick = onMoveToTrash, enabled = !busy) { Text("Enviar a papelera") }
+                    TextButton(onClick = onMoveToTrash, enabled = !busy) { Text("Archivar") }
                 }
             } else if (item.status == "pendiente" && !item.isDeleted) {
                 // El residente genera el código para que otra persona recoja su paquete (HU-048).

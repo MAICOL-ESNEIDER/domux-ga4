@@ -5,17 +5,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.dracknoval.domux.data.CreateVisitQrPassRequest
 import com.dracknoval.domux.data.RegisterVisitRequest
@@ -271,6 +275,8 @@ private fun VisitCard(
             Text("Para: ${visit.residentName.orEmpty()} · ${visit.apartment.orEmpty()}")
             if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
                 Text("Documento: ${visit.visitorDocument}")
+            } else if (visit.documentRefused) {
+                Text("Documento: no quiso darlo")
             }
             MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType, "Foto del visitante")
             visit.description?.takeIf { it.isNotBlank() }?.let { Text("Pedido: $it") }
@@ -432,7 +438,8 @@ fun VisitRegistrationSection(
     var visitorName by rememberSaveable { mutableStateOf("") }
     var visitorDocument by rememberSaveable { mutableStateOf("") }
     var visitorType by rememberSaveable { mutableStateOf("visitante") }
-    var consent by rememberSaveable { mutableStateOf(false) }
+    // «dio» o «no»: el guardia siempre pide el documento y anota si la persona lo dio.
+    var documentChoice by rememberSaveable { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf<String?>(null) }
     var photoType by remember { mutableStateOf<String?>(null) }
     var photoName by remember { mutableStateOf<String?>(null) }
@@ -480,29 +487,24 @@ fun VisitRegistrationSection(
                     )
                 }
                 StayChips(stay, { stay = it })
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = consent,
-                        onCheckedChange = { checked ->
-                            consent = checked
-                            if (!checked) {
-                                visitorDocument = ""
-                                photoUrl = null
-                                photoType = null
-                                photoName = null
-                            }
+                VisitorDocumentSection(
+                    choice = documentChoice,
+                    onChoice = { chosen ->
+                        documentChoice = chosen
+                        if (chosen != DOCUMENT_GIVEN) {
+                            // Sin documento no se guarda nada de la persona: ni el número ni la foto.
+                            visitorDocument = ""
+                            photoUrl = null
+                            photoType = null
+                            photoName = null
                         }
-                    )
-                    Text("El visitante autoriza guardar su documento o foto (opcional)")
-                }
-                if (consent) {
-                    OutlinedTextField(
-                        value = visitorDocument,
-                        onValueChange = { visitorDocument = it },
-                        label = { Text("Documento (opcional)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    },
+                    document = visitorDocument,
+                    onDocument = { visitorDocument = it },
+                    attempted = attempted
+                )
+                if (documentChoice == DOCUMENT_GIVEN) {
+                    Text("Foto del visitante (opcional)", style = MaterialTheme.typography.titleSmall)
                     MediaAttachmentPicker(
                         photoName,
                         { url, type, name ->
@@ -519,17 +521,28 @@ fun VisitRegistrationSection(
                     onClick = {
                         attempted = true
                         val target = resident
+                        val given = documentChoice == DOCUMENT_GIVEN
+                        val documentProblem = when {
+                            documentChoice.isEmpty() -> DOCUMENT_MISSING_TEXT
+                            given && visitorDocument.isBlank() ->
+                                "Escribe el número del documento o marca «No quiso darlo»."
+                            else -> null
+                        }
                         if (target == null || visitorName.isBlank()) {
                             onMessage("Selecciona residente y escribe el nombre del visitante.")
+                        } else if (documentProblem != null) {
+                            onMessage(documentProblem)
                         } else {
                             val request = RegisterVisitRequest(
                                 residentId = target.id,
                                 visitorName = visitorName.trim(),
                                 type = visitorType,
-                                visitorDocument = visitorDocument.trim().ifEmpty { null },
-                                mediaConsent = consent,
-                                mediaUrl = if (consent) photoUrl else null,
-                                mediaType = if (consent) photoType else null,
+                                visitorDocument = if (given) visitorDocument.trim() else null,
+                                documentRefused = documentChoice == DOCUMENT_REFUSED,
+                                // Al dar el documento después del aviso, la persona acepta que se guarde.
+                                mediaConsent = given,
+                                mediaUrl = if (given) photoUrl else null,
+                                mediaType = if (given) photoType else null,
                                 description = description.trim().ifEmpty { null },
                                 expectedStayMinutes = stay
                             )
@@ -537,7 +550,7 @@ fun VisitRegistrationSection(
                                 resident = null
                                 visitorName = ""
                                 visitorDocument = ""
-                                consent = false
+                                documentChoice = ""
                                 photoUrl = null
                                 photoType = null
                                 photoName = null
@@ -552,6 +565,79 @@ fun VisitRegistrationSection(
                 ) { Text("Registrar visita") }
             }
         }
+    }
+}
+
+private const val DOCUMENT_GIVEN = "dio"
+private const val DOCUMENT_REFUSED = "no"
+private const val DOCUMENT_MISSING_TEXT =
+    "Pide el documento a la persona. Si no lo quiere dar, marca «No quiso darlo»."
+
+/**
+ * El documento del visitante. El guardia siempre lo pide y antes le dice a la persona para qué es
+ * (aviso de la Ley 1581 de 2012, de protección de datos). Si lo da, se anota con su número; si no
+ * lo quiere dar, queda anotado así. Con las dos opciones la visita se registra.
+ */
+@Composable
+private fun VisitorDocumentSection(
+    choice: String,
+    onChoice: (String) -> Unit,
+    document: String,
+    onDocument: (String) -> Unit,
+    attempted: Boolean
+) {
+    Text("Documento del visitante *", style = MaterialTheme.typography.titleSmall)
+    Text(
+        "Antes de pedirlo, dile a la persona: «Le pedimos su documento solo para saber quién entra a la " +
+            "unidad y por seguridad. Lo guarda la administración, no se usa para nada más y usted puede " +
+            "pedirle verlo, corregirlo o borrarlo.»",
+        style = MaterialTheme.typography.bodyMedium,
+        color = DomuxColor.TextSoft
+    )
+    Column(Modifier.selectableGroup()) {
+        DocumentChoiceRow("Dio su documento", choice == DOCUMENT_GIVEN) { onChoice(DOCUMENT_GIVEN) }
+        DocumentChoiceRow("No quiso darlo", choice == DOCUMENT_REFUSED) { onChoice(DOCUMENT_REFUSED) }
+    }
+    when (choice) {
+        DOCUMENT_GIVEN -> {
+            val missing = attempted && document.isBlank()
+            OutlinedTextField(
+                value = document,
+                onValueChange = { if (it.length <= 40) onDocument(it) },
+                label = { Text("Número de documento *") },
+                isError = missing,
+                supportingText = {
+                    Text(
+                        if (missing) "Escribe el número del documento"
+                        else "Queda anotado que la persona aceptó que se guarde su documento y, si la tomas, su foto."
+                    )
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        DOCUMENT_REFUSED -> Text(
+            "Queda anotado que no quiso darlo. La visita se registra igual y el residente decide si la deja entrar.",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        else -> if (attempted) {
+            Text(DOCUMENT_MISSING_TEXT, color = DomuxColor.Bad, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/** Una opción de la pregunta del documento; toda la fila se toca (mínimo 48 dp de alto). */
+@Composable
+private fun DocumentChoiceRow(text: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Text(text, modifier = Modifier.padding(start = 8.dp))
     }
 }
 

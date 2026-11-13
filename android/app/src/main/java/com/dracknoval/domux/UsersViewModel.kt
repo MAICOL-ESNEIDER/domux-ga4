@@ -108,6 +108,7 @@ data class NewUserForm(
         listOf(name, lastName, email, phone, documentId).any { it.isBlank() } ->
             "Completa todos los campos obligatorios."
         !email.trim().contains("@") -> "Revisa el correo: le falta la @."
+        phoneProblem(phone) != null -> phoneProblem(phone)
         !validStrongPassword(password) ->
             "La contraseña temporal debe tener 8 caracteres o más, con mayúscula, minúscula, número y símbolo."
         isResident && apartment == null -> "Elige el apartamento del residente."
@@ -289,7 +290,7 @@ class UsersViewModel : DomuxViewModel() {
                             role = form.role,
                             apartmentId = if (form.isResident) form.apartment?.id else null,
                             lastName = form.lastName.trim(),
-                            phone = form.phone.trim(),
+                            phone = phoneToSend(form.phone),
                             documentId = form.documentId.trim(),
                             occupancyType = form.occupancyType,
                             dataProcessingConsent = form.isResident && form.consentConfirmed,
@@ -323,6 +324,7 @@ class UsersViewModel : DomuxViewModel() {
             listOf(draft.name, draft.lastName, draft.email, draft.phone, draft.documentId).any { it.isBlank() } ->
                 "Completa los campos obligatorios."
             !draft.email.trim().contains("@") -> "Revisa el correo: le falta la @."
+            phoneProblem(draft.phone) != null -> phoneProblem(draft.phone)
             resident && draft.apartment == null -> "Elige el apartamento del residente."
             becomesResident && !draft.consent -> "Confirma que el residente autorizó el tratamiento de sus datos."
             else -> null
@@ -335,7 +337,7 @@ class UsersViewModel : DomuxViewModel() {
             name = draft.name.trim(),
             lastName = draft.lastName.trim(),
             email = draft.email.trim().lowercase(),
-            phone = draft.phone.trim(),
+            phone = phoneToSend(draft.phone),
             documentId = draft.documentId.trim(),
             role = draft.role,
             apartmentId = if (resident) draft.apartment?.id else null,

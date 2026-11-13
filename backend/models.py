@@ -51,7 +51,7 @@ MOVEMENT_TYPES = ("entrada", "salida")
 def package_wait(status, is_deleted, arrived_at, now=None):
     """Cuánto lleva un paquete sin reclamar y su color de alerta: ``(minutos, alerta)`` (RN-018).
 
-    Un paquete que no espera a su dueño (no está «pendiente», está en la papelera o no tiene hora de
+    Un paquete que no espera a su dueño (no está «pendiente», está archivado o no tiene hora de
     llegada) da ``(None, None)``. La alerta es «rojo» con más de 72 horas, «naranja» con más de 48 o
     None. Es la regla de ``PackageItem`` para quien tiene solo las columnas, como las listas livianas.
     """
@@ -241,14 +241,21 @@ class User(db.Model):
         }
 
     def to_guard_summary(self):
-        """Lo que portería necesita para avisar o entregar (SEC-015 y ADR-015)."""
+        """Lo que portería ve en la lista del buscador: nombre y apartamento (SEC-015 y ADR-015).
+
+        El teléfono no va en la lista: se pide aparte, solo del residente que el guardia elige
+        (``to_guard_contact``).
+        """
         return {
             "id": self.id,
             "name": self.full_name,
-            "phone": self.phone or "",
             "apartment": self.apartment,
             "apartmentNumber": self.apartment_number,
         }
+
+    def to_guard_contact(self):
+        """El residente que portería eligió, con su teléfono para llamarlo o avisarle."""
+        return {**self.to_guard_summary(), "phone": self.phone or ""}
 
     def to_resident_summary(self):
         return {
@@ -1329,6 +1336,8 @@ class Visit(db.Model):
     registered_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     visitor_name = db.Column(db.String(120), nullable=False)
     visitor_document = db.Column(db.String(40), nullable=True)
+    # true si el guardia pidió el documento y la persona no lo quiso dar (queda anotado así).
+    document_refused = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     visitor_photo_url = db.Column(db.Text, nullable=True)
     visitor_photo_type = db.Column(db.String(20), nullable=True)
     media_consent = db.Column(db.Boolean, default=False, nullable=False)
@@ -1373,6 +1382,7 @@ class Visit(db.Model):
             "residentId": self.resident_id,
             "visitorName": self.visitor_name or "",
             "visitorDocument": self.visitor_document or "",
+            "documentRefused": bool(self.document_refused),
             "visitorPhotoUrl": self.visitor_photo_url,
             "visitorPhotoType": self.visitor_photo_type,
             "mediaConsent": self.media_consent,

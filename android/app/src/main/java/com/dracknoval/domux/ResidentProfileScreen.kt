@@ -69,10 +69,7 @@ private fun ProfileContent(
                 state.email, viewModel::onEmail,
                 label = { Text("Correo") }, singleLine = true, modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
-                state.phone, viewModel::onPhone,
-                label = { Text("Teléfono") }, singleLine = true, modifier = Modifier.fillMaxWidth()
-            )
+            DomuxPhoneField(state.phone, viewModel::onPhone, error = state.phoneError)
             OutlinedTextField(
                 state.socialNetworks, viewModel::onSocialNetworks,
                 label = { Text("Redes sociales (opcional)") }, modifier = Modifier.fillMaxWidth()

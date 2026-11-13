@@ -218,12 +218,12 @@ class WebPackageListTests(RegistryWebCase):
         self.assertIn("<h1>Paquetes</h1>", body)
         self.assertIn("5 paquetes", body)
         self.assertIn("Es solo de consulta", body)
-        for label in ("Todos (5)", "En portería (2)", "Por llegar (1)", "Entregados (1)", "Papelera (1)"):
+        for label in ("Todos (5)", "En portería (2)", "Por llegar (1)", "Entregados (1)", "Archivados (1)"):
             self.assertIn(label, body)
         self.assertRegex(body, r'aria-current="page">Todos \(5\)')
-        # Del más reciente al más antiguo, también la papelera.
+        # Del más reciente al más antiguo, también los archivados.
         self.assertInOrder(body, "Perdido", "Libros", "Televisor", "Sobre", "Caja grande")
-        self.assertIn("También los de la papelera".lower(), body.lower())
+        self.assertIn("También los archivados".lower(), body.lower())
 
     def test_each_row_says_who_where_and_how_long_it_has_been_waiting(self):
         self.package(hours=80, description="Caja grande", carrier="Servientrega", tracking_number="SV-100")
@@ -276,7 +276,7 @@ class WebPackageListTests(RegistryWebCase):
             "pendiente": ("En la portería", ("Anunciado", "Entregado ayer", "De la papelera")),
             "por_llegar": ("Anunciado", ("En la portería", "Entregado ayer", "De la papelera")),
             "entregado": ("Entregado ayer", ("En la portería", "Anunciado", "De la papelera")),
-            "papelera": ("De la papelera", ("En la portería", "Anunciado", "Entregado ayer")),
+            "archivados": ("De la papelera", ("En la portería", "Anunciado", "Entregado ayer")),
         }
         for tab, (present, absent) in expected.items():
             with self.subTest(tab=tab):
@@ -292,15 +292,15 @@ class WebPackageListTests(RegistryWebCase):
         body = self.main_of(self.page("/web/paqueteria?estado=entregado"))
 
         self.assertRegex(body, r"Entregado el \d{2}/\d{2}/\d{4} \d{2}:\d{2} a Tercero Pérez")
-        self.assertIn("pasan a la papelera", body)
+        self.assertIn("pasan a «Archivados»", body)
 
     def test_the_trash_explains_what_it_is_and_marks_each_package(self):
         self.trash(self.package(status="entregado", description="Vieja", delivered_at=utc_now() - timedelta(days=9)))
 
-        body = self.main_of(self.page("/web/paqueteria?estado=papelera"))
+        body = self.main_of(self.page("/web/paqueteria?estado=archivados"))
 
         self.assertIn("la portería ya no ve en su lista", body)
-        self.assertIn("En la papelera", body)
+        self.assertIn("Archivado", body)
 
     def test_the_search_finds_in_the_whole_history_and_keeps_the_tab(self):
         self.package(hours=60, description="Caja grande", carrier="Servientrega", tracking_number="SV-100")
@@ -322,7 +322,7 @@ class WebPackageListTests(RegistryWebCase):
         self.assertNotIn("Antigua", body)
         self.assertIn("Todos (2)", body)
         self.assertIn("En portería (1)", body)
-        self.assertIn("Papelera (1)", body)
+        self.assertIn("Archivados (1)", body)
 
     def test_a_search_without_results_says_so_and_can_be_cleared(self):
         self.package()
@@ -341,7 +341,7 @@ class WebPackageListTests(RegistryWebCase):
             "pendiente": "No hay paquetes esperando en la portería.",
             "por_llegar": "No hay paquetes anunciados que estén por llegar.",
             "entregado": "No hay paquetes entregados en los últimos 7 días.",
-            "papelera": "La papelera de paquetes está vacía.",
+            "archivados": "No hay paquetes archivados.",
         }
         for tab, text in expected.items():
             with self.subTest(tab=tab):
@@ -455,16 +455,16 @@ class WebPackageDetailTests(RegistryWebCase):
         self.assertIn("Tercero Pérez", article)
         self.assertNotIn("Tiempo en portería", article)
 
-    def test_a_package_in_the_trash_says_who_sent_it_there(self):
+    def test_an_archived_package_says_who_archived_it(self):
         item = self.trash(self.package(status="entregado", description="Vieja"), by=self.guard)
 
         article = self.page(f"/web/paqueteria/{item.id}").split('<article class="card"', 1)[1]
 
-        self.assertIn("Este paquete está en la papelera", article)
-        self.assertIn("lo quitó Guardia", article)
+        self.assertIn("Este paquete está archivado", article)
+        self.assertIn("lo archivó Guardia", article)
         self.assertNotIn("pasó solo", article)
 
-    def test_a_package_that_went_to_the_trash_by_itself_says_so(self):
+    def test_a_package_that_was_archived_by_itself_says_so(self):
         item = self.trash(self.package(status="entregado", description="Vieja"))
 
         article = self.page(f"/web/paqueteria/{item.id}").split('<article class="card"', 1)[1]
@@ -728,6 +728,15 @@ class WebVisitDetailTests(RegistryWebCase):
 
     def article(self, visit):
         return self.page(f"/web/visitas/{visit.id}").split('<article class="card" aria-labelledby="detail-title">', 1)[1]
+
+    def test_a_visitor_who_did_not_give_the_document_says_so(self):
+        refused = self.visit(name="Sin documento", document_refused=True)
+        given = self.visit(name="Con documento", visitor_document="99887766", media_consent=True)
+
+        self.assertIn("<dt>Documento</dt><dd>No quiso darlo</dd>", self.article(refused))
+        given_article = self.article(given)
+        self.assertIn("<dt>Documento</dt><dd>99887766</dd>", given_article)
+        self.assertNotIn("No quiso darlo", given_article)
 
     def test_the_visit_opens_next_to_the_list_with_its_data(self):
         visit = self.make_complete_visit()

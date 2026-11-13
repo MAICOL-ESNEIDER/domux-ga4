@@ -352,7 +352,7 @@ class PackageTests(unittest.TestCase):
         db.session.commit()
         trashed = self.lookup(code["qrData"])
         self.assertEqual(trashed.status_code, 409)
-        self.assertIn("papelera", trashed.get_json()["error"])
+        self.assertIn("archivado", trashed.get_json()["error"])
 
         package.is_deleted = False
         package.status = "entregado"

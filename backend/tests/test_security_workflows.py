@@ -78,6 +78,8 @@ class SecurityWorkflowTests(unittest.TestCase):
             "visitorName": "Visita de prueba",
             "type": "visitante",
         }
+        if "visitorDocument" not in fields:
+            data["documentRefused"] = True   # aquí no importa el documento: la persona no lo dio
         data.update(fields)
         return self.client.post("/api/visits", headers=self.auth(self.guard), json=data)
 
@@ -189,9 +191,10 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(search.status_code, 200)
         self.assertEqual([item["id"] for item in search.get_json()["residents"]], [self.resident.id])
+        # Sin escribir nada, portería no ve a nadie (la lista no queda a la vista en la portería).
         missing_search = self.client.get("/api/residents", headers=self.auth(self.guard))
         self.assertEqual(missing_search.status_code, 200)
-        self.assertEqual(len(missing_search.get_json()["residents"]), 2)
+        self.assertEqual(missing_search.get_json()["residents"], [])
         admin_list = self.client.get("/api/residents", headers=self.auth(self.admin))
         self.assertEqual(admin_list.status_code, 200)
         self.assertEqual(len(admin_list.get_json()["residents"]), 2)

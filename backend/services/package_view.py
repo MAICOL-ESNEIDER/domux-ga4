@@ -20,9 +20,11 @@ from services.media import decode_media
 from time_utils import format_colombia, utc_now
 from validators import VALID_PACKAGE_STATUSES
 
-#: Los dos valores de ``status`` que no son un estado del paquete: los de la papelera y todos, también
-#: los de la papelera.
-TRASH_FILTER = "papelera"
+#: Los valores de ``status`` que no son un estado del paquete: los archivados y todos (también los
+#: archivados). «papelera» es el nombre de antes de «Archivados»: se sigue aceptando para las
+#: versiones de la app que todavía lo mandan.
+TRASH_FILTER = "archivados"
+LEGACY_TRASH_FILTER = "papelera"
 ALL_FILTER = "todos"
 
 _INVALID_STATUS = "Estado de paquete inválido"
@@ -33,21 +35,23 @@ _INVALID_STATUS = "Estado de paquete inválido"
 # ---------------------------------------------------------------------------
 
 def parse_status(value, allow_all=False):
-    """El estado pedido con ``?status=``: None (los que no están en la papelera), un estado, «papelera» o «todos».
+    """El estado pedido con ``?status=``: None (los no archivados), un estado, «archivados» o «todos».
 
     «todos» solo existe en la vista liviana (``allow_all``): reúne los de cualquier estado, también los
-    que están en la papelera, para buscar un paquete sin saber dónde quedó. Un valor desconocido da un
-    error 400.
+    archivados, para buscar un paquete sin saber dónde quedó. «papelera» vale lo mismo que
+    «archivados». Un valor desconocido da un error 400.
     """
     if value in (None, ""):
         return None
+    if value == LEGACY_TRASH_FILTER:
+        return TRASH_FILTER
     if value in VALID_PACKAGE_STATUSES or value == TRASH_FILTER or (allow_all and value == ALL_FILTER):
         return value
     raise ApiError(_INVALID_STATUS)
 
 
 def filter_status(query, status):
-    """Aplica el estado a una consulta de paquetes: sin él salen los que no están en la papelera."""
+    """Aplica el estado a una consulta de paquetes: sin él salen los que no están archivados."""
     if status == ALL_FILTER:
         return query
     if status == TRASH_FILTER:
@@ -85,7 +89,7 @@ def status_counts(query):
     """Cuántos paquetes hay de cada estado entre los que dejó la consulta (sin el filtro de estado).
 
     Son los números del filtro: los que esperan en portería, los que están por llegar, los entregados
-    (los tres sin contar los de la papelera), los de la papelera y el total.
+    (los tres sin contar los archivados), los archivados y el total.
     """
     rows = (
         query.order_by(None)
@@ -183,7 +187,7 @@ def summary_page(query, status, page, size):
 def detail_dict(package):
     """El paquete como lo entrega la API, pero sin la foto: en lugar de ``mediaUrl`` lleva ``hasMedia``.
 
-    Si está en la papelera dice quién lo mandó allá (``deletedByName``). La foto se pide aparte con
+    Si está archivado dice quién lo archivó (``deletedByName``). La foto se pide aparte con
     ``attachment``.
     """
     data = package.to_dict()

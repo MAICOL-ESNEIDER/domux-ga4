@@ -33,7 +33,7 @@ from services.structure_service import (
     ensure_unit,
 )
 from time_utils import colombia_today, to_colombia, utc_now
-from validators import validate_colombian_plate
+from validators import normalize_phone, validate_colombian_plate
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 CENSUS_HEADERS = (
@@ -248,7 +248,11 @@ def _upsert_census_row(row):
         user.last_name = row["last_name"].strip()
     user.email = email or user.email
     if "phone" in row:
-        user.phone = row["phone"].strip() or None
+        # Igual que en la app y la web: se guardan solo los 10 números (sin +57 ni espacios).
+        phone, phone_error = normalize_phone(row["phone"])
+        if phone_error:
+            raise ValueError(phone_error)
+        user.phone = phone or None
     if document_id:
         user.document_id = document_id
     user.role = "RESIDENT"

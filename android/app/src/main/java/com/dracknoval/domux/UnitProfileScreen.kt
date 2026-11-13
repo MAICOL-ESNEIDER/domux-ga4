@@ -164,7 +164,7 @@ private fun MemberForm(viewModel: UnitProfileViewModel) {
     OutlinedTextField(lastName, { lastName = it }, label = { Text("Apellido") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(document, { document = it }, label = { Text("Documento") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     DatePickerField("Fecha de nacimiento", birthDate, { birthDate = it }, allowFutureDates = false)
-    OutlinedTextField(phone, { phone = it }, label = { Text("Teléfono (opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    DomuxPhoneField(phone, { phone = it }, "Teléfono (opcional)")
     TextButton(onClick = { relationshipMenu = true }) { Text("Parentesco: ${relationshipLabel(relationship)}") }
     DropdownMenu(relationshipMenu, { relationshipMenu = false }) {
         householdRelationships.forEach { option ->

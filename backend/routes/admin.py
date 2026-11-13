@@ -40,6 +40,7 @@ from services.summary_service import admin_summary
 from validators import (
     HOUSEHOLD_RELATIONSHIPS,
     OCCUPANCY_TYPES,
+    normalize_phone,
     parse_optional_bool,
     require_non_empty_fields,
     validate_occupancy_type,
@@ -341,6 +342,9 @@ def create_user():
     for field in ("lastName", "phone", "documentId"):
         if field in data and not isinstance(data[field], str):
             return error_response(400, f"El campo '{field}' debe ser texto")
+    phone, phone_error = normalize_phone(data.get("phone"))
+    if phone_error:
+        return error_response(400, phone_error)
     if User.query.filter(db.func.lower(User.email) == email).first():
         return error_response(409, "Ese correo ya está registrado")
 
@@ -348,7 +352,7 @@ def create_user():
         name=data["name"].strip(),
         last_name=data.get("lastName", "").strip(),
         email=email,
-        phone=data.get("phone", "").strip(),
+        phone=phone,
         document_id=data.get("documentId", "").strip(),
         password_hash=generate_password_hash(data["password"]),
         role=role,
@@ -446,14 +450,15 @@ def update_user(user_id):
         if duplicate:
             return error_response(409, "Ese correo ya está registrado")
         user.email = email
-    for field, attribute, label in (
-        ("phone", "phone", "teléfono"),
-        ("documentId", "document_id", "documento"),
-    ):
-        if field in data:
-            if not isinstance(data[field], str):
-                return error_response(400, f"El {label} debe ser texto")
-            setattr(user, attribute, data[field].strip())
+    if "phone" in data:
+        phone, phone_error = normalize_phone(data["phone"])
+        if phone_error:
+            return error_response(400, phone_error)
+        user.phone = phone
+    if "documentId" in data:
+        if not isinstance(data["documentId"], str):
+            return error_response(400, "El documento debe ser texto")
+        user.document_id = data["documentId"].strip()
 
     if "role" in data:
         role = _normalize_role(data["role"])
@@ -558,18 +563,27 @@ def set_guard_pin(user_id):
     return jsonify({"message": "PIN asignado", "user": user.to_dict()})
 
 
+#: Portería ve pocos residentes a la vez y solo después de escribir algo: así en la pantalla del
+#: guardia no queda una lista de la unidad a la vista de quien esté en la portería.
+GUARD_SEARCH_MIN_CHARS = 2
+GUARD_SEARCH_LIMIT = 5
+ADMIN_SEARCH_LIMIT = 30
+
+
 @bp.get("/residents")
 @token_required
 @role_required("ADMIN", "GUARD")
 def get_residents():
     """Busca residentes activos para elegirlos en un formulario.
 
-    Portería solo recibe nombre, teléfono y apartamento, y no busca por correo
-    (SEC-015): es lo que necesita para avisar o entregar.
+    Portería solo recibe nombre y apartamento, no busca por correo (SEC-015) y
+    no recibe nada hasta escribir 2 letras; ve máximo 5 a la vez. El teléfono lo
+    pide aparte, del residente que elige (``/residents/<id>/contact``).
+    ``more`` dice si hay más resultados de los que llegaron: hay que escribir más.
 
     Con ``id`` devuelve solo a ese residente: así una pantalla que llega con el
     residente ya elegido (por ejemplo desde el perfil de su apartamento) lo
-    encuentra aunque no esté entre los primeros 30 de la lista.
+    encuentra aunque no esté entre los primeros de la lista.
     """
     is_guard = g.current_user.role == "GUARD"
     query = User.query.filter_by(role="RESIDENT").filter(User.is_active.is_(True))
@@ -579,6 +593,8 @@ def get_residents():
             return error_response(400, "El id del residente debe ser un número.")
         query = query.filter(User.id == int(resident_id))
     search = (request.args.get("search") or "").strip()
+    if is_guard and not resident_id and len(search) < GUARD_SEARCH_MIN_CHARS:
+        return jsonify({"residents": [], "more": False})
     if search:
         pattern = f"%{search}%"
         fields = [
@@ -591,9 +607,31 @@ def get_residents():
         if not is_guard:
             fields.append(User.email.ilike(pattern))
         query = query.filter(db.or_(*fields))
-    residents = query.order_by(User.name, User.last_name).limit(30).all()
+    limit = GUARD_SEARCH_LIMIT if is_guard else ADMIN_SEARCH_LIMIT
+    residents = query.order_by(User.name, User.last_name, User.id).limit(limit + 1).all()
     summary = User.to_guard_summary if is_guard else User.to_resident_summary
-    return jsonify({"residents": [summary(resident) for resident in residents]})
+    return jsonify({
+        "residents": [summary(resident) for resident in residents[:limit]],
+        "more": len(residents) > limit,
+    })
+
+
+@bp.get("/residents/<int:resident_id>/contact")
+@token_required
+@role_required("ADMIN", "GUARD")
+def get_resident_contact(resident_id):
+    """El residente que portería eligió en el buscador, con su teléfono.
+
+    Cada vez que un guardia lo pide queda anotado en el registro de auditoría:
+    se sabe quién vio el teléfono de quién.
+    """
+    resident = User.query.filter_by(id=resident_id, role="RESIDENT").filter(User.is_active.is_(True)).first()
+    if resident is None:
+        return error_response(404, "Residente no encontrado.")
+    if g.current_user.role == "GUARD":
+        add_audit_log("user", resident.id, "contact_viewed")
+        db.session.commit()
+    return jsonify({"resident": resident.to_guard_contact()})
 
 
 @bp.get("/admin/units")
@@ -754,13 +792,16 @@ def update_unit_profile():
         for field in ("lastName", "phone"):
             if member.get(field) is not None and not isinstance(member[field], str):
                 return error_response(400, f"El campo '{field}' del miembro debe ser texto.")
+        member_phone, phone_error = normalize_phone(member.get("phone"), f"El teléfono del miembro #{index + 1}")
+        if phone_error:
+            return error_response(400, phone_error)
         parsed_members.append({
             "id": member.get("id"),
             "name": member["name"].strip(),
             "last_name": (member.get("lastName") or "").strip(),
             "document_id": member["documentId"].strip(),
             "birth_date": birth_date.isoformat(),
-            "phone": (member.get("phone") or "").strip() or None,
+            "phone": member_phone or None,
             "relationship": relationship,
             "other_relationship": (other_relationship or "").strip() or None,
         })
@@ -909,9 +950,10 @@ def update_resident_profile():
         return error_response(400, "Indica al menos un dato permitido para actualizar.")
     user = g.current_user
     if "phone" in data:
-        if not isinstance(data["phone"], str) or len(data["phone"]) > 30:
-            return error_response(400, "El teléfono debe ser texto.")
-        user.phone = data["phone"].strip()
+        phone, phone_error = normalize_phone(data["phone"])
+        if phone_error:
+            return error_response(400, phone_error)
+        user.phone = phone
     if "socialNetworks" in data:
         if not isinstance(data["socialNetworks"], str) or len(data["socialNetworks"]) > 500:
             return error_response(400, "Las redes sociales deben ser texto de máximo 500 caracteres.")

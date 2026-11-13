@@ -152,6 +152,42 @@ def validate_media_fields(data, allow_document=False):
     return None
 
 
+#: Lo que se acepta al escribir un teléfono: números, espacios, guiones, puntos, paréntesis y un + al inicio.
+PHONE_TEXT = re.compile(r"\+?[\d\s().-]+")
+
+
+def normalize_phone(value, label="El teléfono"):
+    """Un teléfono de Colombia guardado solo con sus 10 números: «+57 300 123 4567» pasa a «3001234567».
+
+    Devuelve ``(números, None)`` o ``(None, error)``. Vacío es válido (el teléfono no es obligatorio en
+    todas partes) y queda como texto vacío. Se acepta el indicativo +57 (o 57) al inicio; lo que queda
+    debe tener 10 números: un celular empieza por 3 y un fijo por 60.
+    """
+    if value is None:
+        return "", None
+    if not isinstance(value, str):
+        return None, f"{label} debe ser texto."
+    text = value.strip()
+    if not text:
+        return "", None
+    problem = (
+        f"{label} debe tener 10 números: un celular empieza por 3 y un fijo por 60. "
+        "Puedes escribir +57 al inicio."
+    )
+    if len(text) > 30 or PHONE_TEXT.fullmatch(text) is None:
+        return None, problem
+    digits = re.sub(r"\D", "", text)
+    if text.startswith("+"):
+        if not digits.startswith("57"):
+            return None, "Solo se aceptan teléfonos de Colombia (+57)."
+        digits = digits[2:]
+    elif len(digits) == 12 and digits.startswith("57"):
+        digits = digits[2:]
+    if len(digits) != 10 or not (digits.startswith("3") or digits.startswith("60")):
+        return None, problem
+    return digits, None
+
+
 def validate_occupancy_type(value):
     return None if value in OCCUPANCY_TYPES else "Tipo de tenencia inválido."
 

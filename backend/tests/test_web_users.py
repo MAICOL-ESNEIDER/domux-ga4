@@ -127,6 +127,19 @@ class WebUsersTests(WebTestCase):
         self.assertNotIn(WEAK_PASSWORD, body)           # la contraseña nunca vuelve a la página
         self.assertIsNone(User.query.filter_by(email="laura-web@test.local").first())
 
+    def test_the_phone_is_saved_with_only_its_ten_digits(self):
+        self.assertIn("10 números: un celular empieza por 3", self.page("/web/usuarios/nuevo"))
+        response = self.post("/web/usuarios/nuevo", self.new_resident_form(phone="+57 322 333 4444"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(User.query.filter_by(email="laura-web@test.local").one().phone, "3223334444")
+
+    def test_a_wrong_phone_is_refused_with_the_servers_message(self):
+        response = self.post("/web/usuarios/nuevo", self.new_resident_form(phone="322 333"))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("El teléfono debe tener 10 números", self.text(response))
+        self.assertIn('value="322 333"', self.text(response))
+        self.assertIsNone(User.query.filter_by(email="laura-web@test.local").first())
+
     def test_a_repeated_email_is_refused(self):
         response = self.post("/web/usuarios/nuevo", self.new_resident_form(email="CARLOS-web@test.local"))
         self.assertEqual(response.status_code, 409)

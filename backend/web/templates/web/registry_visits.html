@@ -91,7 +91,8 @@
         <dt>Residente</dt><dd>{{ selected.residentName or "—" }}</dd>
         <dt>Apartamento</dt><dd>{{ selected.apartment or "—" }}</dd>
         {% if selected.description %}<dt>Detalles</dt><dd class="prewrap">{{ selected.description }}</dd>{% endif %}
-        {% if selected.visitorDocument %}<dt>Documento</dt><dd>{{ selected.visitorDocument }}</dd>{% endif %}
+        {% if selected.visitorDocument %}<dt>Documento</dt><dd>{{ selected.visitorDocument }}</dd>
+        {% elif selected.documentRefused %}<dt>Documento</dt><dd>No quiso darlo</dd>{% endif %}
         <dt>Llegó a la portería</dt>
         <dd>{{ selected.createdAt|date_es }}{% if selected.registeredByName %} · lo registró {{ selected.registeredByName }}{% endif %}</dd>
         {% if selected.authorizationMethod %}<dt>Autorización</dt><dd>{{ authorization_method_text(selected.authorizationMethod, true) }}</dd>{% endif %}

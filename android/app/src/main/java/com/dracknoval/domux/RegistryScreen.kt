@@ -141,7 +141,7 @@ fun RegistryScreen(
                     onDeliver = { packagesVm.startDelivery(it) },
                     onStatusChange = { item, status -> packagesVm.changeStatus(item, status) },
                     onMoveToTrash = { item: PackageItem ->
-                        confirmation = "¿Mover este paquete a la papelera?" to { packagesVm.moveToTrash(item) }
+                        confirmation = "¿Archivar este paquete? Sigue guardado y se puede sacar de «Archivados»." to { packagesVm.moveToTrash(item) }
                     },
                     onRestore = { packagesVm.restore(it) },
                     onCreatePickupCode = {}

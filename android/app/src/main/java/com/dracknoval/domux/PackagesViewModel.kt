@@ -20,7 +20,7 @@ data class DeliveryTarget(val item: PackageItem, val scannedCode: String? = null
 /** Todo lo que las pantallas de paquetes necesitan para dibujarse. */
 data class PackagesUiState(
     val packages: List<PackageItem> = emptyList(),
-    // null = todos; «pendiente», «por_llegar», «entregado» o «papelera».
+    // null = todos; «pendiente», «por_llegar», «entregado» o «archivados».
     val statusFilter: String? = null,
     val search: String = "",
     val loading: Boolean = false,
@@ -36,8 +36,8 @@ data class PackagesUiState(
 
 /**
  * ViewModel de los paquetes (HU-047, HU-048 y HU-049): lista con filtros, registro con
- * transportadora y guía, entrega con código y papelera. Un paquete nunca se borra del todo
- * (DEC-090): la papelera solo lo esconde y se puede restaurar.
+ * transportadora y guía, entrega con código y archivados. Un paquete nunca se borra del todo
+ * (DEC-090): archivarlo solo lo esconde de la lista y se puede sacar de «Archivados».
  */
 class PackagesViewModel : DomuxViewModel() {
     private val api = RetrofitClient.api
@@ -92,7 +92,7 @@ class PackagesViewModel : DomuxViewModel() {
         refresh()
     }
 
-    // --- Registro, estado y papelera ---------------------------------------------
+    // --- Registro, estado y archivados -------------------------------------------
 
     fun register(request: RegisterPackageRequest, onSuccess: () -> Unit) {
         viewModelScope.launch {
@@ -120,9 +120,9 @@ class PackagesViewModel : DomuxViewModel() {
     fun moveToTrash(item: PackageItem) {
         viewModelScope.launch {
             val response = withBusy {
-                attempt("No se pudo mover el paquete") { api.deletePackage(auth(), item.id) }
+                attempt("No se pudo archivar el paquete") { api.deletePackage(auth(), item.id) }
             } ?: return@launch
-            showSuccess(response.body()?.message ?: "Paquete movido a la papelera.")
+            showSuccess(response.body()?.message ?: "Paquete archivado.")
             loadPackages()
         }
     }
@@ -130,7 +130,7 @@ class PackagesViewModel : DomuxViewModel() {
     fun restore(item: PackageItem) {
         viewModelScope.launch {
             val response = withBusy {
-                attempt("No se pudo restaurar el paquete") { api.restorePackage(auth(), item.id) }
+                attempt("No se pudo sacar el paquete de archivados") { api.restorePackage(auth(), item.id) }
             } ?: return@launch
             showSuccess(response.body()?.message ?: "Paquete restaurado.")
             loadPackages()

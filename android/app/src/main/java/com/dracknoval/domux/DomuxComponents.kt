@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.heightIn
@@ -326,153 +327,222 @@ fun DomuxSectionTabs(tabs: List<String>, selectedIndex: Int, onSelect: (Int) -> 
         }
     }
 
+/** Desde cuántas letras busca el campo de residentes (a portería el servidor no le da nada antes). */
+private const val RESIDENT_SEARCH_MIN_CHARS = 2
+
+/** Cuántos residentes muestra la lista del buscador a la vez. */
+private const val RESIDENT_SEARCH_SHOWN = 5
+
+/**
+ * Buscador de residentes para elegir a quién va un paquete, una visita, una PQRS o una reserva.
+ * No busca hasta escribir 2 letras y muestra máximo 5, solo con nombre y apartamento: así la lista
+ * de la unidad no queda a la vista en la portería. Al elegir uno, portería pide su teléfono (el
+ * servidor anota quién lo vio) y sale con el botón «Llamar».
+ */
 @Composable
 fun DomuxResidentSearchField(
-        selectedResident: ResidentSummary?,
-        onSelectResident: (ResidentSummary?) -> Unit,
-        label: String = "Residente destinatario *"
-    ) {
-        var searchQuery by remember { mutableStateOf("") }
-        var results by remember { mutableStateOf<List<ResidentSummary>>(emptyList()) }
-        var searching by remember { mutableStateOf(false) }
-        var searchError by remember { mutableStateOf<String?>(null) }
+    selectedResident: ResidentSummary?,
+    onSelectResident: (ResidentSummary?) -> Unit,
+    label: String = "Residente destinatario *"
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<ResidentSummary>>(emptyList()) }
+    var more by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var contactLoading by remember { mutableStateOf(false) }
+    val currentSelection by rememberUpdatedState(selectedResident)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val query = searchQuery.trim()
+    val longEnough = query.length >= RESIDENT_SEARCH_MIN_CHARS
 
-        LaunchedEffect(searchQuery) {
-            delay(300)
-            searching = true
+    LaunchedEffect(query) {
+        if (!longEnough) {
+            results = emptyList()
+            more = false
             searchError = null
+            searching = false
+            return@LaunchedEffect
+        }
+        searching = true
+        searchError = null
+        try {
+            delay(300)
+            val response = RetrofitClient.api.getResidents(Session.bearer(), query)
+            if (response.isSuccessful) {
+                val found = response.body()?.residents.orEmpty()
+                results = found.take(RESIDENT_SEARCH_SHOWN)
+                more = response.body()?.more == true || found.size > RESIDENT_SEARCH_SHOWN
+            } else {
+                searchError = mensajeDeError(response.code(), response.errorBody()?.string())
+                results = emptyList()
+                more = false
+            }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            if (exception.message?.contains("left the composition", ignoreCase = true) == true) {
+                return@LaunchedEffect
+            }
+            searchError = "No se pudieron buscar residentes. Revisa tu conexión a internet e inténtalo de nuevo."
+            results = emptyList()
+            more = false
+        } finally {
+            searching = false
+        }
+    }
+
+    // Elige al residente. En portería pide su teléfono aparte; si no llega, queda elegido sin él.
+    fun choose(resident: ResidentSummary) {
+        searchQuery = ""
+        results = emptyList()
+        more = false
+        onSelectResident(resident)
+        if (!Session.isGuard) return
+        contactLoading = true
+        scope.launch {
             try {
-                val response = RetrofitClient.api.getResidents(
-                    Session.bearer(),
-                    searchQuery.trim().ifEmpty { null }
-                )
-                if (response.isSuccessful) {
-                    results = response.body()?.residents.orEmpty()
-                } else {
-                    searchError = mensajeDeError(response.code(), response.errorBody()?.string())
-                    results = emptyList()
+                val response = RetrofitClient.api.getResidentContact(Session.bearer(), resident.id)
+                val contact = response.body()?.resident
+                // Si mientras tanto tocaron «Cambiar», no se vuelve a elegir.
+                if (response.isSuccessful && contact != null && currentSelection?.id == resident.id) {
+                    onSelectResident(contact)
                 }
             } catch (exception: CancellationException) {
                 throw exception
-            } catch (exception: Exception) {
-                if (exception.message?.contains("left the composition", ignoreCase = true) == true) {
-                    return@LaunchedEffect
-                }
-                searchError = "No se pudieron buscar residentes: ${exception.message.orEmpty()}"
-                results = emptyList()
+            } catch (_: Exception) {
+                // Sin conexión: el residente queda elegido sin teléfono y el registro sigue igual.
             } finally {
-                searching = false
+                contactLoading = false
             }
         }
+    }
 
-        if (selectedResident != null) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = DomuxColor.Card,
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, DomuxColor.Line)
+    if (selectedResident != null) {
+        val phone = selectedResident.phone?.takeIf { it.isNotBlank() }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = DomuxColor.Card,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, DomuxColor.Line)
+        ) {
+            Row(
+                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(selectedResident.name, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            selectedResident.apartment ?: "Apartamento sin asignar",
-                            color = DomuxColor.TextMuted,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            selectedResident.phone?.takeIf { it.isNotBlank() } ?: "Sin teléfono",
-                            color = DomuxColor.TextMuted,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    TextButton(onClick = { onSelectResident(null) }) {
-                        Text("Cambiar", color = DomuxColor.Primary)
-                    }
-                }
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(label) },
-                    placeholder = { Text("Nombre, documento o apartamento") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    trailingIcon = {
-                        if (searching) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = DomuxColor.Primary,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = DomuxColor.Primary,
-                        unfocusedBorderColor = DomuxColor.FieldBorder,
-                        focusedLabelColor = DomuxColor.Primary,
-                        cursorColor = DomuxColor.Primary
-                    )
-                )
-                searchError?.let {
-                    Text(it, color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
-                }
-                if (results.isNotEmpty()) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = DomuxColor.Surface,
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, DomuxColor.Line)
-                    ) {
-                        Column(modifier = Modifier.padding(6.dp)) {
-                            results.take(6).forEach { resident ->
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onSelectResident(resident)
-                                            searchQuery = ""
-                                            results = emptyList()
-                                        },
-                                    color = Color.Transparent,
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        Text(resident.name, fontWeight = FontWeight.Medium)
-                                        Text(
-                                            listOfNotNull(resident.apartment, resident.phone?.takeIf(String::isNotBlank))
-                                                .joinToString(" · ")
-                                                .ifBlank { "Sin apartamento ni teléfono" },
-                                            color = DomuxColor.TextMuted,
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (searchQuery.isNotBlank() && !searching && searchError == null) {
+                    Text(selectedResident.name, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "No se encontraron residentes.",
+                        selectedResident.apartment ?: "Apartamento sin asignar",
+                        color = DomuxColor.TextMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        when {
+                            phone != null -> "Teléfono: $phone"
+                            contactLoading -> "Buscando el teléfono…"
+                            else -> "Sin teléfono registrado"
+                        },
                         color = DomuxColor.TextMuted,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+                if (phone != null) {
+                    TextButton(onClick = { dialPortal(context, phone) }) {
+                        Text("Llamar", color = DomuxColor.Primary)
+                    }
+                }
+                TextButton(onClick = { onSelectResident(null) }) {
+                    Text("Cambiar", color = DomuxColor.Primary)
+                }
+            }
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(label) },
+                placeholder = { Text("Nombre, apartamento o documento") },
+                supportingText = {
+                    if (!longEnough) Text("Escribe al menos 2 letras del nombre o del apartamento.")
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                trailingIcon = {
+                    if (searching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = DomuxColor.Primary,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = DomuxColor.Primary,
+                    unfocusedBorderColor = DomuxColor.FieldBorder,
+                    focusedLabelColor = DomuxColor.Primary,
+                    cursorColor = DomuxColor.Primary
+                )
+            )
+            searchError?.let {
+                Text(it, color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
+            }
+            if (results.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = DomuxColor.Surface,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, DomuxColor.Line)
+                ) {
+                    Column(modifier = Modifier.padding(6.dp)) {
+                        results.forEach { resident ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .clickable(onClickLabel = "Elegir a ${resident.name}") { choose(resident) },
+                                color = Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(resident.name, fontWeight = FontWeight.Medium)
+                                    Text(
+                                        resident.apartment ?: "Sin apartamento",
+                                        color = DomuxColor.TextMuted,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                        if (more) {
+                            Text(
+                                "Hay más residentes con esa búsqueda: escribe más letras o el apartamento.",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                color = DomuxColor.TextMuted,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            } else if (longEnough && !searching && searchError == null) {
+                Text(
+                    "No se encontraron residentes.",
+                    color = DomuxColor.TextMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }
+}
 
 /**
  * El marco de cada pantalla: barra de arriba con el título (y «Volver» cuando la pantalla no es

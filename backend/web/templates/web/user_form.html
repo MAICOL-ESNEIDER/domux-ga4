@@ -24,7 +24,7 @@
   </div>
   <div class="form-row">
     {{ field("email", "Correo", values.email, type="email", required=True, maxlength=120, help="Con este correo entra la persona.") }}
-    {{ field("phone", "Teléfono", values.phone, type="tel", maxlength=20, extra={"inputmode": "tel"}) }}
+    {{ field("phone", "Teléfono", values.phone, type="tel", maxlength=20, help="10 números: un celular empieza por 3 y un fijo por 60. Puedes escribir +57 al inicio.", autocomplete="tel", extra={"inputmode": "tel"}) }}
     {{ field("documentId", "Documento", values.documentId, maxlength=30) }}
   </div>
   <div class="form-row">

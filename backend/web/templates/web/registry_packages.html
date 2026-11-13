@@ -42,7 +42,7 @@
               <strong class="inbox-subject">{{ item.description or "Paquete sin descripción" }}</strong>
               <span class="badges">
                 {{ status_badge("package", item.status) }}
-                {% if item.isDeleted %}{{ badge("En la papelera") }}{% endif %}
+                {% if item.isDeleted %}{{ badge("Archivado") }}{% endif %}
               </span>
             </span>
             <span>{{ item.apartment or "Sin apartamento" }} · {{ item.residentName }}</span>
@@ -81,13 +81,13 @@
       <p class="badges">
         {{ status_badge("package", selected.status) }}
         {% if selected.claimAlert %}{{ status_badge("package_alert", selected.claimAlert) }}{% endif %}
-        {% if selected.isDeleted %}{{ badge("En la papelera") }}{% endif %}
+        {% if selected.isDeleted %}{{ badge("Archivado") }}{% endif %}
       </p>
 
       {% if selected.isDeleted %}
-      <p class="notice notice-info">Este paquete está en la papelera: la portería ya no lo ve en su lista, pero sigue guardado.
-        {%- if selected.deletedAt %} Pasó a la papelera el {{ selected.deletedAt|date_es }}
-          {%- if selected.deletedByName %}; lo quitó {{ selected.deletedByName }}
+      <p class="notice notice-info">Este paquete está archivado: la portería ya no lo ve en su lista, pero sigue guardado.
+        {%- if selected.deletedAt %} Se archivó el {{ selected.deletedAt|date_es }}
+          {%- if selected.deletedByName %}; lo archivó {{ selected.deletedByName }}
           {%- elif selected.status == "entregado" %}; pasó solo, por llevar más de 7 días entregado{% endif %}.
         {%- endif %}</p>
       {% endif %}

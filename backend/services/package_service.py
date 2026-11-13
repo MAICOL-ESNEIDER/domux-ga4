@@ -73,7 +73,7 @@ def create_pickup_code(package, resident):
     if package.resident_id != resident.id:
         raise ApiError("Solo el dueño del paquete puede generar su código de entrega.", 403)
     if package.is_deleted:
-        raise ApiError("Este paquete está en la papelera.", 409)
+        raise ApiError("Este paquete está archivado. Sácalo de «Archivados» para usarlo.", 409)
     if package.status == "entregado":
         raise ApiError("Este paquete ya fue entregado.", 409)
     if package.status != "pendiente":
@@ -121,7 +121,7 @@ def package_for_pickup_token(value):
     if package.status == "entregado":
         raise ApiError("Este paquete ya fue entregado.", 409)
     if package.is_deleted:
-        raise ApiError("Este paquete está en la papelera.", 409)
+        raise ApiError("Este paquete está archivado. Sácalo de «Archivados» para usarlo.", 409)
     return package
 
 

@@ -119,12 +119,16 @@ class UnitProfileViewModel : DomuxViewModel() {
             showError("Completa nombre, documento, fecha de nacimiento (AAAA-MM-DD) y parentesco.")
             return false
         }
+        phoneProblem(phone, "El teléfono del integrante")?.let { problem ->
+            showError(problem)
+            return false
+        }
         val member = HouseholdMemberData(
             name = name.trim(),
             lastName = lastName.trim().takeIf(String::isNotEmpty),
             documentId = documentId.trim(),
             birthDate = birthDate.trim(),
-            phone = phone.trim().takeIf(String::isNotEmpty),
+            phone = phoneToSend(phone).takeIf(String::isNotEmpty),
             relationship = relationship,
             otherRelationship = otherRelationship.trim().takeIf { relationship == "otro" && it.isNotEmpty() }
         )

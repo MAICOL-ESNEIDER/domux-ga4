@@ -18,6 +18,8 @@ data class ResidentProfileUiState(
     // Lo que el residente está escribiendo; se guarda con «Guardar cambios».
     val email: String = "",
     val phone: String = "",
+    // Lo que está mal en el teléfono después de tocar «Guardar cambios»; se borra al escribir.
+    val phoneError: String? = null,
     val socialNetworks: String = "",
     val loading: Boolean = true,
     val busy: Boolean = false,
@@ -56,7 +58,7 @@ class ResidentProfileViewModel : DomuxViewModel() {
     }
 
     fun onPhone(value: String) {
-        _state.update { it.copy(phone = value) }
+        _state.update { it.copy(phone = value, phoneError = null) }
     }
 
     fun onSocialNetworks(value: String) {
@@ -85,13 +87,18 @@ class ResidentProfileViewModel : DomuxViewModel() {
 
     fun save() {
         val current = _state.value
+        phoneProblem(current.phone)?.let { problem ->
+            _state.update { it.copy(phoneError = problem) }
+            showError(problem)
+            return
+        }
         viewModelScope.launch {
             val response = withBusy {
                 attempt("No se pudo guardar el perfil") {
                     api.updateProfile(
                         auth(),
                         ResidentProfileUpdateRequest(
-                            phone = current.phone.trim(),
+                            phone = phoneToSend(current.phone),
                             email = current.email.trim(),
                             socialNetworks = current.socialNetworks.trim()
                         )

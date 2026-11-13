@@ -127,6 +127,13 @@ interface ApiService {
         @Query("id") id: Int? = null
     ): Response<ResidentsListResponse>
 
+    // El residente que portería eligió, con su teléfono (el servidor anota quién lo vio).
+    @GET("api/residents/{id}/contact")
+    suspend fun getResidentContact(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<ResidentContactResponse>
+
     // Vigentes por defecto; con archived = "true", los que ya pasaron su vencimiento (HU-060).
     // unread = "true" deja solo los que el residente no ha abierto (HU-059).
     @GET("api/announcements")

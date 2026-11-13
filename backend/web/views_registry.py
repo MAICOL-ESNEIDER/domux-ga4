@@ -31,7 +31,7 @@ PACKAGE_TABS = (
     ("pendiente", "En portería", "waiting", {"status": "pendiente"}),
     ("por_llegar", "Por llegar", "incoming", {"status": "por_llegar"}),
     ("entregado", "Entregados", "delivered", {"status": "entregado"}),
-    ("papelera", "Papelera", "trash", {"status": package_view.TRASH_FILTER}),
+    ("archivados", "Archivados", "trash", {"status": package_view.TRASH_FILTER}),
 )
 VISIT_TABS = (
     ("todas", "Todas", "all", {}),
@@ -53,7 +53,7 @@ PACKAGE_EMPTY = {
     "pendiente": "No hay paquetes esperando en la portería.",
     "por_llegar": "No hay paquetes anunciados que estén por llegar.",
     "entregado": "No hay paquetes entregados en los últimos 7 días.",
-    "papelera": "La papelera de paquetes está vacía.",
+    "archivados": "No hay paquetes archivados.",
 }
 VISIT_EMPTY = {
     "todas": "Todavía no hay visitas registradas.",
@@ -71,11 +71,11 @@ VEHICLE_EMPTY = {
 
 #: Una frase bajo las pestañas que ayuda a leer la lista (solo las pestañas que la necesitan).
 PACKAGE_HINTS = {
-    "todos": "Del más reciente al más antiguo, también los de la papelera.",
+    "todos": "Del más reciente al más antiguo, también los archivados.",
     "pendiente": "Los que llevan más tiempo esperando van primero.",
     "por_llegar": "Anunciados que todavía no han llegado a la portería.",
-    "entregado": "Los entregados hace más de 7 días pasan a la papelera: búscalos allí o en «Todos».",
-    "papelera": (
+    "entregado": "Los entregados hace más de 7 días pasan a «Archivados»: búscalos allí o en «Todos».",
+    "archivados": (
         "Son los paquetes que la portería ya no ve en su lista: los entregados hace más de 7 días y los que "
         "se quitaron a mano. Siguen guardados para poder responder un reclamo."
     ),

@@ -170,7 +170,9 @@ data class ResidentSummary(
     val isMinor: Boolean = false,
     val parentalConsent: Boolean = false
 )
-data class ResidentsListResponse(val residents: List<ResidentSummary>?)
+// «more» dice si hay más resultados de los que llegaron: hay que escribir más para encontrarlo.
+data class ResidentsListResponse(val residents: List<ResidentSummary>?, val more: Boolean = false)
+data class ResidentContactResponse(val resident: ResidentSummary?)
 
 /**
  * Comunicado de la administración. Lleva categoría (HU-058), a veces torre (HU-061) y fecha de
@@ -496,6 +498,8 @@ data class Visit(
     val residentId: Int? = null,
     val apartment: String? = null,
     val visitorDocument: String? = "",
+    // true si el guardia pidió el documento y la persona no lo quiso dar.
+    val documentRefused: Boolean = false,
     val visitorPhotoUrl: String? = null,
     val visitorPhotoType: String? = null,
     val mediaConsent: Boolean = false,
@@ -532,6 +536,7 @@ data class RegisterVisitRequest(
     val visitorName: String,
     val type: String,
     val visitorDocument: String? = null,
+    val documentRefused: Boolean = false,
     val mediaConsent: Boolean = false,
     val mediaUrl: String? = null,
     val mediaType: String? = null,

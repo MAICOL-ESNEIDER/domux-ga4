@@ -87,6 +87,8 @@ class VisitTests(unittest.TestCase):
 
     def register(self, **fields):
         body = {"residentId": self.resident.id, "visitorName": "Visita nueva", "type": "visitante"}
+        if "visitorDocument" not in fields:
+            body["documentRefused"] = True   # aquí no importa el documento: la persona no lo dio
         body.update(fields)
         return self.client.post("/api/visits", headers=self.auth(self.guard), json=body)
 
@@ -102,6 +104,62 @@ class VisitTests(unittest.TestCase):
             item for item in response.get_json()["notifications"]
             if item["title"] == "¿Tu visitante sigue en la unidad?"
         ]
+
+    # --- Documento en portería: se pide siempre y, si no lo dan, queda anotado --------------
+
+    def test_registering_without_the_document_and_without_no_quiso_darlo_is_refused(self):
+        response = self.register(documentRefused=False)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Pide el documento a la persona. Si no lo quiere dar, marca «No quiso darlo».",
+        )
+        # Un documento en blanco tampoco sirve (ningún dato puede llegar vacío).
+        for blank in ("", "   "):
+            with self.subTest(document=blank):
+                self.assertEqual(self.register(visitorDocument=blank, documentRefused=False).status_code, 400)
+        self.assertEqual(Visit.query.count(), 0)
+
+    def test_a_person_who_does_not_give_the_document_is_noted(self):
+        response = self.register(documentRefused=True)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.get_json()["visit"]["documentRefused"])
+        visit = Visit.query.one()
+        self.assertTrue(visit.document_refused)
+        self.assertIsNone(visit.visitor_document)
+        self.assertFalse(visit.media_consent)
+
+    def test_a_given_document_is_saved_with_the_consent(self):
+        response = self.register(visitorDocument=" 1020304050 ", mediaConsent=True)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.get_json()["visit"]["documentRefused"])
+        visit = Visit.query.one()
+        self.assertEqual(visit.visitor_document, "1020304050")
+        self.assertFalse(visit.document_refused)
+        self.assertTrue(visit.media_consent)
+
+    def test_a_document_without_the_consent_is_refused(self):
+        response = self.register(visitorDocument="1020304050")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Visit.query.count(), 0)
+
+    def test_the_document_and_no_quiso_darlo_together_are_refused(self):
+        response = self.register(visitorDocument="1020304050", mediaConsent=True, documentRefused=True)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Si anotas el documento, no marques «No quiso darlo».")
+        self.assertEqual(Visit.query.count(), 0)
+
+    def test_no_quiso_darlo_must_be_yes_or_no_and_the_document_short(self):
+        for fields in ({"documentRefused": "sí"}, {"documentRefused": 1},
+                       {"visitorDocument": "1" * 41, "mediaConsent": True}):
+            with self.subTest(fields=fields):
+                self.assertEqual(self.register(**fields).status_code, 400)
+        self.assertEqual(Visit.query.count(), 0)
+        self.assertEqual(self.register(visitorDocument="1" * 40, mediaConsent=True).status_code, 201)
 
     # --- Estadía prevista (HU-031) ------------------------------------------
 

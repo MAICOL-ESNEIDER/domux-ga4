@@ -32,6 +32,9 @@ from time_utils import colombia_today, to_colombia, utc_now
 
 bp = Blueprint("security", __name__, url_prefix="/api")
 VISIT_TYPES = ("visitante", "domiciliario", "contratista")
+DOCUMENT_MISSING_MESSAGE = (
+    "Pide el documento a la persona. Si no lo quiere dar, marca «No quiso darlo»."
+)
 
 
 def _package_metadata_error(data):
@@ -47,7 +50,7 @@ def _package_metadata_error(data):
 
 
 def _cleanup_expired_packages():
-    """Pasa a la papelera los paquetes entregados hace más de 7 días.
+    """Archiva los paquetes entregados hace más de 7 días.
 
     Solo los oculta de la lista diaria del guardia: siguen en la base y se pueden
     restaurar. Ningún paquete se borra (DEC-090), para responder si alguien
@@ -128,15 +131,16 @@ def delete_push_token():
 def get_packages():
     """Lista los paquetes, del más nuevo al más antiguo.
 
-    Sin ``status`` salen los que no están en la papelera; con ``status`` solo los de ese estado
-    (``por_llegar``, ``pendiente`` o ``entregado``) o, con ``papelera``, los de la papelera. Se puede
+    Sin ``status`` salen los que no están archivados; con ``status`` solo los de ese estado
+    (``por_llegar``, ``pendiente`` o ``entregado``) o, con ``archivados`` (o ``papelera``, el nombre de
+    antes), los archivados. Se puede
     buscar con ``search`` o ``q`` y filtrar por ``residentId`` (un residente solo ve los suyos).
 
     Con ``view=summary`` entrega la lista liviana de la consulta de la web (HU-088): paginada (``page`` y
     ``pageSize``), sin la foto (en lugar de ``mediaUrl`` dice ``hasMedia``) y, en ``counts``, cuántos hay
     de cada estado. Los que esperan en portería salen con el que lleva más tiempo primero; lo demás, de lo
     más reciente a lo más antiguo. Esa vista también acepta ``status=todos``: los de cualquier estado,
-    también los de la papelera.
+    también los archivados.
     """
     _cleanup_expired_packages()
     user = g.current_user
@@ -179,10 +183,10 @@ def get_packages():
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_package(pkg_id):
-    """Un paquete, con lo mismo que trae en la lista (también si está en la papelera).
+    """Un paquete, con lo mismo que trae en la lista (también si está archivado).
 
     Un residente solo recibe los suyos; uno ajeno responde 404. Con ``view=summary`` va sin la foto (en
-    lugar de ``mediaUrl`` dice ``hasMedia``) y, si está en la papelera, dice quién lo mandó allá.
+    lugar de ``mediaUrl`` dice ``hasMedia``) y, si está archivado, dice quién lo archivó.
     """
     view = parse_view(request.args.get("view"))
     package = db.session.get(PackageItem, pkg_id)
@@ -278,11 +282,11 @@ def update_package_status(pkg_id):
 @token_required
 @role_required("GUARD", "ADMIN")
 def delete_package(pkg_id):
-    """Envía un paquete a la papelera (retiro lógico).
+    """Archiva un paquete (retiro lógico).
 
-    El paquete no se borra de la base (DEC-090): queda en la papelera, se puede
-    restaurar y lo guarda el archivo histórico. Por eso no existe borrar para
-    siempre, ni siquiera desde la papelera.
+    El paquete no se borra de la base (DEC-090): queda en «Archivados», se puede
+    sacar de ahí y lo guarda el archivo histórico. Por eso no existe borrar para
+    siempre, ni siquiera desde «Archivados».
     """
     package = db.session.get(PackageItem, pkg_id)
     if package is None:
@@ -290,15 +294,15 @@ def delete_package(pkg_id):
     if package.is_deleted:
         return error_response(
             409,
-            "El paquete ya está en la papelera. Los paquetes no se eliminan para "
-            "siempre: se pueden restaurar.",
+            "El paquete ya está archivado. Los paquetes no se eliminan para "
+            "siempre: se pueden sacar de «Archivados».",
         )
     package.is_deleted = True
     package.deleted_at = utc_now()
     package.deleted_by_id = g.current_user.id
     db.session.commit()
     return jsonify({
-        "message": "Paquete movido a la papelera.",
+        "message": "Paquete archivado. Sigue guardado y se puede sacar de «Archivados».",
         "packageItem": package.to_dict(),
     })
 
@@ -314,7 +318,7 @@ def restore_package(pkg_id):
     package.deleted_at = None
     package.deleted_by_id = None
     db.session.commit()
-    return jsonify({"message": "Paquete restaurado.", "packageItem": package.to_dict()})
+    return jsonify({"message": "Paquete fuera de «Archivados»: vuelve a la lista de la portería.", "packageItem": package.to_dict()})
 
 
 @bp.put("/packages/<int:pkg_id>/deliver")
@@ -469,9 +473,20 @@ def register_visit():
     if resident is None or visit_type not in VISIT_TYPES:
         return error_response(400, "Datos incompletos para registrar el ingreso")
 
+    # El guardia siempre pide el documento; si la persona no lo quiere dar, queda anotado así.
     document = data.get("visitorDocument")
     if document is not None and not isinstance(document, str):
         return error_response(400, "El documento del visitante debe ser texto")
+    document = (document or "").strip()
+    refused = data.get("documentRefused", False)
+    if not isinstance(refused, bool):
+        return error_response(400, "«No quiso darlo» debe ser verdadero o falso.")
+    if document and refused:
+        return error_response(400, "Si anotas el documento, no marques «No quiso darlo».")
+    if not document and not refused:
+        return error_response(400, DOCUMENT_MISSING_MESSAGE)
+    if len(document) > 40:
+        return error_response(400, "El documento del visitante puede tener máximo 40 caracteres.")
     consent = data.get("mediaConsent", False)
     if not isinstance(consent, bool):
         return error_response(400, "El consentimiento debe ser verdadero o falso.")
@@ -491,7 +506,8 @@ def register_visit():
         registered_by=g.current_user.id,
         expected_stay_minutes=stay,
         visitor_name=data["visitorName"].strip(),
-        visitor_document=document.strip() if document else None,
+        visitor_document=document or None,
+        document_refused=refused,
         visitor_photo_url=data.get("mediaUrl"),
         visitor_photo_type=data.get("mediaType"),
         media_consent=consent,

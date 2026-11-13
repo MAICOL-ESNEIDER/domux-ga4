@@ -253,6 +253,8 @@ class PackageSummaryFilterTests(PackageTestCase):
         self.assertEqual(sorted(self.ids(self.summary(status="pendiente")[1])), sorted([self.waiting.id, self.waiting_housemate.id]))
         self.assertEqual(self.ids(self.summary(status="por_llegar")[1]), [self.incoming.id])
         self.assertEqual(self.ids(self.summary(status="entregado")[1]), [self.delivered.id])
+        self.assertEqual(self.ids(self.summary(status="archivados")[1]), [self.in_trash.id])
+        # «papelera» era el nombre de antes: las versiones viejas de la app lo siguen mandando.
         self.assertEqual(self.ids(self.summary(status="papelera")[1]), [self.in_trash.id])
 
     def test_all_includes_the_trash(self):

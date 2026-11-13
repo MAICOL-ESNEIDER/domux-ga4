@@ -110,14 +110,14 @@ class RolePermissionTests(unittest.TestCase):
             with self.subTest(method=method, path=path):
                 self.assertEqual(self.call(self.guard, method, path, body).status_code, 403)
 
-    def test_guard_only_gets_name_phone_and_apartment_of_residents(self):
-        response = self.call(self.guard, "GET", "/api/residents")
+    def test_guard_only_gets_name_and_apartment_of_residents(self):
+        response = self.call(self.guard, "GET", "/api/residents?search=Resi")
         by_email = self.call(self.guard, "GET", "/api/residents?search=residente-permisos")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             set(response.get_json()["residents"][0]),
-            {"id", "name", "phone", "apartment", "apartmentNumber"},
+            {"id", "name", "apartment", "apartmentNumber"},
         )
         self.assertEqual(by_email.get_json()["residents"], [])
         admin_view = self.call(self.admin, "GET", "/api/residents").get_json()["residents"][0]
@@ -143,7 +143,7 @@ class RolePermissionTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in by_guard.get_json()["residents"]], [self.resident.id])
         self.assertEqual(
             set(by_guard.get_json()["residents"][0]),
-            {"id", "name", "phone", "apartment", "apartmentNumber"},
+            {"id", "name", "apartment", "apartmentNumber"},
         )
         self.assertEqual(not_a_number.status_code, 400)
 

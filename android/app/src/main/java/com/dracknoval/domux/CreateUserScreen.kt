@@ -663,16 +663,21 @@ private fun UserInput(
     val missing = required && showMissingError && value.trim().isEmpty()
     val invalidEmail = label == "Correo" && value.isNotEmpty() && !value.trim().contains("@")
     val invalidPassword = password && value.isNotEmpty() && !validStrongPassword(value)
+    // El teléfono muestra la regla mientras se escribe y el error solo al intentar guardar.
+    val isPhone = label == "Teléfono"
+    val phoneError = if (isPhone && showMissingError && value.isNotBlank()) phoneProblem(value) else null
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
-        isError = missing || invalidEmail || invalidPassword,
+        isError = missing || invalidEmail || invalidPassword || phoneError != null,
         supportingText = {
             if (missing) Text("$label es obligatorio")
             else if (invalidEmail) Text("Ingresa un correo válido")
             else if (invalidPassword) Text("Usa 8 caracteres con mayúscula, minúscula, número y símbolo")
+            else if (phoneError != null) Text(phoneError)
+            else if (isPhone) Text(PHONE_HINT)
         },
         visualTransformation = if (password && !visible) PasswordVisualTransformation() else VisualTransformation.None,
         trailingIcon = if (password) {
