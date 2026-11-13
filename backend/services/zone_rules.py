@@ -1,5 +1,8 @@
 """Reglas de las zonas comunes: franjas, aforo, anticipación y plazos (HU-055, RN-020 a RN-022).
 
+Una reserva puede cubrir una franja, varias franjas seguidas (hasta el máximo de la zona) o, si la
+zona lo permite, el día completo. Siempre se guarda como un rango «HH:MM-HH:MM».
+
 Lo que cambia de un conjunto a otro (horario, aforo, anticipación y plazo de
 cancelación) no está en el código: cada zona lo guarda y la administración lo
 ajusta desde la web. Aquí están los valores por defecto, la revisión de los
@@ -22,6 +25,11 @@ DEFAULT_MAX_ADVANCE_DAYS = 60
 DEFAULT_CANCEL_DEADLINE_DAYS = 3
 #: Reservas por semana que cada residente puede tener en una zona (antes eran 2 en total).
 DEFAULT_WEEKLY_LIMIT = 2
+
+#: Por defecto se reserva una franja a la vez y no el día completo; cada zona lo puede cambiar
+#: (por ejemplo, el salón social se reserva todo el día y el BBQ hasta dos franjas seguidas).
+DEFAULT_MAX_CONSECUTIVE_SLOTS = 1
+DEFAULT_ALLOW_FULL_DAY = False
 
 #: Duraciones de franja que la administración puede elegir, en minutos.
 ALLOWED_SLOT_MINUTES = (30, 60, 90, 120, 180, 240)
@@ -63,6 +71,34 @@ def _slot_range(slot):
         return _to_minutes(start), _to_minutes(end)
     except (AttributeError, ValueError):
         return None
+
+
+def full_day_slot(open_time, close_time, slot_minutes):
+    """El rango del día completo, como «08:00-22:00»: de la apertura al final de la última franja.
+
+    Si al final del día sobra un pedazo donde no cabe una franja completa, ese pedazo no se reserva.
+    None si la zona no tiene franjas.
+    """
+    slots = zone_slots(open_time, close_time, slot_minutes)
+    if not slots:
+        return None
+    return f"{slots[0].split('-')[0]}-{slots[-1].split('-')[1]}"
+
+
+def slot_span(open_time, close_time, slot_minutes, time_slot):
+    """Cuántas franjas seguidas cubre «HH:MM-HH:MM» en una zona; None si no es un rango de la zona.
+
+    El rango tiene que empezar donde empieza una franja y terminar donde termina otra (la misma o
+    una posterior): «08:00-12:00» son dos franjas de 2 horas; «09:00-11:00» no es de la zona.
+    """
+    requested = _slot_range(time_slot)
+    if requested is None:
+        return None
+    start, end = requested
+    ranges = [_slot_range(slot) for slot in zone_slots(open_time, close_time, slot_minutes)]
+    if end <= start or start not in {first for first, _ in ranges} or end not in {last for _, last in ranges}:
+        return None
+    return (end - start) // slot_minutes
 
 
 def slots_overlap(first, second):
@@ -162,6 +198,21 @@ def parse_zone_rules(data, area):
         changes["maintenance_weekday"] = (
             None if value is None else _whole_rule(value, "El día de mantenimiento", 0, 6)
         )
+    if "maxConsecutiveSlots" in data:
+        value = data["maxConsecutiveSlots"]
+        changes["max_consecutive_slots"] = (
+            DEFAULT_MAX_CONSECUTIVE_SLOTS
+            if value is None
+            else _whole_rule(value, "El máximo de franjas seguidas", 1, 48)
+        )
+    if "allowFullDay" in data:
+        value = data["allowFullDay"]
+        if value is None:
+            changes["allow_full_day"] = DEFAULT_ALLOW_FULL_DAY
+        elif isinstance(value, bool):
+            changes["allow_full_day"] = value
+        else:
+            raise ApiError("«Se puede reservar el día completo» debe ser sí o no.")
     if not changes:
         raise ApiError("Indica al menos una regla de la zona para cambiar.")
 
@@ -177,4 +228,10 @@ def parse_zone_rules(data, area):
         )
     if final("max_advance_days") < final("min_advance_days"):
         raise ApiError("La anticipación máxima no puede ser menor que la mínima.")
+    slots_per_day = len(zone_slots(final("open_time"), final("close_time"), final("slot_minutes")))
+    if final("max_consecutive_slots") > slots_per_day:
+        raise ApiError(
+            f"La zona tiene {slots_per_day} franjas al día: el máximo de franjas seguidas no puede pasar de "
+            f"{slots_per_day}."
+        )
     return changes

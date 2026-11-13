@@ -52,7 +52,50 @@ data class ReservationsUiState(
             val reported = availability?.availableSlots.orEmpty() + availability?.occupiedSlots.orEmpty()
             return reported.sorted()
         }
+
+    /** Cuántas franjas seguidas se reservan de una vez en la zona (al menos 1). */
+    val maxConsecutive: Int
+        get() = (availability?.maxConsecutiveSlots ?: area?.maxConsecutiveSlots ?: 1).coerceAtLeast(1)
+
+    /** El rango del día completo, si la zona lo deja reservar. */
+    val fullDaySlot: String?
+        get() {
+            val allowed = availability?.allowFullDay ?: area?.allowFullDay ?: false
+            return if (allowed) availability?.fullDaySlot ?: area?.fullDaySlot else null
+        }
+
+    /** El día completo se puede elegir solo si todas sus franjas están libres. */
+    val fullDayFree: Boolean
+        get() = fullDaySlot != null && slots.isNotEmpty() &&
+            slots.all { availability?.availableSlots?.contains(it) == true }
+
+    /** true si la franja [time] queda dentro de lo elegido (una franja, varias o el día completo). */
+    fun isChosen(time: String): Boolean {
+        val chosen = slotRange(slot) ?: return false
+        val candidate = slotRange(time) ?: return false
+        return candidate.first >= chosen.first && candidate.second <= chosen.second
+    }
+
+    /** Cuántas franjas cubre lo elegido. */
+    val chosenCount: Int
+        get() = slots.count { isChosen(it) }
 }
+
+/** Inicio y fin en minutos de «HH:MM-HH:MM»; null si no tiene esa forma. */
+fun slotRange(slot: String?): Pair<Int, Int>? {
+    val parts = slot?.split("-")?.takeIf { it.size == 2 } ?: return null
+    fun minutes(text: String): Int? {
+        val (hours, mins) = text.split(":").takeIf { it.size == 2 } ?: return null
+        return (hours.toIntOrNull() ?: return null) * 60 + (mins.toIntOrNull() ?: return null)
+    }
+    val start = minutes(parts[0]) ?: return null
+    val end = minutes(parts[1]) ?: return null
+    return start to end
+}
+
+/** «08:00-12:00» a partir de minutos. */
+private fun rangeText(start: Int, end: Int): String =
+    String.format(java.util.Locale.US, "%02d:%02d-%02d:%02d", start / 60, start % 60, end / 60, end % 60)
 
 /**
  * ViewModel de las reservas de zonas comunes (HU-050 a HU-055): la lista, la reserva nueva con las
@@ -178,8 +221,46 @@ class ReservationsViewModel : DomuxViewModel() {
         reloadAvailability()
     }
 
-    fun selectSlot(slot: String) {
-        _state.update { it.copy(slot = slot) }
+    /**
+     * Toca una franja. Si la zona deja reservar varias seguidas, una franja pegada a lo elegido lo
+     * alarga (hasta el máximo de la zona); tocar la primera o la última de lo elegido la quita, y
+     * tocar una que no está pegada empieza de nuevo con esa.
+     */
+    fun selectSlot(time: String) {
+        val current = _state.value
+        val tapped = slotRange(time) ?: return
+        val chosen = slotRange(current.slot)
+        val next = when {
+            chosen == null || current.slot == current.fullDaySlot -> time
+            tapped.first >= chosen.first && tapped.second <= chosen.second -> when {
+                tapped == chosen -> ""
+                tapped.first == chosen.first -> rangeText(tapped.second, chosen.second)
+                tapped.second == chosen.second -> rangeText(chosen.first, tapped.first)
+                else -> time
+            }
+            current.maxConsecutive > 1 && (tapped.first == chosen.second || tapped.second == chosen.first) -> {
+                val start = minOf(chosen.first, tapped.first)
+                val end = maxOf(chosen.second, tapped.second)
+                val count = current.slots.count { slot ->
+                    val range = slotRange(slot)
+                    range != null && range.first >= start && range.second <= end
+                }
+                if (count > current.maxConsecutive) {
+                    showError("En ${current.area?.name ?: "esta zona"} se pueden reservar hasta ${current.maxConsecutive} franjas seguidas.")
+                    return
+                }
+                rangeText(start, end)
+            }
+            else -> time
+        }
+        _state.update { it.copy(slot = next) }
+    }
+
+    /** Elige el día completo (o lo quita, si ya estaba elegido). */
+    fun toggleFullDay() {
+        val current = _state.value
+        val whole = current.fullDaySlot ?: return
+        _state.update { it.copy(slot = if (it.slot == whole) "" else whole) }
     }
 
     /** El calendario cambió de mes: se piden los días ocupados y cerrados de ese mes. */
@@ -278,7 +359,10 @@ class ReservationsViewModel : DomuxViewModel() {
                 return@launch
             }
             _state.update { it.copy(created = it.created + 1, date = "", slot = "", availability = null) }
-            showSuccess("Reserva creada exitosamente.")
+            showSuccess(
+                if (Session.isAdmin) "Reserva creada a nombre del residente."
+                else "Reserva enviada. Queda pendiente de que la administración la apruebe."
+            )
             reloadCalendar()
             loadReservations()
         }

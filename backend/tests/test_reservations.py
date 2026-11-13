@@ -561,11 +561,15 @@ class ZoneRulesTests(ReservationTestCase):
         self.set_rules(openTime="06:00", closeTime="20:00", slotMinutes=60)
 
         early = self.book(3, "06:00-07:00")
+        # La franja de 2 horas de antes ahora son dos franjas seguidas, y la zona permite una a la vez.
         old_slot = self.book(4, "10:00-12:00")
+        misaligned = self.book(4, "10:30-11:30")
 
         self.assertEqual(early.status_code, 201)
         self.assertEqual(old_slot.status_code, 400)
-        self.assertIn("Esa franja no existe en Salón social", old_slot.get_json()["error"])
+        self.assertIn("En Salón social se puede reservar una franja a la vez", old_slot.get_json()["error"])
+        self.assertEqual(misaligned.status_code, 400)
+        self.assertIn("Ese horario no existe en Salón social", misaligned.get_json()["error"])
 
     def test_a_slot_outside_the_schedule_is_refused_for_everyone(self):
         self.set_rules(openTime="10:00", closeTime="16:00")
@@ -915,6 +919,116 @@ class ZoneRulesTests(ReservationTestCase):
 
         self.assertEqual(response.get_json()["closedDates"], [])
 
+
+    # --- Varias franjas seguidas y el día completo ------------------------------------------------
+
+    def test_by_default_a_zone_takes_one_slot_at_a_time_and_says_so(self):
+        response = self.client.get("/api/common-areas", headers=self.headers(self.resident))
+        hall = next(area for area in response.get_json()["areas"] if area["id"] == self.area.id)
+
+        self.assertEqual((hall["maxConsecutiveSlots"], hall["allowFullDay"]), (1, False))
+        self.assertEqual(hall["fullDaySlot"], "08:00-22:00")
+        two_slots = self.book(3, "10:00-14:00")
+        self.assertEqual(two_slots.status_code, 400)
+        self.assertEqual(two_slots.get_json()["error"], "En Salón social se puede reservar una franja a la vez.")
+
+    def test_several_slots_in_a_row_up_to_the_zone_maximum(self):
+        self.set_rules(maxConsecutiveSlots=2)
+
+        two = self.book(3, "10:00-14:00")
+        three = self.book(4, "10:00-16:00")
+
+        self.assertEqual(two.status_code, 201, two.get_json())
+        self.assertEqual(Reservation.query.one().time_slot, "10:00-14:00")
+        self.assertEqual(three.status_code, 400)
+        self.assertEqual(three.get_json()["error"], "En Salón social se puede reservar hasta 2 franjas seguidas.")
+
+    def test_the_whole_day_only_where_the_zone_allows_it(self):
+        refused = self.book(3, "08:00-22:00")
+        self.set_rules(allowFullDay=True)
+        availability = self.availability(4)
+        whole_day = self.book(4, "08:00-22:00")
+        two_slots = self.book(5, "08:00-12:00")
+
+        self.assertEqual(refused.status_code, 400)
+        self.assertTrue(availability["allowFullDay"])
+        self.assertEqual(availability["fullDaySlot"], "08:00-22:00")
+        self.assertEqual(availability["maxConsecutiveSlots"], 1)
+        self.assertEqual(whole_day.status_code, 201, whole_day.get_json())
+        self.assertEqual(two_slots.status_code, 400)
+        self.assertEqual(
+            two_slots.get_json()["error"], "En Salón social se puede reservar una franja a la vez o el día completo."
+        )
+
+    def test_a_long_reservation_takes_every_slot_it_covers(self):
+        # La reserva larga es de otro residente: así no cuenta el límite de una reserva por día.
+        self.stored(3, slot="10:00-14:00", resident=self.other_resident)
+
+        availability = self.availability(3)
+        inside = self.book(3, "12:00-14:00")
+        next_to_it = self.book(3, "14:00-16:00")
+
+        self.assertIn("10:00-12:00", availability["occupiedSlots"])
+        self.assertIn("12:00-14:00", availability["occupiedSlots"])
+        self.assertIn("14:00-16:00", availability["availableSlots"])
+        self.assertEqual(inside.status_code, 409)
+        self.assertEqual(inside.get_json()["error"], "Ese horario ya no está disponible")
+        self.assertEqual(next_to_it.status_code, 201)
+
+    def test_the_whole_day_is_not_free_if_any_slot_is_taken(self):
+        self.set_rules(allowFullDay=True)
+        self.stored(3, slot="16:00-18:00", resident=self.other_resident)
+
+        response = self.book(3, "08:00-22:00")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["error"], "Ese horario ya no está disponible")
+        self.assertEqual(Reservation.query.count(), 1)
+
+    def test_approving_a_long_reservation_checks_every_slot(self):
+        self.set_rules(maxConsecutiveSlots=3)
+        long_request = self.book(3, "10:00-16:00")
+        self.assertEqual(long_request.status_code, 201)
+        self.stored(3, slot="14:00-16:00", resident=self.other_resident)
+
+        response = self.client.put(
+            f"/api/reservations/{long_request.get_json()['reservation']['id']}/status",
+            headers=self.headers(self.admin),
+            json={"status": "aprobada"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_ranges_that_do_not_start_and_end_on_slots_are_refused(self):
+        self.set_rules(maxConsecutiveSlots=3)
+
+        for slot in ("09:00-11:00", "10:00-11:00", "12:00-10:00", "10:00-10:00", "10:00-24:00"):
+            with self.subTest(slot=slot):
+                response = self.book(3, slot)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("Ese horario no existe en Salón social", response.get_json()["error"])
+
+    def test_the_new_rules_are_checked_and_null_goes_back_to_the_default(self):
+        too_many = self.set_rules(expected=400, maxConsecutiveSlots=8)
+        zero = self.set_rules(expected=400, maxConsecutiveSlots=0)
+        not_a_flag = self.set_rules(expected=400, allowFullDay="sí")
+        self.set_rules(maxConsecutiveSlots=3, allowFullDay=True)
+        changed = (self.area.max_consecutive_slots, self.area.allow_full_day)
+        self.set_rules(maxConsecutiveSlots=None, allowFullDay=None)
+        db.session.refresh(self.area)
+
+        self.assertIn("La zona tiene 7 franjas al día", too_many.get_json()["error"])
+        self.assertIn("entre 1 y 48", zero.get_json()["error"])
+        self.assertIn("sí o no", not_a_flag.get_json()["error"])
+        self.assertEqual(changed, (3, True))
+        self.assertEqual((self.area.max_consecutive_slots, self.area.allow_full_day), (1, False))
+
+    def test_a_shorter_day_cannot_keep_more_slots_in_a_row_than_it_has(self):
+        self.set_rules(maxConsecutiveSlots=5)
+
+        response = self.set_rules(expected=400, slotMinutes=240)
+
+        self.assertIn("La zona tiene 3 franjas al día", response.get_json()["error"])
 
 if __name__ == "__main__":
     unittest.main()

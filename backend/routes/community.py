@@ -845,6 +845,11 @@ def get_reservation_availability():
     return jsonify({
         "commonAreaId": common_area_id,
         "date": day,
+        # Lo que la app necesita para elegir varias franjas seguidas o el día completo.
+        "slotMinutes": area.slot_minutes,
+        "maxConsecutiveSlots": area.max_consecutive_slots,
+        "allowFullDay": bool(area.allow_full_day),
+        "fullDaySlot": area.full_day_slot,
         **reservation_availability(area, day),
     })
 
@@ -874,18 +879,29 @@ def get_reservation_calendar():
 
 
 def _zone_request_error(area, data):
-    """Revisa que la franja, el día y el número de personas encajen con las reglas de la zona.
+    """Revisa que el horario, el día y el número de personas encajen con las reglas de la zona.
 
     Aplica a todos, también cuando la administración reserva por un residente:
-    una franja fuera del horario, un día de mantenimiento o más personas que el
-    aforo no son reservas posibles (HU-055 y RN-021).
+    un horario fuera de las franjas, más franjas seguidas de las que permite la
+    zona (salvo el día completo, si la zona lo permite), un día de mantenimiento o
+    más personas que el aforo no son reservas posibles (HU-055 y RN-021).
     """
-    if data["timeSlot"] not in area.slots:
+    span = area.slot_span(data["timeSlot"])
+    if span is None:
         return error_response(
             400,
-            f"Esa franja no existe en {area.name}: abre de {area.open_time} a {area.close_time}, "
+            f"Ese horario no existe en {area.name}: abre de {area.open_time} a {area.close_time}, "
             f"en franjas de {area.slot_minutes} minutos.",
         )
+    full_day = data["timeSlot"] == area.full_day_slot
+    if span > area.max_consecutive_slots and not (full_day and area.allow_full_day):
+        options = (
+            "una franja a la vez" if area.max_consecutive_slots == 1
+            else f"hasta {area.max_consecutive_slots} franjas seguidas"
+        )
+        if area.allow_full_day:
+            options += " o el día completo"
+        return error_response(400, f"En {area.name} se puede reservar {options}.")
     requested_day = date.fromisoformat(data["date"])
     if is_maintenance_day(area.maintenance_weekday, requested_day):
         return error_response(

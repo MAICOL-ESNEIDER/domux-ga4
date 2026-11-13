@@ -327,7 +327,12 @@ data class CommonArea(
     val cancelDeadlineDays: Int = 0,
     val weeklyLimit: Int = 0,
     // Día de la semana en que cierra por mantenimiento (0 es lunes); sin valor, no cierra.
-    val maintenanceWeekday: Int? = null
+    val maintenanceWeekday: Int? = null,
+    // Cuántas franjas seguidas se reservan de una vez y si se puede el día completo (HU-055).
+    val maxConsecutiveSlots: Int = 1,
+    val allowFullDay: Boolean = false,
+    // El rango del día completo, como «08:00-22:00».
+    val fullDaySlot: String? = null
 )
 data class CommonAreasListResponse(val areas: List<CommonArea>?)
 data class Reservation(
@@ -395,7 +400,12 @@ data class ReservationAvailabilityResponse(
     val availableSlots: List<String>?,
     val occupiedSlots: List<String>?,
     // La zona está cerrada ese día por mantenimiento.
-    val closed: Boolean = false
+    val closed: Boolean = false,
+    // Las reglas para elegir varias franjas seguidas o el día completo.
+    val slotMinutes: Int = 0,
+    val maxConsecutiveSlots: Int = 1,
+    val allowFullDay: Boolean = false,
+    val fullDaySlot: String? = null
 )
 data class UpdateReservationStatusRequest(val status: String)
 

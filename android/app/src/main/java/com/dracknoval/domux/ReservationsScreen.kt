@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.dracknoval.domux.ui.theme.DomuxColor
 import com.dracknoval.domux.data.CommonArea
 import com.dracknoval.domux.data.Reservation
 import com.dracknoval.domux.data.ResidentSummary
@@ -105,6 +106,7 @@ fun ReservationsScreen(
                     onArea = { viewModel.selectArea(it) },
                     onDate = { viewModel.selectDate(it) },
                     onSlot = { viewModel.selectSlot(it) },
+                    onFullDay = { viewModel.toggleFullDay() },
                     onMonth = { year, month -> viewModel.showMonth(year, month) },
                     onResident = { viewModel.selectResident(it) },
                     onNotice = { viewModel.showNotice(it) },
@@ -358,6 +360,7 @@ private fun ReservationForm(
     onArea: (Int) -> Unit,
     onDate: (String) -> Unit,
     onSlot: (String) -> Unit,
+    onFullDay: () -> Unit,
     onMonth: (Int, Int) -> Unit,
     onResident: (ResidentSummary?) -> Unit,
     onNotice: (String) -> Unit,
@@ -471,18 +474,39 @@ private fun ReservationForm(
                             "${area?.name ?: "La zona"} está cerrada ese día por mantenimiento. Elige otra fecha.",
                             color = MaterialTheme.colorScheme.error
                         )
-                        else -> FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            state.slots.forEach { time ->
-                                val available = state.availability?.availableSlots?.contains(time) ?: false
-                                FilterChip(
-                                    selected = state.slot == time,
-                                    enabled = available,
-                                    onClick = { onSlot(time) },
-                                    label = { Text(if (available) time else "$time · Ocupado") }
+                        else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (state.maxConsecutive > 1) {
+                                Text(
+                                    "Toca la franja de al lado para reservar hasta ${state.maxConsecutive} seguidas.",
+                                    style = MaterialTheme.typography.bodySmall
                                 )
+                            }
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                state.fullDaySlot?.let { whole ->
+                                    FilterChip(
+                                        selected = state.slot == whole,
+                                        enabled = state.fullDayFree,
+                                        onClick = onFullDay,
+                                        label = {
+                                            Text(if (state.fullDayFree) "Día completo ($whole)" else "Día completo · Ocupado")
+                                        }
+                                    )
+                                }
+                                state.slots.forEach { time ->
+                                    val available = state.availability?.availableSlots?.contains(time) ?: false
+                                    FilterChip(
+                                        selected = state.isChosen(time),
+                                        enabled = available,
+                                        onClick = { onSlot(time) },
+                                        label = { Text(if (available) time else "$time · Ocupado") }
+                                    )
+                                }
+                            }
+                            chosenText(state)?.let { chosen ->
+                                Text(chosen, style = MaterialTheme.typography.bodyMedium, color = DomuxColor.Primary)
                             }
                         }
                     }
@@ -534,7 +558,7 @@ private fun ReservationForm(
                             val resident = state.resident
                             val onBehalf = if (admin && resident != null) " a nombre de ${resident.name}" else ""
                             onSubmit(
-                                "¿Crear la reserva de ${chosen.name} para el ${humanDate(state.date)}, en la franja ${state.slot}$onBehalf?",
+                                "¿Crear la reserva de ${chosen.name} para el ${humanDate(state.date)}, ${scheduleText(state)}$onBehalf?",
                                 if (capacity != null) people else null,
                                 note.trim().ifEmpty { null },
                                 mediaUrl,
@@ -547,6 +571,24 @@ private fun ReservationForm(
             }
         }
     }
+}
+
+/** Lo elegido en palabras: «el día completo», «de 10:00 a 14:00 (2 franjas)» o «en la franja 10:00-12:00». */
+private fun scheduleText(state: ReservationsUiState): String {
+    val range = slotRange(state.slot) ?: return "en la franja ${state.slot}"
+    val from = state.slot.substringBefore("-")
+    val to = state.slot.substringAfter("-")
+    return when {
+        state.slot == state.fullDaySlot -> "el día completo (de $from a $to)"
+        state.chosenCount > 1 && range.second > range.first -> "de $from a $to (${state.chosenCount} franjas)"
+        else -> "en la franja ${state.slot}"
+    }
+}
+
+/** Debajo de las franjas: qué quedó elegido, para no tener que contar los botones marcados. */
+private fun chosenText(state: ReservationsUiState): String? {
+    if (state.slot.isBlank()) return null
+    return "Elegiste ${scheduleText(state)}."
 }
 
 /** Las reglas de la zona elegida (HU-055), para que quien reserva sepa de antemano qué se le va a pedir. */
@@ -570,6 +612,12 @@ private fun zoneRuleLines(area: CommonArea, admin: Boolean): List<String> {
     if (opensAt != null && closesAt != null) {
         val slotText = if (area.slotMinutes > 0) ", en franjas de ${slotLengthText(area.slotMinutes)}" else ""
         lines.add("Horario: de $opensAt a $closesAt$slotText.")
+    }
+    if (area.maxConsecutiveSlots > 1) {
+        lines.add("Puedes reservar hasta ${area.maxConsecutiveSlots} franjas seguidas.")
+    }
+    if (area.allowFullDay && area.fullDaySlot != null) {
+        lines.add("También se puede reservar el día completo (${area.fullDaySlot}).")
     }
     area.capacity?.let { lines.add("Aforo máximo: $it personas.") }
     if (admin) {

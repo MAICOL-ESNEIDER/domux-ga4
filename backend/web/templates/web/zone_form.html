@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% from "web/_forms.html" import field, select %}
+{% from "web/_forms.html" import checkbox, field, select %}
 {% set page_title = "Reglas de " ~ area.name %}
 
 {% block content %}
@@ -21,6 +21,11 @@
   </div>
   {{ select("slotMinutes", "Duración de cada franja", slot_options, values.slotMinutes, required=True,
             help="El día se parte en franjas de esta duración, desde la hora de apertura. Una franja que no cabe completa antes del cierre no se ofrece.") }}
+  {{ field("maxConsecutiveSlots", "Franjas seguidas que se pueden reservar", values.maxConsecutiveSlots, type="number", required=True,
+           extra={"min": 1, "max": 48, "inputmode": "numeric"},
+           help="1 es una franja a la vez. Con 2, por ejemplo, el residente puede reservar dos franjas seguidas de una vez.") }}
+  {{ checkbox("allowFullDay", "Se puede reservar el día completo", values.allowFullDay,
+              help="Para zonas como el salón social: el residente reserva desde la apertura hasta el final de la última franja.") }}
 
   <h2>Cuántos y cuándo</h2>
   {{ field("capacity", "Aforo máximo (personas)", values.capacity, type="number",

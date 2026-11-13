@@ -11,13 +11,17 @@ from config import visitor_parking_max_days
 from extensions import db
 from services.pqrs_rules import make_radicado, running_semaphore
 from services.zone_rules import (
+    DEFAULT_ALLOW_FULL_DAY,
     DEFAULT_CANCEL_DEADLINE_DAYS,
     DEFAULT_CLOSE_TIME,
     DEFAULT_MAX_ADVANCE_DAYS,
+    DEFAULT_MAX_CONSECUTIVE_SLOTS,
     DEFAULT_MIN_ADVANCE_DAYS,
     DEFAULT_OPEN_TIME,
     DEFAULT_SLOT_MINUTES,
     DEFAULT_WEEKLY_LIMIT,
+    full_day_slot,
+    slot_span,
     zone_slots,
 )
 from time_utils import colombia_today, format_colombia, utc_now
@@ -975,6 +979,8 @@ class CommonArea(db.Model):
     * weekly_limit: reservas por semana de cada residente en esta zona.
     * maintenance_weekday: día de la semana (0 es lunes) en que la zona cierra por
       mantenimiento; si es festivo, pasa al día siguiente (RN-021).
+    * max_consecutive_slots: cuántas franjas seguidas se pueden reservar de una vez.
+    * allow_full_day: si se puede reservar el día completo (por ejemplo el salón social).
     """
 
     __tablename__ = "common_areas"
@@ -1009,11 +1015,27 @@ class CommonArea(db.Model):
         server_default=str(DEFAULT_WEEKLY_LIMIT),
     )
     maintenance_weekday = db.Column(db.Integer, nullable=True)
+    max_consecutive_slots = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_MAX_CONSECUTIVE_SLOTS,
+        server_default=str(DEFAULT_MAX_CONSECUTIVE_SLOTS),
+    )
+    allow_full_day = db.Column(
+        db.Boolean, nullable=False, default=DEFAULT_ALLOW_FULL_DAY, server_default=db.false(),
+    )
 
     @property
     def slots(self):
         """Las franjas que ofrece la zona cada día, según su horario."""
         return zone_slots(self.open_time, self.close_time, self.slot_minutes)
+
+    @property
+    def full_day_slot(self):
+        """El rango del día completo («08:00-22:00»), o None si la zona no tiene franjas."""
+        return full_day_slot(self.open_time, self.close_time, self.slot_minutes)
+
+    def slot_span(self, time_slot):
+        """Cuántas franjas seguidas cubre el rango; None si no es un rango de esta zona."""
+        return slot_span(self.open_time, self.close_time, self.slot_minutes, time_slot)
 
     def to_dict(self):
         return {
@@ -1029,6 +1051,9 @@ class CommonArea(db.Model):
             "cancelDeadlineDays": self.cancel_deadline_days,
             "weeklyLimit": self.weekly_limit,
             "maintenanceWeekday": self.maintenance_weekday,
+            "maxConsecutiveSlots": self.max_consecutive_slots,
+            "allowFullDay": bool(self.allow_full_day),
+            "fullDaySlot": self.full_day_slot,
         }
 
 

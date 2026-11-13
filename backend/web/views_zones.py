@@ -1,8 +1,8 @@
 """Zonas comunes y sus reglas de reserva en la web (HU-055).
 
-Cada zona guarda su horario, la duración de sus franjas, su aforo, con cuánta anticipación se puede reservar,
-hasta cuándo se puede cancelar, cuántas reservas por semana tiene cada residente y su día de mantenimiento
-(RN-020 a RN-022). La administración los ajusta aquí, sin tocar el código. Las reservas nuevas usan las
+Cada zona guarda su horario, la duración de sus franjas, cuántas franjas seguidas se reservan de una vez y si
+se puede reservar el día completo, su aforo, con cuánta anticipación se puede reservar, hasta cuándo se puede
+cancelar, cuántas reservas por semana tiene cada residente y su día de mantenimiento (RN-020 a RN-022). La administración los ajusta aquí, sin tocar el código. Las reservas nuevas usan las
 reglas desde que se guardan; las que ya existen no se tocan.
 
 La web solo reúne lo que escribió la administración y lo manda a la API (que revisa cada dato y que todos
@@ -21,9 +21,11 @@ from web.security import login_required
 #: Los de hora se escriben como HH:MM; los demás son números enteros.
 TIME_FIELDS = ("openTime", "closeTime")
 NUMBER_FIELDS = (
-    "slotMinutes", "capacity", "minAdvanceDays", "maxAdvanceDays", "cancelDeadlineDays", "weeklyLimit",
-    "maintenanceWeekday",
+    "slotMinutes", "maxConsecutiveSlots", "capacity", "minAdvanceDays", "maxAdvanceDays", "cancelDeadlineDays",
+    "weeklyLimit", "maintenanceWeekday",
 )
+#: Las casillas de sí o no: marcada es sí.
+FLAG_FIELDS = ("allowFullDay",)
 #: Los que se pueden dejar vacíos: el aforo y el día de mantenimiento quedan «sin definir» y el plazo de
 #: cancelación y el límite semanal vuelven al valor por defecto (la API entiende ``null`` así).
 CLEARABLE_FIELDS = ("capacity", "maintenanceWeekday", "cancelDeadlineDays", "weeklyLimit")
@@ -44,6 +46,14 @@ def _summary(area):
         "name": area["name"],
         "schedule": f"De {area['openTime']} a {area['closeTime']}",
         "slots": f"{texts.slot_length_text(area['slotMinutes'])} cada una · {texts.plural(len(slots), 'franja', 'franjas')} al día",
+        "consecutive": (
+            "Una franja a la vez" if area["maxConsecutiveSlots"] == 1
+            else f"Hasta {area['maxConsecutiveSlots']} franjas seguidas"
+        ),
+        "fullDay": (
+            f"Se puede reservar el día completo ({area['fullDaySlot']})" if area["allowFullDay"] and area["fullDaySlot"]
+            else "No se reserva el día completo"
+        ),
         "capacity": (
             texts.plural(area["capacity"], "persona", "personas") if area["capacity"] else "Sin límite definido"
         ),
@@ -69,11 +79,22 @@ def _areas(api):
 
 
 def _form_values(area):
-    """Las reglas de la zona como las muestra el formulario (todo en texto, lo vacío en blanco)."""
-    return {
+    """Las reglas de la zona como las muestra el formulario (texto, lo vacío en blanco; las casillas, sí o no)."""
+    values = {
         key: "" if area[key] is None else str(area[key])
         for key in (*TIME_FIELDS, *NUMBER_FIELDS)
     }
+    for key in FLAG_FIELDS:
+        values[key] = bool(area.get(key))
+    return values
+
+
+def _posted_values():
+    """Lo que llegó en el formulario: texto en los campos y sí o no en las casillas."""
+    values = {key: text(key) for key in (*TIME_FIELDS, *NUMBER_FIELDS)}
+    for key in FLAG_FIELDS:
+        values[key] = request.form.get(key) == "1"
+    return values
 
 
 def _typed(values):
@@ -92,6 +113,8 @@ def _typed(values):
             typed[key] = number(key)
         elif key in CLEARABLE_FIELDS:
             typed[key] = None
+    for key in FLAG_FIELDS:
+        typed[key] = bool(values[key])
     return typed
 
 
@@ -124,7 +147,7 @@ def zone_edit(area_id):
     if request.method == "GET":
         return _page(area, _form_values(area))
 
-    values = {key: text(key) for key in (*TIME_FIELDS, *NUMBER_FIELDS)}
+    values = _posted_values()
     changes = _changes(area, _typed(values))
     if not changes:
         flash("No cambiaste ninguna regla.", "info")

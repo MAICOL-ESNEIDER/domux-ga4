@@ -34,9 +34,13 @@ class WebZoneCase(WebTestCase):
             "minAdvanceDays": str(area.min_advance_days), "maxAdvanceDays": str(area.max_advance_days),
             "cancelDeadlineDays": str(area.cancel_deadline_days), "weeklyLimit": str(area.weekly_limit),
             "maintenanceWeekday": "" if area.maintenance_weekday is None else str(area.maintenance_weekday),
+            "maxConsecutiveSlots": str(area.max_consecutive_slots),
         }
+        # La casilla marcada llega como «1»; sin marcar, el navegador no la manda.
+        if area.allow_full_day:
+            form["allowFullDay"] = "1"
         form.update({key: str(value) for key, value in changes.items()})
-        return form
+        return {key: value for key, value in form.items() if value != "None"}
 
     def save(self, area, **changes):
         return self.post(f"/web/zonas/{area.id}", self.rules(area, **changes))
@@ -126,9 +130,56 @@ class WebZoneFormTests(WebZoneCase):
         self.assertRegex(body, r'name="capacity" type="number" value=""|name="capacity" type="number"(?! value)')
         self.assertNotRegex(body, r'<option value="\d" selected>')
 
+    def test_the_form_has_the_slots_in_a_row_and_the_whole_day(self):
+        body = self.page(f"/web/zonas/{self.hall.id}")
+
+        self.assertRegex(body, r'name="maxConsecutiveSlots" type="number" value="1" required')
+        self.assertIn('name="allowFullDay"', body)
+        self.assertIn("Se puede reservar el día completo", body)
+        self.assertNotRegex(body, r'name="allowFullDay" value="1" checked')
+
     def test_an_unknown_zone_is_a_404(self):
         self.assertEqual(self.client.get("/web/zonas/99999").status_code, 404)
         self.assertEqual(self.post("/web/zonas/99999", {"capacity": "10"}).status_code, 404)
+
+
+class WebZoneSlotsInARowTests(WebZoneCase):
+    def test_the_list_says_how_the_zone_is_reserved(self):
+        self.hall.max_consecutive_slots = 2
+        self.hall.allow_full_day = True
+        db.session.commit()
+
+        body = self.page("/web/zonas")
+
+        self.assertIn("Hasta 2 franjas seguidas", body)
+        self.assertIn("Se puede reservar el día completo (08:00-22:00)", body)
+        self.assertIn("Una franja a la vez", body)
+        self.assertIn("No se reserva el día completo", body)
+
+    def test_the_whole_day_and_slots_in_a_row_are_saved(self):
+        response = self.save(self.hall, maxConsecutiveSlots=3, allowFullDay="1")
+
+        self.assertEqual(response.status_code, 302)
+        zone = self.reload(self.hall)
+        self.assertEqual((zone.max_consecutive_slots, zone.allow_full_day), (3, True))
+
+    def test_unchecking_the_whole_day_turns_it_off(self):
+        self.hall.allow_full_day = True
+        db.session.commit()
+        form = self.rules(self.hall)
+        del form["allowFullDay"]
+
+        response = self.post(f"/web/zonas/{self.hall.id}", form)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(self.reload(self.hall).allow_full_day)
+
+    def test_more_slots_in_a_row_than_the_day_has_shows_the_message(self):
+        response = self.save(self.pool, maxConsecutiveSlots=30)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("La zona tiene 14 franjas al día", self.text(response))
+        self.assertEqual(self.reload(self.pool).max_consecutive_slots, 1)
 
 
 class WebZoneSaveTests(WebZoneCase):
