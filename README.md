@@ -129,13 +129,14 @@ Todas las rutas protegidas requieren el encabezado `Authorization: Bearer <token
 | Usuarios | `POST /api/users` | ADMIN | Creación de usuarios con validación de datos. |
 | Usuarios | `PUT /api/users/<id>` | ADMIN | Edición de usuario, rol, unidad y estado activo. |
 | Usuarios | `PUT /api/users/<id>/password` | ADMIN | Restablecimiento seguro de contraseña. |
-| Residentes | `GET /api/residents` | ADMIN, GUARD | Búsqueda rápida por nombre completo o apto. |
+| Residentes | `GET /api/residents` | ADMIN, GUARD | Búsqueda por nombre o apartamento. Portería recibe máximo 5, solo con nombre y apartamento, y nada antes de 2 letras. |
+| Residentes | `GET /api/residents/<id>/contact` | ADMIN, GUARD | El residente elegido con su teléfono; si lo pide portería queda en la auditoría. |
 | Unidades | `GET / PUT /api/admin/units` | ADMIN | Consulta y guardado de la ficha del hogar. |
 | Perfil | `GET / PUT /api/profile` | RESIDENT | Consulta y actualización de datos de contacto. |
 | Censo | `GET /api/admin/census-template` | ADMIN | Descarga la plantilla Excel para importar residentes y datos de sus unidades. |
-| Censo | `POST /api/admin/import-census` | ADMIN | Importa o actualiza residentes desde `.xlsx` o `.csv` codificado en base64. |
-| Archivo legal | `GET /api/admin/export/legal-report` | ADMIN | Exporta PQRS, conversaciones, reservas y auditoría en un libro Excel. |
-| Archivo legal | `POST /api/admin/archive-history` | ADMIN | Archiva PQRS resueltas y reservas históricas y genera el respaldo Excel. |
+| Censo | `POST /api/admin/import-census` | ADMIN | Importa o actualiza residentes desde `.xlsx` o `.csv` codificado en base64; exige `dataProcessingConsent: true`. Se usa desde la web (`/web/usuarios/censo`). |
+| Archivo legal | `GET /api/admin/export/legal-report` | ADMIN | Exporta PQRS, conversaciones, reservas y auditoría en un libro Excel. Se usa desde la web (`/web/respaldo`). |
+| Archivo legal | `POST /api/admin/archive-history` | ADMIN | Archiva PQRS resueltas y reservas históricas y genera el respaldo Excel. Se usa desde la web (`/web/respaldo`). |
 | Anuncios | `GET / POST / DELETE /api/announcements` | Todos (GET), ADMIN (POST/DELETE) | Tablón de comunicados con soporte multimedia. |
 | PQRS | `GET / POST /api/pqrs` | ADMIN, RESIDENT | Listado filtrado y radicación de solicitudes. |
 | PQRS | `PUT /api/pqrs/<id>/respond` | ADMIN | Respuesta administrativa y cambio de estado. |
@@ -150,9 +151,9 @@ Todas las rutas protegidas requieren el encabezado `Authorization: Bearer <token
 | Paquetes | `GET / POST /api/packages` | ADMIN, GUARD, RESIDENT (GET) | Consulta con filtros y registro (pendiente/por_llegar). |
 | Paquetes | `PUT /api/packages/<id>/status` | ADMIN, GUARD | Recepción en portería de paquetes por llegar. |
 | Paquetes | `PUT /api/packages/<id>/deliver` | ADMIN, GUARD | Registro de entrega con nombre de receptor. |
-| Paquetes | `DELETE /api/packages/<id>` | ADMIN, GUARD | Envío a papelera o eliminación definitiva (`?force=true`). |
-| Paquetes | `PUT /api/packages/<id>/restore` | ADMIN, GUARD | Restauración de paquetes desde la papelera. |
-| Visitas | `GET / POST /api/visits` | ADMIN, GUARD, RESIDENT (GET) | Historial y registro en portería con foto/documento. |
+| Paquetes | `DELETE /api/packages/<id>` | ADMIN, GUARD | Archiva el paquete: no se elimina para siempre. |
+| Paquetes | `PUT /api/packages/<id>/restore` | ADMIN, GUARD | Saca el paquete de «Archivados». |
+| Visitas | `GET / POST /api/visits` | ADMIN, GUARD, RESIDENT (GET) | Historial y registro en portería: pide el documento o `documentRefused: true` («No quiso darlo»); foto opcional. |
 | Visitas | `PUT /api/visits/<id>/decision` | RESIDENT | Autorización o rechazo de ingreso desde la app. |
 | Visitas | `PUT /api/visits/<id>/authorize-call` | GUARD | Autorización de ingreso respaldada por llamada. |
 | Visitas | `POST /api/visits/<id>/entry` y `/exit` | GUARD | Control de entrada, salida temporal o definitiva. |

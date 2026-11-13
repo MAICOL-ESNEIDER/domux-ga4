@@ -12,6 +12,11 @@
     <h1>Reservas</h1>
     <p>{{ plural(total, "reserva", "reservas") }}{% if filtered %} con esos filtros{% endif %}.{% if filters.estado in ("por_aprobar", "todas") %} Las que esperan tu decisión van primero, la de fecha más próxima antes.{% endif %}</p>
   </div>
+  {% if excel_url %}
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ excel_url }}">Descargar Excel</a>
+  </div>
+  {% endif %}
 </div>
 
 <nav class="tabs" aria-label="Estado de las reservas">

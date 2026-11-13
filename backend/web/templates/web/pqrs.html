@@ -11,6 +11,11 @@
     <h1>PQRS</h1>
     <p>{{ plural(total, "PQRS", "PQRS") }}{% if filtered %} con esos filtros{% endif %}. Las que siguen sin resolverse van primero, de la más antigua a la más nueva.</p>
   </div>
+  {% if excel_url %}
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ excel_url }}">Descargar Excel</a>
+  </div>
+  {% endif %}
 </div>
 
 {{ pqrs_tabs("bandeja") }}

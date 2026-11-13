@@ -431,6 +431,26 @@ def _append_sheet(workbook, name, headers, rows):
     return worksheet
 
 
+def generate_list_xlsx(title, headers, rows, about) -> bytes:
+    """El Excel de una lista de la web: una hoja con la lista y otra «Acerca de».
+
+    ``title`` es el nombre de la hoja (máximo 31 letras, como pide Excel), ``rows`` las filas en el
+    orden de ``headers`` y ``about`` las parejas (dato, valor) que dicen quién lo descargó, cuándo,
+    con qué filtros y que tiene datos personales. Un texto que empieza por «=», «+», «-» o «@» se
+    guarda como texto, nunca como fórmula.
+    """
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    _append_sheet(workbook, title[:31], tuple(headers), rows)
+    info = _append_sheet(workbook, "Acerca de", ("Dato", "Valor"), about)
+    info.column_dimensions["B"].width = 90
+    for row in info.iter_rows(min_row=2):
+        row[1].alignment = Alignment(wrap_text=True, vertical="top")
+    stream = io.BytesIO()
+    workbook.save(stream)
+    return stream.getvalue()
+
+
 def generate_census_template_xlsx() -> bytes:
     """Generate an example census workbook with a styled header row."""
     workbook = Workbook()

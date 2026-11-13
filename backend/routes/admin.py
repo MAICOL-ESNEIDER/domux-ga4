@@ -91,6 +91,13 @@ def post_import_census():
         return error_response(400, "fileBase64 es obligatorio.")
     if not isinstance(filename, str) or not filename.strip():
         return error_response(400, "fileName es obligatorio.")
+    # El censo deja a cada residente con la autorización de tratamiento de datos: quien lo sube
+    # confirma que la unidad la tiene (Ley 1581 de 2012).
+    if data.get("dataProcessingConsent") is not True:
+        return error_response(
+            400,
+            "Confirma que la unidad tiene la autorización de tratamiento de datos de cada residente del archivo.",
+        )
     if encoded_file.startswith("data:"):
         header, separator, encoded_file = encoded_file.partition(",")
         if not separator or ";base64" not in header.lower():

@@ -125,7 +125,6 @@ fun ReservationsScreen(
                     modifier = Modifier.weight(1f),
                     state = state,
                     onIncludeArchived = { viewModel.setIncludeArchived(it) },
-                    onRefresh = { viewModel.refresh() },
                     onDecide = { reservation, status ->
                         val approving = status == "aprobada"
                         confirmation = ReservationConfirmation(
@@ -180,7 +179,6 @@ private fun ReservationList(
     modifier: Modifier,
     state: ReservationsUiState,
     onIncludeArchived: (Boolean) -> Unit,
-    onRefresh: () -> Unit,
     onDecide: (Reservation, String) -> Unit,
     onCancel: (Reservation) -> Unit,
     onSend: (Reservation, String?, String?, String?) -> Unit,
@@ -195,15 +193,13 @@ private fun ReservationList(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // El respaldo va dentro de la lista para que se desplace con ella y deje ver las reservas.
+            // Las archivadas se ven aquí; el respaldo en Excel y archivar se hacen en la web, desde el computador.
             if (Session.isAdmin) {
                 item {
-                    LegalBackupCard(
-                        archiveLabel = "Archivar finalizadas y limpiar",
-                        archiveMessage = "Las reservas finalizadas y las PQRS resueltas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa.",
-                        includeArchived = state.includeArchived,
-                        onToggleArchived = { onIncludeArchived(!state.includeArchived) },
-                        onArchived = onRefresh
+                    FilterChip(
+                        selected = state.includeArchived,
+                        onClick = { onIncludeArchived(!state.includeArchived) },
+                        label = { Text("Ver archivadas") }
                     )
                 }
             }
@@ -268,7 +264,7 @@ private fun ReservationCard(
                 DomuxStatusBadge("Menor con autorización parental", DomuxBadgeTone.PROGRESS)
             }
             if (reservation.isArchived) {
-                DomuxStatusBadge("Archivada en Excel", DomuxBadgeTone.ALERT)
+                DomuxStatusBadge("Archivada", DomuxBadgeTone.PROGRESS)
             }
             // El residente cancela hasta el plazo de la zona (HU-053); después, debe escribirle a la administración.
             if (Session.isResident && actionable) {

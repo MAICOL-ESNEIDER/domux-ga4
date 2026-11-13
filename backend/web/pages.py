@@ -34,6 +34,7 @@ MENU = (
     ("Configuración", (
         ("Datos de la unidad", "web.unit_data", "card", "web.unit"),
         ("Zonas comunes y reglas", "web.zones_list", "sliders", "web.zone"),
+        ("Respaldo legal", "web.backup_page", "archive", "web.backup"),
     )),
 )
 
@@ -53,6 +54,8 @@ ICONS = {
     "card": '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/>'
             '<path d="M6 16a3 3 0 0 1 6 0M14 10h4M14 14h4"/>',
     "sliders": '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+    "archive": '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/>'
+               '<path d="M10 12h4"/>',
     "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
     "logout": '<path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9"/>',
 }

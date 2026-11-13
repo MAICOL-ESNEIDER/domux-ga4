@@ -92,16 +92,23 @@ class ExcelServiceTests(unittest.TestCase):
         self.assertEqual(template_response.json["fileName"], "Plantilla_Censo_DOMUX.xlsx")
         self.assertEqual(template_response.json["mimeType"], MIME_XLSX)
 
+        body = {
+            "fileBase64": (
+                "data:application/vnd.openxmlformats-officedocument."
+                f"spreadsheetml.sheet;base64,{template_response.json['base64']}"
+            ),
+            "fileName": template_response.json["fileName"],
+        }
+        # Sin confirmar la autorización de tratamiento de datos no se carga nada (Ley 1581 de 2012).
+        refused = self.client.post("/api/admin/import-census", headers=self.headers(), json=body)
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("autorización de tratamiento de datos", refused.json["error"])
+        self.assertEqual(User.query.filter_by(role="RESIDENT").count(), 1)
+
         import_response = self.client.post(
             "/api/admin/import-census",
             headers=self.headers(),
-            json={
-                "fileBase64": (
-                    "data:application/vnd.openxmlformats-officedocument."
-                    f"spreadsheetml.sheet;base64,{template_response.json['base64']}"
-                ),
-                "fileName": template_response.json["fileName"],
-            },
+            json={**body, "dataProcessingConsent": True},
         )
         self.assertEqual(import_response.status_code, 200)
         self.assertEqual(import_response.json["createdUsers"], 2)

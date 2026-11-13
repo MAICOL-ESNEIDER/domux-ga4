@@ -411,28 +411,6 @@ data class ReservationAvailabilityResponse(
 )
 data class UpdateReservationStatusRequest(val status: String)
 
-data class ExcelFileResponse(
-    val message: String? = null,
-    val fileName: String,
-    val mimeType: String? = null,
-    val base64: String,
-    val pqrsCount: Int? = null,
-    val reservationsCount: Int? = null,
-    val auditLogsCount: Int? = null,
-    val archivedPqrsCount: Int? = null,
-    val archivedReservationsCount: Int? = null
-)
-
-data class ImportCensusRequest(val fileBase64: String, val fileName: String)
-
-data class ImportCensusResponse(
-    val message: String?,
-    val createdUsers: Int = 0,
-    val updatedUsers: Int = 0,
-    val unitsProcessed: Int = 0,
-    val errors: List<String>? = null
-)
-
 data class PackageItem(
     val id: Int,
     val description: String?,

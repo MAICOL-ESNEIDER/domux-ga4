@@ -33,6 +33,7 @@ def init_web(app):
         pages,
         views_announcements,
         views_auth,
+        views_backup,
         views_notifications,
         views_panel,
         views_pqrs,

@@ -183,15 +183,13 @@ private fun PqrsList(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // El respaldo va dentro de la lista para que se desplace con ella y deje ver las PQRS.
+            // Las archivadas se ven aquí; el respaldo en Excel y archivar se hacen en la web, desde el computador.
             if (Session.isAdmin) {
                 item {
-                    LegalBackupCard(
-                        archiveLabel = "Archivar resueltas y limpiar",
-                        archiveMessage = "Las PQRS resueltas y las reservas finalizadas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa.",
-                        includeArchived = state.includeArchived,
-                        onToggleArchived = { viewModel.setIncludeArchived(!state.includeArchived) },
-                        onArchived = { viewModel.refresh() }
+                    FilterChip(
+                        selected = state.includeArchived,
+                        onClick = { viewModel.setIncludeArchived(!state.includeArchived) },
+                        label = { Text("Ver archivadas") }
                     )
                 }
             }

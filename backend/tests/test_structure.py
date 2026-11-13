@@ -802,6 +802,7 @@ class CensusImportStructureTests(StructureTestCase):
         response = self.call("post", "/api/admin/import-census", json={
             "fileBase64": base64.b64encode(self.csv("Torre 1 Apto 101,Ana,ana@test.local,,")).decode(),
             "fileName": "censo.csv",
+            "dataProcessingConsent": True,
         })
 
         self.assertEqual(response.status_code, 200)

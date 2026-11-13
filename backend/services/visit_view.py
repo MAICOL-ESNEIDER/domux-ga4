@@ -65,6 +65,9 @@ def _summary_row(row, now):
         "isOverstay": is_overstay,
         "qrPassId": row.qr_pass_id,
         "hasPhoto": bool(row.has_photo),
+        # Si dio el documento o no lo quiso dar; el número no viaja en la lista.
+        "hasDocument": bool(row.has_document),
+        "documentRefused": bool(row.document_refused),
         "createdAt": format_colombia(row.created_at),
         "registeredByName": full_name(row.guard_first_name, row.guard_last_name) or None,
     }
@@ -89,6 +92,8 @@ def summary_page(query, inside, page, size):
             Visit.approval_status, Visit.authorization_method, Visit.entered_at, Visit.exited_at,
             Visit.expected_stay_minutes, Visit.qr_pass_id, Visit.created_at,
             db.and_(Visit.visitor_photo_url.is_not(None), Visit.media_consent.is_(True)).label("has_photo"),
+            Visit.visitor_document.is_not(None).label("has_document"),
+            Visit.document_refused,
             resident.name.label("resident_first_name"),
             resident.last_name.label("resident_last_name"),
             resident.apartment.label("apartment"),

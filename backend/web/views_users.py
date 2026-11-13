@@ -3,15 +3,26 @@
 Son las mismas reglas de la app (RN-001, RN-004 y RN-008): la web solo reúne lo que escribió la
 administración y lo manda a la API. Nada se borra: desactivar a alguien cierra su acceso y deja su
 historial (ADR-013).
+
+Aquí también se importa el censo en Excel y se descarga la lista en Excel: eso se hace solo en la web,
+desde el computador, para que ningún archivo con datos de la unidad quede guardado en un celular.
 """
+
+import base64
+import binascii
 
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
 from web import bp
 from web.api import Api
+from web.exports import USER_COLUMNS, excel_download, filters_text, xlsx_response
 from web.forms import checked, compact, number, text
 from web.security import login_required
 from web.support import fetch_all, flash_result
+
+#: Lo más que puede pesar el archivo del censo.
+CENSUS_MAX_MB = 5
+CENSUS_EXTENSIONS = (".xlsx", ".csv")
 
 PAGE_SIZE = 25
 
@@ -27,21 +38,31 @@ STATE_OPTIONS = (("activos", "Activos"), ("inactivos", "Inactivos"))
 
 # --- Lista con filtros --------------------------------------------------------------------------
 
+def _user_filters():
+    """Los filtros de la lista; un rol o un estado desconocido se ignora."""
+    role = request.args.get("rol", "")
+    state = request.args.get("estado", "")
+    return {
+        "q": (request.args.get("q") or "").strip(),
+        "rol": role if role in dict(ROLE_OPTIONS) else "",
+        "estado": state if state in dict(STATE_OPTIONS) else "",
+    }
+
+
+def _user_api_filters(filters):
+    params = {"search": filters["q"], "role": filters["rol"]}
+    if filters["estado"]:
+        params["isActive"] = "true" if filters["estado"] == "activos" else "false"
+    return params
+
+
 @bp.get("/usuarios")
 @login_required
 def users_list():
-    search = (request.args.get("q") or "").strip()
-    role = request.args.get("rol", "")
-    state = request.args.get("estado", "")
+    filters = _user_filters()
+    search, state = filters["q"], filters["estado"]
     page = request.args.get("page", 1, type=int)
-    params = {
-        "search": search,
-        "role": role if role in dict(ROLE_OPTIONS) else "",
-        "page": max(page or 1, 1),
-        "pageSize": PAGE_SIZE,
-    }
-    if state in dict(STATE_OPTIONS):
-        params["isActive"] = "true" if state == "activos" else "false"
+    params = {**_user_api_filters(filters), "page": max(page or 1, 1), "pageSize": PAGE_SIZE}
     result = Api(g.web_user).get("/api/admin/users", **params)
     if not result.ok:
         flash(result.error, "error")
@@ -52,9 +73,91 @@ def users_list():
     return render_template(
         "web/users.html",
         users=result.get("users", []), total=result.get("total", 0), page=params["page"], pages=total_pages,
-        filters={"q": search, "rol": params["role"], "estado": state if state in dict(STATE_OPTIONS) else ""},
+        filters={"q": search, "rol": params["role"], "estado": state},
         role_options=ROLE_OPTIONS, state_options=STATE_OPTIONS,
+        excel_url=url_for("web.users_excel", **{key: value for key, value in filters.items() if value}),
     )
+
+
+@bp.get("/usuarios/excel")
+@login_required
+def users_excel():
+    """La lista de usuarios con sus filtros, en Excel: nombre, rol, apartamento y estado de la cuenta.
+
+    No van correos, teléfonos ni documentos: para eso está la página de cada usuario.
+    """
+    filters = _user_filters()
+    words = filters_text((
+        ("Búsqueda", filters["q"]),
+        ("Rol", dict(ROLE_OPTIONS).get(filters["rol"])),
+        ("Estado", dict(STATE_OPTIONS).get(filters["estado"])),
+    ))
+    back = url_for("web.users_list", **{key: value for key, value in filters.items() if value})
+    return excel_download(
+        "usuarios", "Usuarios", Api(g.web_user), "/api/admin/users", "users", _user_api_filters(filters),
+        words, USER_COLUMNS, back,
+    )
+
+
+# --- Censo en Excel -----------------------------------------------------------------------------
+
+def _census_page(result=None, status=200):
+    return render_template("web/census.html", result=result, max_mb=CENSUS_MAX_MB), status
+
+
+@bp.get("/usuarios/censo")
+@login_required
+def users_census():
+    return _census_page()
+
+
+@bp.post("/usuarios/censo")
+@login_required
+def users_census_import():
+    """Sube el censo a la API, que crea o actualiza a cada residente y dice qué filas no se cargaron."""
+    upload = request.files.get("file")
+    if not checked("consent"):
+        flash("Confirma que la unidad tiene la autorización de tratamiento de datos de los residentes del archivo.", "error")
+        return _census_page(status=400)
+    name = (upload.filename or "").strip() if upload else ""
+    if not name:
+        flash("Elige el archivo del censo.", "error")
+        return _census_page(status=400)
+    if not name.lower().endswith(CENSUS_EXTENSIONS):
+        flash("El censo debe ser un Excel (.xlsx) o un CSV. Descarga la plantilla para ver el formato.", "error")
+        return _census_page(status=400)
+    raw = upload.read(CENSUS_MAX_MB * 1024 * 1024 + 1)
+    if len(raw) > CENSUS_MAX_MB * 1024 * 1024:
+        flash(f"El archivo pesa más de {CENSUS_MAX_MB} MB. Divide el censo en varios archivos.", "error")
+        return _census_page(status=400)
+    if not raw:
+        flash("El archivo está vacío.", "error")
+        return _census_page(status=400)
+    result = Api(g.web_user).post("/api/admin/import-census", {
+        "fileBase64": base64.b64encode(raw).decode("ascii"),
+        "fileName": name.replace("\\", "/").rsplit("/", 1)[-1],
+        "dataProcessingConsent": True,
+    })
+    if not result.ok:
+        flash(result.error, "error")
+        return _census_page(status=result.status)
+    flash(result.message or "Censo importado.", "success")
+    return _census_page(result.data)
+
+
+@bp.get("/usuarios/censo/plantilla")
+@login_required
+def users_census_template():
+    """La plantilla del censo con dos residentes de ejemplo."""
+    result = Api(g.web_user).get("/api/admin/census-template")
+    try:
+        content = base64.b64decode(result.get("base64") or "", validate=True) if result.ok else b""
+    except (binascii.Error, ValueError):
+        content = b""
+    if not content:
+        flash(result.error or "No se pudo generar la plantilla. Inténtalo de nuevo.", "error")
+        return redirect(url_for("web.users_census"))
+    return xlsx_response(content, result.get("fileName") or "Plantilla_Censo_DOMUX.xlsx")
 
 
 # --- Crear y editar -----------------------------------------------------------------------------

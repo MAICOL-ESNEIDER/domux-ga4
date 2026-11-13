@@ -18,6 +18,7 @@ from services import reservation_view
 from services.reservation_service import CLOSED_RESERVATION_STATUSES, PENDING_RESERVATION_STATUSES
 from web import bp
 from web.api import Api
+from web.exports import RESERVATION_COLUMNS, excel_download, filters_text
 from web.forms import compact, text
 from web.security import login_required, safe_next
 from web.support import file_response, flash_result
@@ -85,6 +86,15 @@ def _args(filters, page=None):
     return args
 
 
+def _api_filters(filters):
+    """Los filtros de la lista como se los pide la API (sin la página)."""
+    return {
+        "view": "summary", "status": _TAB_STATUS[filters["estado"]], "commonAreaId": filters["zona"],
+        "dateFrom": filters["desde"], "dateTo": filters["hasta"], "search": filters["q"],
+        "includeArchived": "true" if filters["archivadas"] else "",
+    }
+
+
 def _list_args():
     """Lo que hay que conservar en los enlaces y formularios para volver a la misma lista."""
     return _args(_filters(), request.args.get("page", type=int))
@@ -112,12 +122,7 @@ def _page(selected_id=None, reply=None, status=200):
     api = Api(g.web_user)
     filters = _filters()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
-    result = api.get(
-        "/api/reservations", view="summary", status=_TAB_STATUS[filters["estado"]],
-        commonAreaId=filters["zona"], dateFrom=filters["desde"], dateTo=filters["hasta"],
-        search=filters["q"], includeArchived="true" if filters["archivadas"] else "",
-        page=page, pageSize=PAGE_SIZE,
-    )
+    result = api.get("/api/reservations", **_api_filters(filters), page=page, pageSize=PAGE_SIZE)
     if not result.ok:
         flash(result.error, "error")
     total_pages = result.get("totalPages", 1) or 1
@@ -144,6 +149,7 @@ def _page(selected_id=None, reply=None, status=200):
         "web/reservations.html",
         items=result.get("reservations", []), total=result.get("total", 0), page=page, pages=total_pages,
         filters=filters, list_args=_list_args(), tabs=_tabs(filters, result.get("counts", {})),
+        excel_url=url_for("web.reservations_excel", **_args(filters)),
         empty_text=EMPTY_TEXTS[filters["estado"]],
         zone_options=[(str(area["id"]), area["name"]) for area in areas.get("areas", [])],
         selected=selected, reply=reply or {"message": ""},
@@ -163,6 +169,31 @@ def reservations_list():
 @login_required
 def reservation_detail(res_id):
     return _page(res_id)
+
+
+@bp.get("/reservas/excel")
+@login_required
+def reservations_excel():
+    """La lista, con la pestaña y los filtros que tenga, en Excel (sin conversaciones ni adjuntos)."""
+    filters = _filters()
+    api = Api(g.web_user)
+    zone_name = ""
+    if filters["zona"]:
+        areas = api.get("/api/common-areas").get("areas", []) or []
+        zone_name = next((area["name"] for area in areas if str(area["id"]) == filters["zona"]), filters["zona"])
+    words = filters_text((
+        ("Estado", next(label for key, label, _status, _count in TABS if key == filters["estado"])),
+        ("Zona", zone_name),
+        ("Desde", filters["desde"]),
+        ("Hasta", filters["hasta"]),
+        ("Búsqueda", filters["q"]),
+        ("Incluye archivadas", "Sí" if filters["archivadas"] else ""),
+    ))
+    back = url_for("web.reservations_list", **_args(filters))
+    return excel_download(
+        "reservas", "Reservas", api, "/api/reservations", "reservations", _api_filters(filters), words,
+        RESERVATION_COLUMNS, back,
+    )
 
 
 # --- Decidir, cancelar y escribirle al residente ---------------------------------------------------

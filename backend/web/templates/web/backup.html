@@ -1,0 +1,29 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import checkbox %}
+{% set page_title = "Respaldo legal" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Respaldo legal</h1>
+    <p>El expediente de la unidad en Excel. Se descarga solo aquí, en el computador; cada descarga queda registrada.</p>
+  </div>
+</div>
+
+<section class="card form-narrow" aria-labelledby="backup-download">
+  <h2 id="backup-download">Descargar el respaldo completo</h2>
+  <p>Trae todas las PQRS con su conversación, las reservas y el registro de auditoría, también lo archivado. Sirve para guardar el expediente o para responder a una autoridad.</p>
+  <p class="help">Tiene datos personales: guárdalo en un lugar seguro y no lo compartas (Ley 1581 de 2012).</p>
+  <p><a class="btn" href="{{ url_for('web.backup_download') }}">Descargar el respaldo</a></p>
+</section>
+
+<form method="post" action="{{ url_for('web.backup_archive') }}" class="card form-narrow" aria-labelledby="backup-archive">
+  {{ csrf_input() }}
+  <h2 id="backup-archive">Archivar lo terminado</h2>
+  <p>Pasa a «archivadas» las PQRS resueltas y las reservas que ya pasaron, se rechazaron o se cancelaron. Salen de la bandeja del día a día, pero no se borra nada: siguen en el respaldo y se ven con el filtro «Archivadas».</p>
+  {{ checkbox("confirm", "Entiendo que esas PQRS y reservas salen de la bandeja activa.") }}
+  <div class="form-actions">
+    <button type="submit" class="btn">Archivar lo terminado</button>
+  </div>
+</form>
+{% endblock %}

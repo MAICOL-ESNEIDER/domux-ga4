@@ -101,10 +101,15 @@ class RegistryWebCase(WebTestCase):
 
     @staticmethod
     def links(body, prefix):
-        """Los enlaces de la página que empiezan por ``prefix``: lista de (ruta, parámetros)."""
+        """Los enlaces de la página que empiezan por ``prefix``: lista de (ruta, parámetros).
+
+        No cuenta el botón «Descargar Excel» de la lista (sus pruebas están en test_web_exports).
+        """
         found = []
         for href in re.findall(r'href="(' + re.escape(prefix) + r'[^"]*)"', body):
             parts = urlsplit(html.unescape(href))
+            if parts.path.endswith("/excel"):
+                continue
             found.append((parts.path, {key: values[0] for key, values in parse_qs(parts.query).items()}))
         return found
 

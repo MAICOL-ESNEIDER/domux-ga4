@@ -3,7 +3,8 @@
 Es solo de consulta (DEC-098): la administración busca y revisa lo que registró la portería —por ejemplo,
 para responder el reclamo de un paquete que no llegó— pero no registra ni cambia nada desde aquí; el
 registro sigue en la app de portería. Por eso esta web no tiene formularios que cambien datos: solo
-filtros que viajan en la dirección (GET).
+filtros que viajan en la dirección (GET). Cada lista se puede descargar en Excel con sus filtros
+(``exports.py``): solo con los datos necesarios y anotado en la auditoría.
 
 Los paquetes y las visitas se ven con la lista a la izquierda y el elegido al lado (en la pantalla angosta
 son dos pantallas, con un enlace para volver); los vehículos, en una tabla. Las fotos no viajan dentro de
@@ -18,6 +19,7 @@ from flask import abort, flash, g, redirect, render_template, request, url_for
 from services import package_view, visit_view
 from web import bp
 from web.api import Api
+from web.exports import PACKAGE_COLUMNS, VEHICLE_COLUMNS, VISIT_COLUMNS, excel_download, filters_text
 from web.security import login_required
 from web.support import file_response
 
@@ -147,6 +149,10 @@ def _out_of_range(result, rows_key, page, filters, tabs):
     return None
 
 
+def _tab_label(tabs, name):
+    return next(label for key, label, _count, _params in tabs if key == name)
+
+
 def _selected(api, path, key):
     """El elemento abierto al lado, con la API como fuente; si no existe, la página de «no encontrado»."""
     found = api.get(path, view="summary")
@@ -164,15 +170,16 @@ def _package_filters():
     return {"q": (request.args.get("q") or "").strip(), "estado": _tab(PACKAGE_TABS)}
 
 
+def _package_api_filters(filters):
+    return {"view": "summary", "search": filters["q"], **_tab_params(PACKAGE_TABS, filters["estado"])}
+
+
 def _packages_page(selected_id=None):
     """La lista de paquetes con los filtros de la URL y, si se pide, el paquete abierto al lado."""
     api = Api(g.web_user)
     filters = _package_filters()
     page = _page_number()
-    result = api.get(
-        "/api/packages", view="summary", search=filters["q"], page=page, pageSize=PAGE_SIZE,
-        **_tab_params(PACKAGE_TABS, filters["estado"]),
-    )
+    result = api.get("/api/packages", **_package_api_filters(filters), page=page, pageSize=PAGE_SIZE)
     if not result.ok:
         flash(result.error, "error")
     if (moved := _out_of_range(result, "packages", page, filters, PACKAGE_TABS)) is not None:
@@ -186,7 +193,7 @@ def _packages_page(selected_id=None):
         pages=result.get("totalPages", 1) or 1, filters=filters, list_args=list_args,
         tabs=_tab_links("web.registry_packages", PACKAGE_TABS, filters, result.get("counts", {})),
         empty_text=PACKAGE_EMPTY[filters["estado"]], hint=PACKAGE_HINTS.get(filters["estado"]),
-        selected=selected,
+        selected=selected, excel_url=url_for("web.registry_packages_excel", **_args(filters, PACKAGE_TABS)),
     )
 
 
@@ -200,6 +207,18 @@ def registry_packages():
 @login_required
 def registry_package_detail(package_id):
     return _packages_page(package_id)
+
+
+@bp.get("/paqueteria/excel")
+@login_required
+def registry_packages_excel():
+    """Los paquetes de la pestaña y la búsqueda que tenga la lista, en Excel (sin fotos ni guías)."""
+    filters = _package_filters()
+    words = filters_text((("Estado", _tab_label(PACKAGE_TABS, filters["estado"])), ("Búsqueda", filters["q"])))
+    return excel_download(
+        "paquetes", "Paquetes", Api(g.web_user), "/api/packages", "packages", _package_api_filters(filters),
+        words, PACKAGE_COLUMNS, url_for("web.registry_packages", **_args(filters, PACKAGE_TABS)),
+    )
 
 
 @bp.get("/paqueteria/<int:package_id>/foto")
@@ -220,16 +239,19 @@ def _visit_filters():
     }
 
 
+def _visit_api_filters(filters):
+    return {
+        "view": "summary", "search": filters["q"], "from": filters["desde"], "to": filters["hasta"],
+        **_tab_params(VISIT_TABS, filters["estado"]),
+    }
+
+
 def _visits_page(selected_id=None):
     """La lista de visitas con los filtros de la URL y, si se pide, la visita abierta al lado."""
     api = Api(g.web_user)
     filters = _visit_filters()
     page = _page_number()
-    result = api.get(
-        "/api/visits", view="summary", search=filters["q"], page=page, pageSize=PAGE_SIZE,
-        **{"from": filters["desde"], "to": filters["hasta"]},
-        **_tab_params(VISIT_TABS, filters["estado"]),
-    )
+    result = api.get("/api/visits", **_visit_api_filters(filters), page=page, pageSize=PAGE_SIZE)
     if not result.ok:
         flash(result.error, "error")
     if (moved := _out_of_range(result, "visits", page, filters, VISIT_TABS)) is not None:
@@ -243,7 +265,7 @@ def _visits_page(selected_id=None):
         pages=result.get("totalPages", 1) or 1, filters=filters, list_args=list_args,
         tabs=_tab_links("web.registry_visits", VISIT_TABS, filters, result.get("counts", {})),
         empty_text=VISIT_EMPTY[filters["estado"]], hint=VISIT_HINTS.get(filters["estado"]),
-        selected=selected,
+        selected=selected, excel_url=url_for("web.registry_visits_excel", **_args(filters, VISIT_TABS)),
     )
 
 
@@ -257,6 +279,24 @@ def registry_visits():
 @login_required
 def registry_visit_detail(visit_id):
     return _visits_page(visit_id)
+
+
+@bp.get("/visitas/excel")
+@login_required
+def registry_visits_excel():
+    """Las visitas de la pestaña, la búsqueda y las fechas que tenga la lista, en Excel.
+
+    Sin fotos ni números de documento: solo si la persona dio el documento o no lo quiso dar.
+    """
+    filters = _visit_filters()
+    words = filters_text((
+        ("Estado", _tab_label(VISIT_TABS, filters["estado"])), ("Búsqueda", filters["q"]),
+        ("Desde", filters["desde"]), ("Hasta", filters["hasta"]),
+    ))
+    return excel_download(
+        "visitas", "Visitas", Api(g.web_user), "/api/visits", "visits", _visit_api_filters(filters),
+        words, VISIT_COLUMNS, url_for("web.registry_visits", **_args(filters, VISIT_TABS)),
+    )
 
 
 @bp.get("/visitas/<int:visit_id>/foto")
@@ -273,11 +313,10 @@ def registry_visit_photo(visit_id):
 def registry_vehicles():
     """Las entradas de vehículos de visitantes, de la más reciente a la más antigua, en una tabla."""
     api = Api(g.web_user)
-    filters = {"placa": (request.args.get("placa") or "").strip(), "estado": _tab(VEHICLE_TABS)}
+    filters = _vehicle_filters()
     page = _page_number()
     result = api.get(
-        "/api/vehicle-entries", counts="true", plate=filters["placa"], page=page, pageSize=PAGE_SIZE,
-        **_tab_params(VEHICLE_TABS, filters["estado"]),
+        "/api/vehicle-entries", counts="true", page=page, pageSize=PAGE_SIZE, **_vehicle_api_filters(filters)
     )
     if not result.ok:
         flash(result.error, "error")
@@ -289,4 +328,26 @@ def registry_vehicles():
         pages=result.get("totalPages", 1) or 1, filters=filters,
         tabs=_tab_links("web.registry_vehicles", VEHICLE_TABS, filters, result.get("counts", {})),
         empty_text=VEHICLE_EMPTY[filters["estado"]], hint=VEHICLE_HINTS.get(filters["estado"]),
+        excel_url=url_for("web.registry_vehicles_excel", **_args(filters, VEHICLE_TABS)),
+    )
+
+
+def _vehicle_filters():
+    return {"placa": (request.args.get("placa") or "").strip(), "estado": _tab(VEHICLE_TABS)}
+
+
+def _vehicle_api_filters(filters):
+    return {"plate": filters["placa"], **_tab_params(VEHICLE_TABS, filters["estado"])}
+
+
+@bp.get("/vehiculos/excel")
+@login_required
+def registry_vehicles_excel():
+    """Las entradas de vehículos de la pestaña y la placa que tenga la lista, en Excel."""
+    filters = _vehicle_filters()
+    words = filters_text((("Situación", _tab_label(VEHICLE_TABS, filters["estado"])), ("Placa", filters["placa"])))
+    return excel_download(
+        "vehiculos", "Vehículos de visitantes", Api(g.web_user), "/api/vehicle-entries", "vehicleEntries",
+        _vehicle_api_filters(filters), words, VEHICLE_COLUMNS,
+        url_for("web.registry_vehicles", **_args(filters, VEHICLE_TABS)),
     )

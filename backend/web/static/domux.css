@@ -272,6 +272,10 @@ dl.facts dt { color: var(--muted); }
 dl.facts dd { margin: 0; }
 dl.facts.mt-1 { margin-top: 1rem; }
 
+/* Pasos numerados (censo) y la lista de filas que no se cargaron. */
+ol.steps { margin: 0 0 1rem; padding-left: 1.4rem; display: grid; gap: .4rem; }
+ul.error-list { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: .3rem; color: var(--bad); }
+
 dialog {
   background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 1.25rem 1.5rem; max-width: min(92vw, 440px);

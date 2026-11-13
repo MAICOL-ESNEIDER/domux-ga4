@@ -10,6 +10,8 @@
     <p>{{ plural(total, "usuario", "usuarios") }}{% if filtered %} con esos filtros{% endif %}.</p>
   </div>
   <div class="actions">
+    {% if excel_url %}<a class="btn btn-quiet" href="{{ excel_url }}">Descargar Excel</a>{% endif %}
+    <a class="btn btn-quiet" href="{{ url_for('web.users_census') }}">Importar censo</a>
     <a class="btn" href="{{ url_for('web.user_new') }}">Crear usuario</a>
   </div>
 </div>

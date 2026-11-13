@@ -10,6 +10,11 @@
     <h1>Paquetes</h1>
     <p>{{ plural(total, "paquete", "paquetes") }}{% if filters.q %} con esa búsqueda{% endif %}. Es solo de consulta: el registro de paquetes se hace en la app de portería.</p>
   </div>
+  {% if excel_url %}
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ excel_url }}">Descargar Excel</a>
+  </div>
+  {% endif %}
 </div>
 
 {{ registry_tabs("paquetes") }}

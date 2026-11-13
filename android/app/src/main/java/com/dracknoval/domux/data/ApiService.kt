@@ -218,26 +218,8 @@ interface ApiService {
         @Query("includeArchived") includeArchived: String? = null
     ): Response<ReservationsListResponse>
 
-    @GET("api/admin/census-template")
-    suspend fun getCensusTemplate(
-        @Header("Authorization") auth: String
-    ): Response<ExcelFileResponse>
-
-    @POST("api/admin/import-census")
-    suspend fun importCensus(
-        @Header("Authorization") auth: String,
-        @Body body: ImportCensusRequest
-    ): Response<ImportCensusResponse>
-
-    @GET("api/admin/export/legal-report")
-    suspend fun exportLegalReport(
-        @Header("Authorization") auth: String
-    ): Response<ExcelFileResponse>
-
-    @POST("api/admin/archive-history")
-    suspend fun archiveHistory(
-        @Header("Authorization") auth: String
-    ): Response<ExcelFileResponse>
+    // El Excel (censo, respaldo legal, archivar y exportar listas) se maneja solo en la web de
+    // administración, desde el computador: la app no descarga ni guarda archivos en el celular.
 
     @GET("api/reservations/availability")
     suspend fun getReservationAvailability(

@@ -15,6 +15,7 @@ from flask import abort, flash, g, redirect, render_template, request, url_for
 from services import pqrs_service
 from web import bp
 from web.api import Api
+from web.exports import PQRS_COLUMNS, excel_download, filters_text
 from web.forms import compact, number, text
 from web.security import login_required
 from web.support import fetch_all, file_response
@@ -51,6 +52,15 @@ def _filters():
     }
 
 
+def _api_filters(filters):
+    """Los filtros de la bandeja como se los pide la API (sin la página)."""
+    return {
+        "view": "summary", "status": filters["estado"], "category": filters["tipo"],
+        "semaphore": filters["plazo"], "search": filters["q"],
+        "includeArchived": "true" if filters["archivadas"] else "",
+    }
+
+
 def _list_args():
     """Lo que hay que conservar en los enlaces y formularios para volver a la misma bandeja."""
     args = {key: value for key, value in _filters().items() if value}
@@ -84,11 +94,7 @@ def _inbox(selected_id=None, reply=None, batch=None, status=200):
     api = Api(g.web_user)
     filters = _filters()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
-    result = api.get(
-        "/api/pqrs", view="summary", status=filters["estado"], category=filters["tipo"],
-        semaphore=filters["plazo"], search=filters["q"],
-        includeArchived="true" if filters["archivadas"] else "", page=page, pageSize=PAGE_SIZE,
-    )
+    result = api.get("/api/pqrs", **_api_filters(filters), page=page, pageSize=PAGE_SIZE)
     if not result.ok:
         flash(result.error, "error")
     total_pages = result.get("totalPages", 1) or 1
@@ -110,6 +116,7 @@ def _inbox(selected_id=None, reply=None, batch=None, status=200):
         "web/pqrs.html",
         items=result.get("pqrs", []), total=result.get("total", 0), page=page, pages=total_pages,
         filters=filters, list_args=_list_args(),
+        excel_url=url_for("web.pqrs_excel", **{key: value for key, value in filters.items() if value}),
         selected=selected, thread=_thread(selected) if selected else [],
         reply=reply or _default_reply(selected),
         batch=batch or {"ids": [], "status": "en_proceso", "message": "", "open": False},
@@ -128,6 +135,24 @@ def pqrs_list():
 @login_required
 def pqrs_detail(pqrs_id):
     return _inbox(pqrs_id)
+
+
+@bp.get("/pqrs/excel")
+@login_required
+def pqrs_excel():
+    """La bandeja, con los filtros que tenga, en Excel (sin conversaciones ni adjuntos)."""
+    filters = _filters()
+    words = filters_text((
+        ("Búsqueda", filters["q"]),
+        ("Estado", dict(STATUS_OPTIONS).get(filters["estado"])),
+        ("Tipo", filters["tipo"]),
+        ("Plazo", dict(DEADLINE_OPTIONS).get(filters["plazo"])),
+        ("Incluye archivadas", "Sí" if filters["archivadas"] else ""),
+    ))
+    back = url_for("web.pqrs_list", **{key: value for key, value in filters.items() if value})
+    return excel_download(
+        "pqrs", "PQRS", Api(g.web_user), "/api/pqrs", "pqrs", _api_filters(filters), words, PQRS_COLUMNS, back
+    )
 
 
 # --- Responder -------------------------------------------------------------------------------------

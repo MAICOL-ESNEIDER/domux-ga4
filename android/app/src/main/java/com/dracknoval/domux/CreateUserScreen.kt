@@ -1,11 +1,6 @@
 package com.dracknoval.domux
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,25 +10,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.dracknoval.domux.data.ExcelFileResponse
-import com.dracknoval.domux.data.ImportCensusRequest
-import com.dracknoval.domux.data.RetrofitClient
-import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.UserData
-import com.dracknoval.domux.data.mensajeDeError
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 import com.dracknoval.domux.ui.theme.DomuxColor
 
 private fun nextFilter(value: Boolean?): Boolean? = when (value) {
@@ -47,10 +31,6 @@ private fun filterLabel(value: Boolean?): String = when (value) {
     true -> "Sí"
     false -> "No"
 }
-
-private fun isCancellation(e: Throwable): Boolean =
-    e is CancellationException ||
-        e.message?.contains("left the composition", ignoreCase = true) == true
 
 private const val PASSWORD_RULE = "Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo."
 
@@ -68,17 +48,21 @@ fun CreateUserScreen(navController: NavController, viewModel: UsersViewModel = v
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DomuxSectionTabs(
-                listOf("Usuarios (${state.total})", "Crear usuario", "Censo Excel"),
+                listOf("Usuarios (${state.total})", "Crear usuario"),
                 state.selectedTab,
                 viewModel::selectTab
             )
             DomuxMessageBanner(state.message, state.messageIsError) { viewModel.dismissMessage() }
             when (state.selectedTab) {
                 0 -> UsersList(state, viewModel, navController)
-                1 -> CreateUserForm(state, viewModel)
-                // El censo por Excel pasa a la web; mientras tanto sigue aquí como estaba.
-                else -> CensusExcelPanel { viewModel.load(1) }
+                else -> CreateUserForm(state, viewModel)
             }
+            // El censo en Excel se importa en la web, desde el computador: la app no guarda archivos.
+            Text(
+                "Para importar el censo en Excel usa la web de administración desde el computador.",
+                style = MaterialTheme.typography.bodySmall,
+                color = DomuxColor.TextMuted
+            )
         }
     }
 
@@ -496,157 +480,6 @@ private fun GuardPinDialog(user: UserData, state: UsersUiState, viewModel: Users
             TextButton(enabled = !state.busy, onClick = viewModel::cancelPin) { Text("Cancelar") }
         }
     )
-}
-
-@Composable
-private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var message by remember { mutableStateOf("") }
-    var messageIsError by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    var pendingTemplate by remember { mutableStateOf<ExcelFileResponse?>(null) }
-    val storagePermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        val file = pendingTemplate
-        pendingTemplate = null
-        if (granted && file != null) {
-            try {
-                saveBase64FileToDownloads(
-                    context,
-                    file.fileName,
-                    file.base64,
-                    file.mimeType
-                        ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-                message = "Plantilla guardada exitosamente en Descargas."
-                messageIsError = false
-            } catch (exception: Exception) {
-                message = "No se pudo guardar la plantilla: ${exception.message}"
-                messageIsError = true
-            }
-        } else {
-            message = "Se requiere permiso de almacenamiento para guardar en Descargas."
-            messageIsError = true
-        }
-        busy = false
-    }
-
-    DomuxCard(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text("Censo Excel", style = MaterialTheme.typography.titleMedium)
-            Text("Descarga la plantilla o importa el censo de residentes de una unidad.")
-            Button(
-                enabled = !busy,
-                onClick = {
-                    busy = true
-                    message = ""
-                    scope.launch {
-                        var waitingForPermission = false
-                        try {
-                            val response = RetrofitClient.api.getCensusTemplate(Session.bearer())
-                            if (response.isSuccessful) {
-                                val file = response.body()
-                                    ?: error("El servidor devolvió una plantilla vacía.")
-                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
-                                    ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.WRITE_EXTERNAL_STORAGE
-                                    ) != PackageManager.PERMISSION_GRANTED
-                                ) {
-                                    pendingTemplate = file
-                                    waitingForPermission = true
-                                    storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                                } else {
-                                    saveBase64FileToDownloads(
-                                        context,
-                                        file.fileName,
-                                        file.base64,
-                                        file.mimeType
-                                            ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                    )
-                                    message = "Plantilla guardada exitosamente en Descargas."
-                                    messageIsError = false
-                                }
-                            } else {
-                                message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                messageIsError = true
-                            }
-                        } catch (exception: Exception) {
-                            if (isCancellation(exception)) {
-                                if (exception is CancellationException) throw exception
-                                return@launch
-                            }
-                            message = "No se pudo descargar la plantilla: ${exception.message}"
-                            messageIsError = true
-                        } finally {
-                            if (!waitingForPermission) busy = false
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Descargar plantilla Excel de ejemplo")
-            }
-            ExcelFilePickerButton(
-                onFileSelected = { base64, fileName ->
-                    busy = true
-                    message = ""
-                    scope.launch {
-                        try {
-                            val response = RetrofitClient.api.importCensus(
-                                Session.bearer(),
-                                ImportCensusRequest(base64, fileName)
-                            )
-                            if (response.isSuccessful) {
-                                val result = response.body()
-                                    ?: error("El servidor devolvió un resumen vacío.")
-                                message = buildString {
-                                    append(result.message ?: "Importación del censo procesada.")
-                                    append("\nResidentes creados: ${result.createdUsers}")
-                                    append("\nResidentes actualizados: ${result.updatedUsers}")
-                                    append("\nUnidades procesadas: ${result.unitsProcessed}")
-                                    result.errors.orEmpty().takeIf { it.isNotEmpty() }?.let { warnings ->
-                                        append("\nAdvertencias:")
-                                        warnings.forEach { append("\n• $it") }
-                                    }
-                                }
-                                messageIsError = false
-                                onImportComplete()
-                            } else {
-                                message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                messageIsError = true
-                            }
-                        } catch (exception: Exception) {
-                            if (isCancellation(exception)) {
-                                if (exception is CancellationException) throw exception
-                                return@launch
-                            }
-                            message = "No se pudo importar el censo: ${exception.message}"
-                            messageIsError = true
-                        } finally {
-                            busy = false
-                        }
-                    }
-                },
-                onError = {
-                    message = it
-                    messageIsError = true
-                }
-            )
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (message.isNotBlank()) {
-                Text(
-                    message,
-                    color = if (messageIsError) MaterialTheme.colorScheme.error else DomuxColor.Ok
-                )
-            }
-        }
-    }
 }
 
 @Composable

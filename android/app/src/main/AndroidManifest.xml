@@ -7,9 +7,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Grabar audios para las PQRS, las reservas y los comunicados; se pide la primera vez que se usa. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <!-- Sin permiso de almacenamiento: la app no guarda archivos en el celular (el Excel va en la web). -->
 
     <!-- Sin copia de seguridad de Android: ningún dato de la unidad sale de la app hacia la nube del dueño del celular. -->
     <application

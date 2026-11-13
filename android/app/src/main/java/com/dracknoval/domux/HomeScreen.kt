@@ -482,6 +482,35 @@ private fun AdminHome(summary: AdminSummaryResponse?, loading: Boolean, navContr
             }
         }
     }
+    InfoNote(
+        "Exportar a Excel, el respaldo legal e importar el censo se hacen en la web de administración, " +
+            "desde el computador. La app no guarda archivos en el celular."
+    )
+}
+
+/** Un aviso informativo pequeño, con su ícono: no es un error ni un éxito, solo cuenta algo. */
+@Composable
+private fun InfoNote(text: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = DomuxColor.Selected,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, DomuxColor.Line)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_info),
+                contentDescription = null,
+                tint = DomuxColor.Primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(text, style = MaterialTheme.typography.bodySmall, color = DomuxColor.TextBright)
+        }
+    }
 }
 
 /** Un contador grande del inicio de la administración; se toca para ir a la lista. */

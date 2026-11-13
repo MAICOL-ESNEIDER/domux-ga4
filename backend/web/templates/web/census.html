@@ -1,0 +1,61 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import checkbox %}
+{% set page_title = "Importar el censo" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Importar el censo</h1>
+    <p>Carga de una vez los residentes de la unidad desde un Excel. Se hace solo aquí, en el computador: la app no guarda archivos en el celular.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ url_for('web.users_list') }}">Volver a usuarios</a>
+  </div>
+</div>
+
+<section class="card form-narrow" aria-labelledby="census-steps">
+  <h2 id="census-steps">Cómo se hace</h2>
+  <ol class="steps">
+    <li>Descarga la plantilla y llénala: una fila por residente, con su apartamento, nombre y correo o documento.</li>
+    <li>Guarda el archivo como Excel (.xlsx) o CSV y súbelo aquí.</li>
+    <li>Revisa el resultado: los residentes nuevos se crean, los que ya existen (mismo correo o documento) se actualizan y las filas con errores no cambian nada.</li>
+  </ol>
+  <p><a class="btn btn-quiet" href="{{ url_for('web.users_census_template') }}">Descargar la plantilla de ejemplo</a></p>
+  <p class="help">Los residentes nuevos quedan sin contraseña: asígnasela desde su página en «Usuarios» para que puedan entrar.</p>
+</section>
+
+<form method="post" action="{{ url_for('web.users_census_import') }}" enctype="multipart/form-data"
+      class="card form-narrow" aria-label="Subir el censo">
+  {{ csrf_input() }}
+  <div class="field">
+    <label for="file">Archivo del censo <span class="req" aria-hidden="true">*</span><span class="sr-only">(obligatorio)</span></label>
+    <input type="file" id="file" name="file" required aria-describedby="file-help"
+           accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
+    <p class="help" id="file-help">Excel (.xlsx) o CSV de hasta {{ max_mb }} MB.</p>
+  </div>
+  {{ checkbox("consent", "Confirmo que la unidad tiene la autorización de tratamiento de datos de cada residente del archivo.",
+              help="Es la autorización de la Ley 1581 de 2012. Sin ella no se pueden cargar sus datos.") }}
+  <div class="form-actions">
+    <button type="submit" class="btn">Importar el censo</button>
+  </div>
+</form>
+
+{% if result %}
+<section class="card form-narrow" aria-labelledby="census-result" tabindex="-1" data-focus-on-load>
+  <h2 id="census-result">Resultado de la importación</h2>
+  <dl class="facts">
+    <dt>Residentes nuevos</dt><dd>{{ result.createdUsers }}</dd>
+    <dt>Residentes actualizados</dt><dd>{{ result.updatedUsers }}</dd>
+    <dt>Apartamentos</dt><dd>{{ result.unitsProcessed }}</dd>
+    <dt>Filas con errores</dt><dd>{{ result.errors|length }}</dd>
+  </dl>
+  {% if result.errors %}
+  <h3>Filas que no se cargaron</h3>
+  <ul class="error-list">
+    {% for error in result.errors %}<li>{{ error }}</li>{% endfor %}
+  </ul>
+  <p class="help">Corrige esas filas en el archivo y vuelve a subirlo: las que ya se cargaron solo se actualizan.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
