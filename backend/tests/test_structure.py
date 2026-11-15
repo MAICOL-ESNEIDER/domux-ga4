@@ -530,6 +530,10 @@ class ResidentLinkTests(StructureTestCase):
         self.assertEqual(response.status_code, 201)
         created = User.query.filter_by(email="nuevo-estructura@test.local").one()
         self.assertEqual(created.apartment_id, self.apartment.id)
+        # La cuenta nace con contraseña temporal; aquí se da por cambiada para poder ver el perfil.
+        self.assertTrue(created.must_change_password)
+        created.must_change_password = False
+        db.session.commit()
         # CA-HU-017-03: el residente ve su apartamento y su tipo de ocupación en su perfil.
         profile = self.call("get", "/api/profile", user=created).get_json()["user"]
         self.assertEqual(

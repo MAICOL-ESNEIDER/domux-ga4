@@ -72,6 +72,25 @@ class ForcedPasswordChangeTests(PasswordApiTestCase):
         self.assertEqual(log.actor_id, self.resident.id)
         self.assertNotIn(OWN, log.details or "")
 
+    def test_una_cuenta_nueva_nace_con_contrasena_temporal(self):
+        created = self.client.post("/api/users", headers=self.bearer(self.admin), json={
+            "name": "Nora", "lastName": "Paz", "email": "nueva-cuenta@test.local", "password": TEMPORARY,
+            "role": "GUARD",
+        })
+        self.assertEqual(created.status_code, 201, created.get_json())
+        self.assertTrue(created.get_json()["user"]["mustChangePassword"])
+
+        token = self.client.post(
+            "/api/auth/login", json={"email": "nueva-cuenta@test.local", "password": TEMPORARY},
+        ).get_json()["token"]
+
+        self.assertEqual(self.client.get("/api/announcements", headers=self.bearer(token)).status_code, 403)
+        changed = self.change(token, TEMPORARY, OWN)
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(
+            self.client.get("/api/announcements", headers=self.bearer(changed.get_json()["token"])).status_code, 200,
+        )
+
     def test_el_administrador_que_cambia_la_suya_no_queda_obligado(self):
         self.reset(self.admin)
 

@@ -231,7 +231,7 @@ def user_new():
     if request.method == "POST":
         result = api.post("/api/admin/users", _user_body(creating=True))
         if result.ok:
-            flash("Usuario creado.", "success")
+            flash("Usuario creado. Su contraseña es temporal: al entrar por primera vez tendrá que cambiarla.", "success")
             return redirect(url_for("web.user_edit", user_id=result.get("user", {}).get("id")))
         flash(result.error, "error")
         return _render_form(api, None, _values_of_form(), result.status)

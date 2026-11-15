@@ -371,6 +371,8 @@ def create_user():
         data_processing_consent=role == "RESIDENT",
         data_processing_consent_at=utc_now() if role == "RESIDENT" else None,
         is_active=True,
+        # La contraseña la escribió el administrador: es temporal y la persona pone una propia al entrar.
+        must_change_password=True,
     )
     db.session.add(user)
     if apartment is not None:
