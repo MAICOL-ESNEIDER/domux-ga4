@@ -438,7 +438,10 @@ private fun ResetPasswordDialog(user: UserData, state: UsersUiState, viewModel: 
         title = { Text("Restablecer contraseña") },
         text = {
             Column {
-                Text("Se cambiará la contraseña de ${user.email}.")
+                Text(
+                    "Se cambiará la contraseña de ${user.email}. Es temporal: la primera vez que entre, " +
+                        "la app le pedirá cambiarla por una propia."
+                )
                 UserInput(
                     newPassword, { newPassword = it }, "Nueva contraseña", true,
                     password = true, showMissingError = attempted

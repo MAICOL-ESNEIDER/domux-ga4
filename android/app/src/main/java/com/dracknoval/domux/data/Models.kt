@@ -26,7 +26,9 @@ data class UserData(
     // El apartamento es una llave a la estructura de la unidad (HU-017); `apartment` es su texto.
     val apartmentId: Int? = null,
     // Solo los guardias tienen PIN para cambiar de turno (HU-010).
-    val hasPin: Boolean = false
+    val hasPin: Boolean = false,
+    // El administrador le restableció la contraseña: al entrar debe poner una propia.
+    val mustChangePassword: Boolean = false
 )
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
@@ -61,6 +63,7 @@ data class UpdateUserRequest(
     val parentalConsent: Boolean? = null
 )
 data class ResetPasswordRequest(val password: String)
+data class ChangeOwnPasswordRequest(val currentPassword: String, val newPassword: String)
 
 // PIN de 4 dígitos del guardia (HU-010): el administrador lo asigna y el guardia lo usa en la tablet.
 data class SetPinRequest(val pin: String)

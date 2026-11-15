@@ -30,6 +30,10 @@ from web import bp
 
 #: Segundos sin actividad después de los cuales la sesión se cierra sola.
 IDLE_SECONDS = 30 * 60
+#: Segundos que vale haber escrito la contraseña otra vez para descargar copias y archivos.
+PASSWORD_CONFIRM_SECONDS = 10 * 60
+#: Páginas que puede usar quien tiene pendiente poner una contraseña propia.
+PASSWORD_CHANGE_PAGES = frozenset({"web.password_change", "web.password_change_submit", "web.logout"})
 
 #: Horas que dura una sesión como máximo, aunque la persona no deje de usarla.
 SESSION_HOURS = 8
@@ -184,6 +188,38 @@ def login_required(view):
                 return redirect(url_for("web.login"))
             return redirect(url_for("web.login", next=target))
         g.web_user = user
+        # Con una contraseña que le puso otro administrador, primero debe poner una propia.
+        if user.must_change_password and request.endpoint not in PASSWORD_CHANGE_PAGES:
+            return redirect(url_for("web.password_change"))
         return view(*args, **kwargs)
 
     return wrapper
+
+
+def password_confirmed():
+    """Dice si el administrador escribió su contraseña hace poco (para descargar copias y archivos)."""
+    return int(time.time()) - int(session.get("pwd_at", 0)) <= PASSWORD_CONFIRM_SECONDS
+
+
+def mark_password_confirmed():
+    session["pwd_at"] = int(time.time())
+
+
+def password_confirmation_required(back_endpoint):
+    """Antes de una descarga delicada pide otra vez la contraseña; va después de ``login_required``.
+
+    Protege si alguien encuentra el computador con la sesión abierta. Al confirmar, la persona
+    vuelve a la página ``back_endpoint`` y desde ahí descarga durante unos minutos.
+    """
+
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            if not password_confirmed():
+                flash("Por seguridad, escribe tu contraseña para descargar.", "info")
+                return redirect(url_for("web.password_confirm", next=url_for(back_endpoint)))
+            return view(*args, **kwargs)
+
+        return wrapper
+
+    return decorator

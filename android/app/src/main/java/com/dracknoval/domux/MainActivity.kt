@@ -116,6 +116,14 @@ class MainActivity : ComponentActivity() {
                         composable("notifications") { NotificationsScreen(navController) }
                         composable("more") { MoreScreen(navController) }
                     }
+                    // Con una contraseña temporal (se la restableció el administrador) esta pantalla
+                    // tapa todo lo demás hasta que la persona ponga una propia.
+                    if (Session.mustChangePassword) {
+                        PasswordChangeScreen(
+                            onChanged = { navController.navigate("home") { popUpTo(0) } },
+                            onLoggedOut = { navController.navigate("login") { popUpTo(0) } }
+                        )
+                    }
                 }
             }
         }

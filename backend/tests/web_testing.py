@@ -74,6 +74,10 @@ class WebTestCase(unittest.TestCase):
         self._token = None
         return response
 
+    def confirm_password(self, password=PASSWORD, next_url=""):
+        """Escribe otra vez la contraseña, como pide la web antes de descargar copias y archivos."""
+        return self.post("/web/confirmar-contrasena", {"password": password, "next": next_url})
+
     def post(self, path, data=None, follow=False):
         """Manda un formulario con el código contra CSRF de la sesión abierta."""
         if self._token is None:

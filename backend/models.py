@@ -148,6 +148,9 @@ class User(db.Model):
     # Sube cada vez que hay que cerrar las sesiones abiertas de la persona (entrega el turno de
     # portería o le restablecen la contraseña): un token con un número viejo deja de servir.
     token_version = db.Column(db.Integer, default=0, nullable=False, server_default="0")
+    # Verdadero cuando el administrador le restableció la contraseña: al entrar debe poner una
+    # propia antes de seguir, así nadie más conoce su contraseña.
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     data_processing_consent = db.Column(db.Boolean, nullable=False, default=False)
     data_processing_consent_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -240,6 +243,7 @@ class User(db.Model):
             "dataProcessingConsent": bool(self.data_processing_consent),
             "dataProcessingConsentAt": _fmt(self.data_processing_consent_at),
             "isActive": self.is_active if self.is_active is not None else True,
+            "mustChangePassword": bool(self.must_change_password),
             "createdAt": _fmt(self.created_at),
         }
 

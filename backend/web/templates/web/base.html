@@ -44,6 +44,7 @@
       </nav>
       <div class="who">
         <span class="who-name">{{ web_user.full_name }} · {{ role_labels.get(web_user.role, web_user.role) }}</span>
+        <a class="btn btn-quiet btn-small" href="{{ url_for('web.password_change') }}">Cambiar contraseña</a>
         <form method="post" action="{{ url_for('web.logout') }}">
           {{ csrf_input() }}
           <button type="submit" class="btn btn-quiet btn-small">{{ icon("logout") }} Cerrar sesión</button>

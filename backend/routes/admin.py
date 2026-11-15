@@ -538,6 +538,8 @@ def reset_user_password(user_id):
     user.password_hash = generate_password_hash(data["password"])
     # Las sesiones abiertas con la clave anterior se cierran.
     close_sessions(user)
+    # Esta contraseña la conoce el administrador: la persona debe poner una propia al entrar.
+    user.must_change_password = user.id != g.current_user.id
     # Con la clave nueva la persona debe poder entrar: se quita el bloqueo por intentos (HU-006).
     register_success(LOGIN, user.email.strip().lower()[:160])
     db.session.commit()

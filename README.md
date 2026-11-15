@@ -139,6 +139,7 @@ Todas las rutas protegidas requieren el encabezado `Authorization: Bearer <token
 | Archivo legal | `POST /api/admin/archive-history` | ADMIN | Archiva PQRS resueltas y reservas históricas y genera el respaldo Excel. Se usa desde la web (`/web/respaldo`). |
 | Archivo histórico | Web: `/web/archivo-historico` | ADMIN | Pasa a archivos JSON comprimidos (por tipo y por mes, con huella SHA-256) los registros que cumplieron su plazo, permite descargarlos y volver a cargarlos, y descarga una copia de respaldo sin contraseñas. No tiene ruta en la API. |
 | Sesiones | `POST /api/auth/guard-shift`, `PUT /api/admin/users/<id>/password` | GUARD, ADMIN | Al entregar el turno o al restablecer una contraseña se cierran las sesiones anteriores de esa persona. |
+| Sesiones | `PUT /api/auth/password` | Autenticado | La persona cambia su propia contraseña (pide la actual). Es obligatorio después de que el administrador se la restablece: hasta entonces lo demás responde 403 con `passwordChangeRequired`. |
 | Anuncios | `GET / POST / DELETE /api/announcements` | Todos (GET), ADMIN (POST/DELETE) | Tablón de comunicados con soporte multimedia. |
 | PQRS | `GET / POST /api/pqrs` | ADMIN, RESIDENT | Listado filtrado y radicación de solicitudes. |
 | PQRS | `PUT /api/pqrs/<id>/respond` | ADMIN | Respuesta administrativa y cambio de estado. |

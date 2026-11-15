@@ -6,14 +6,23 @@ contraseña incorrectos (RN-002) y el aviso de cuenta inhabilitada. Lo único qu
 solo entra la administración (RN-006).
 """
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, g, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash
 
 from extensions import db
 from models import User
 from services.audit_service import add_audit_log
 from web import bp
 from web.api import Api
-from web.security import current_admin, end_session, login_required, safe_next, start_session
+from services.login_attempt_service import LOGIN, register_failure, register_success, seconds_locked
+from web.security import (
+    current_admin,
+    end_session,
+    login_required,
+    mark_password_confirmed,
+    safe_next,
+    start_session,
+)
 
 #: Lo que ve un residente o un guardia que escribe bien su contraseña (CA-HU-074-01).
 NOT_ADMIN_MESSAGE = (
@@ -69,3 +78,64 @@ def logout():
     end_session()
     flash("Cerraste la sesión.", "success")
     return redirect(url_for("web.login"))
+
+
+# --- Confirmar la contraseña antes de descargar ------------------------------------------------
+
+@bp.get("/confirmar-contrasena")
+@login_required
+def password_confirm():
+    return render_template("web/password_confirm.html", next_url=safe_next(request.args.get("next")))
+
+
+@bp.post("/confirmar-contrasena")
+@login_required
+def password_confirm_submit():
+    """Comprueba la contraseña del administrador; los fallos cuentan para el bloqueo de 15 minutos."""
+    next_url = safe_next(request.form.get("next"))
+    user = g.web_user
+    attempts_key = user.email.strip().lower()[:160]
+    if seconds_locked(LOGIN, attempts_key):
+        end_session()
+        flash("Demasiados intentos fallidos. Espera 15 minutos e inicia sesión de nuevo.", "error")
+        return redirect(url_for("web.login"))
+    if not check_password_hash(user.password_hash, request.form.get("password", "")):
+        register_failure(LOGIN, attempts_key)
+        add_audit_log("user", user.id, "web_password_confirm_failed", None, actor=user)
+        db.session.commit()
+        flash("La contraseña no es correcta.", "error")
+        return redirect(url_for("web.password_confirm", next=next_url))
+    register_success(LOGIN, attempts_key)
+    db.session.commit()
+    mark_password_confirmed()
+    flash("Listo: ya puedes descargar durante los próximos 10 minutos.", "success")
+    return redirect(next_url or url_for("web.panel"))
+
+
+# --- Cambiar la contraseña propia ----------------------------------------------------------------
+
+@bp.get("/cambiar-contrasena")
+@login_required
+def password_change():
+    return render_template("web/password_change.html", forced=g.web_user.must_change_password)
+
+
+@bp.post("/cambiar-contrasena")
+@login_required
+def password_change_submit():
+    """Cambia la contraseña con la misma ruta de la app (``PUT /api/auth/password``)."""
+    new_password = request.form.get("newPassword", "")
+    if new_password != request.form.get("newPassword2", ""):
+        flash("Las dos contraseñas nuevas no coinciden. Escríbelas de nuevo.", "error")
+        return redirect(url_for("web.password_change"))
+    result = Api(g.web_user).put("/api/auth/password", {
+        "currentPassword": request.form.get("currentPassword", ""), "newPassword": new_password,
+    })
+    if not result.ok:
+        flash(result.error, "error")
+        return redirect(url_for("web.password_change"))
+    # Cambiar la contraseña cierra las demás sesiones; esta sigue con la versión nueva.
+    db.session.refresh(g.web_user)
+    session["ver"] = g.web_user.token_version or 0
+    flash("Contraseña cambiada. Las demás sesiones abiertas con tu cuenta se cerraron.", "success")
+    return redirect(url_for("web.panel"))

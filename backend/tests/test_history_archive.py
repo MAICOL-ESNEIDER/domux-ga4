@@ -438,6 +438,12 @@ class ArchiveWebTests(ArchiveTestCase):
         archive = HistoryArchive.query.one()
         self.assertIn(archive.sha256[:16], body)
 
+        asked = self.client.get(f"/web/archivo-historico/{archive.id}/descargar")
+        self.assertEqual(asked.status_code, 302)
+        self.assertIn("/web/confirmar-contrasena", asked.headers["Location"])
+        self.assertEqual(AuditLog.query.filter_by(action="history_downloaded").count(), 0)
+        self.confirm_password()
+
         download = self.client.get(f"/web/archivo-historico/{archive.id}/descargar")
         self.assertEqual(download.status_code, 200)
         self.assertEqual(download.mimetype, "application/gzip")
@@ -467,6 +473,7 @@ class ArchiveWebTests(ArchiveTestCase):
 
     def test_un_archivo_que_no_existe_da_404(self):
         self.log_in()
+        self.confirm_password()
 
         self.assertEqual(self.client.get("/web/archivo-historico/999/descargar").status_code, 404)
         self.assertEqual(self.post("/web/archivo-historico/999/cargar").status_code, 404)
@@ -476,6 +483,8 @@ class ArchiveWebTests(ArchiveTestCase):
         self.guard.pin_hash = "PIN-HASH-SECRETO"
         db.session.commit()
         self.log_in()
+        self.assertEqual(self.client.get("/web/archivo-historico/copia").status_code, 302)
+        self.confirm_password()
 
         response = self.client.get("/web/archivo-historico/copia")
 

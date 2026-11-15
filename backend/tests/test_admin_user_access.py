@@ -61,7 +61,10 @@ class AdminUserAccessTests(unittest.TestCase):
         self.assertEqual(user["id"], self.resident.id)
         self.assertEqual(user["fullName"], "Marta Ríos")
         self.assertEqual(user["role"], "RESIDENT")
-        self.assertNotIn("password", str(user).lower())
+        # «mustChangePassword» solo dice si debe cambiarla; ninguna otra clave habla de la contraseña.
+        public = {key: value for key, value in user.items() if key != "mustChangePassword"}
+        self.assertNotIn("password", str(public).lower())
+        self.assertIs(user["mustChangePassword"], False)
 
     def test_an_unknown_user_is_not_found(self):
         response = self.call("GET", "/api/admin/users/9999")

@@ -5,6 +5,7 @@ import android.util.Base64
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONObject
 import java.security.GeneralSecurityException
@@ -32,6 +33,11 @@ object Session {
     var changeCount by mutableIntStateOf(0)
         private set
 
+    // Verdadero cuando el administrador le restableció la contraseña: la app muestra la pantalla
+    // para poner una propia y no deja hacer nada más hasta que la cambie.
+    var mustChangePassword by mutableStateOf(false)
+        private set
+
     val isAdmin: Boolean get() = role == "ADMIN"
     val isResident: Boolean get() = role == "RESIDENT"
     val isGuard: Boolean get() = role == "GUARD"
@@ -49,6 +55,7 @@ object Session {
             .put("apartment", apartment)
             .put("isMinor", isMinor)
             .put("parentalConsent", parentalConsent)
+            .put("mustChangePassword", mustChangePassword)
             .toString()
         SessionStorage.write(context, payload)
     }
@@ -77,6 +84,7 @@ object Session {
             apartment = session.optString("apartment").takeIf { it.isNotBlank() }
             isMinor = session.optBoolean("isMinor", false)
             parentalConsent = session.optBoolean("parentalConsent", false)
+            mustChangePassword = session.optBoolean("mustChangePassword", false)
             if (token != null && userId != null && role != null) true else {
                 clear()
                 SessionStorage.clear(context)
@@ -100,6 +108,7 @@ object Session {
         apartment = null
         isMinor = false
         parentalConsent = false
+        mustChangePassword = false
         ComplexInfoStore.clear()
     }
 
@@ -119,6 +128,7 @@ object Session {
         apartment = user.apartment
         isMinor = user.isMinor
         parentalConsent = user.parentalConsent
+        mustChangePassword = user.mustChangePassword
         changeCount++
     }
 }

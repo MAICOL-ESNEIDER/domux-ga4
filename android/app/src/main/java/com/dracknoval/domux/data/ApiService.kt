@@ -19,6 +19,13 @@ interface ApiService {
     @GET("api/auth/session")
     suspend fun currentSession(@Header("Authorization") auth: String): Response<UserDataResponse>
 
+    // La persona cambia su propia contraseña; la respuesta trae una sesión nueva para este celular.
+    @PUT("api/auth/password")
+    suspend fun changeOwnPassword(
+        @Header("Authorization") auth: String,
+        @Body body: ChangeOwnPasswordRequest
+    ): Response<LoginResponse>
+
     // Cambio de guardia en la tablet de portería (HU-010): lista de guardias con PIN y cambio con PIN.
     @GET("api/auth/guards")
     suspend fun getGuards(@Header("Authorization") auth: String): Response<GuardsListResponse>

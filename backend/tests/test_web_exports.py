@@ -305,7 +305,15 @@ class WebBackupTests(WebExcelTestCase):
         self.assertIn("Descargar el respaldo", body)
         self.assertIn("Archivar lo terminado", body)
 
+    def test_the_backup_asks_for_the_password_again(self):
+        response = self.client.get("/web/respaldo/descargar")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/web/confirmar-contrasena", response.headers["Location"])
+        self.assertEqual(AuditLog.query.filter_by(entity_type="export").count(), 0)
+
     def test_the_backup_downloads_and_is_noted_in_the_audit_log(self):
+        self.confirm_password()
         response = self.client.get("/web/respaldo/descargar")
 
         self.assertEqual(response.status_code, 200)

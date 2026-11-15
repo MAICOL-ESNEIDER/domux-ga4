@@ -56,6 +56,10 @@ JWT_SECRET = load_jwt_secret()
 JWT_ALGORITHM = "HS256"
 JWT_EXP_HOURS = 24 * 7  # el token dura 7 días
 
+#: Lo único que puede usar quien tiene pendiente poner una contraseña propia.
+PASSWORD_CHANGE_ENDPOINTS = frozenset({"auth.current_session", "auth.change_own_password"})
+PASSWORD_CHANGE_MESSAGE = "Antes de continuar debes cambiar tu contraseña."
+
 
 def generate_token(user: User) -> str:
     payload = {
@@ -97,6 +101,9 @@ def token_required(f):
         # anteriores a esta regla no traen versión y valen como la 0.
         if payload.get("ver", 0) != (user.token_version or 0):
             return error_response(401, "Tu sesión se cerró, inicia sesión de nuevo")
+        # Con una contraseña que le puso el administrador solo puede entrar a cambiarla.
+        if user.must_change_password and request.endpoint not in PASSWORD_CHANGE_ENDPOINTS:
+            return error_response(403, PASSWORD_CHANGE_MESSAGE, passwordChangeRequired=True)
 
         g.current_user = user
         return f(*args, **kwargs)

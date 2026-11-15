@@ -82,7 +82,8 @@
 
 <section class="card" aria-labelledby="reset-password">
   <h2 id="reset-password">Restablecer la contraseña</h2>
-  <p>Escribe una contraseña nueva. Esto también quita el bloqueo por intentos fallidos.</p>
+  <p>Escribe una contraseña nueva. Esto también quita el bloqueo por intentos fallidos y cierra las sesiones que la persona tenga abiertas.</p>
+  <p class="help">Es una contraseña temporal: la primera vez que entre, la app le pedirá cambiarla por una que solo ella conozca.</p>
   <form method="post" action="{{ url_for('web.user_password', user_id=user.id) }}">
     {{ csrf_input() }}
     <div class="form-row">

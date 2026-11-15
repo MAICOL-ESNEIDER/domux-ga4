@@ -398,7 +398,7 @@ class UsersViewModel : DomuxViewModel() {
                 }
             } ?: return@launch
             _state.update { it.copy(resetting = null, resetError = "") }
-            showSuccess("Contraseña restablecida. Entrégasela a la persona en privado.")
+            showSuccess("Contraseña restablecida. Entrégasela a la persona en privado: al entrar tendrá que cambiarla.")
         }
     }
 

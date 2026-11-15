@@ -16,7 +16,7 @@ from services.audit_service import add_audit_log
 from time_utils import colombia_today
 from web import bp
 from web.forms import checked
-from web.security import login_required
+from web.security import login_required, password_confirmation_required
 
 
 def _download(content, filename, mimetype):
@@ -86,6 +86,7 @@ def archive_run():
 
 @bp.get("/archivo-historico/<int:archive_id>/descargar")
 @login_required
+@password_confirmation_required("web.archive_page")
 def archive_download(archive_id):
     archive = _archive_or_404(archive_id)
     if not archive_service.verify_archive(archive):
@@ -127,6 +128,7 @@ def archive_manifest():
 
 @bp.get("/archivo-historico/copia")
 @login_required
+@password_confirmation_required("web.archive_page")
 def archive_backup():
     try:
         spool, sha256, counts = archive_service.write_backup()

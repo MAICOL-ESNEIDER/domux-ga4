@@ -294,7 +294,7 @@ def user_password(user_id):
     else:
         result = Api(g.web_user).put(f"/api/admin/users/{user_id}/password", {"password": password})
         if result.ok:
-            flash("Contraseña restablecida. Dásela a la persona por un medio seguro.", "success")
+            flash("Contraseña restablecida. Dásela a la persona por un medio seguro: al entrar tendrá que cambiarla.", "success")
         else:
             flash_result(result)
     return redirect(url_for("web.user_edit", user_id=user_id))

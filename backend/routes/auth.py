@@ -15,7 +15,7 @@ from services.login_attempt_service import (
     register_success,
     seconds_locked,
 )
-from validators import require_non_empty_fields, validate_pin
+from validators import require_non_empty_fields, validate_pin, validate_strong_password
 
 bp = Blueprint("auth", __name__, url_prefix="/api")
 
@@ -99,6 +99,56 @@ def login():
 @token_required
 def current_session():
     return jsonify({"user": g.current_user.to_dict()})
+
+
+@bp.put("/auth/password")
+@token_required
+def change_own_password():
+    """La persona cambia su propia contraseña; la actual se pide para confirmar que es ella.
+
+    Es obligatorio después de que el administrador se la restablece. Al cambiarla se cierran las
+    demás sesiones y la respuesta trae una sesión nueva para este dispositivo.
+    """
+    data, failure = json_body()
+    if failure:
+        return failure
+    validation_error = require_non_empty_fields(
+        data,
+        (("currentPassword", "contraseña actual"), ("newPassword", "contraseña nueva")),
+    )
+    if validation_error:
+        return error_response(400, validation_error)
+
+    user = g.current_user
+    attempts_key = user.email.strip().lower()[:160]
+    wait = seconds_locked(LOGIN, attempts_key)
+    if wait:
+        return locked_response(wait)
+    if not isinstance(data["currentPassword"], str) or not check_password_hash(
+        user.password_hash, data["currentPassword"]
+    ):
+        locked = register_failure(LOGIN, attempts_key)
+        db.session.commit()
+        if locked:
+            return locked_response(LOCK_MINUTES * 60)
+        return error_response(400, "La contraseña actual no es correcta.")
+    password_error = validate_strong_password(data["newPassword"])
+    if password_error:
+        return error_response(400, password_error)
+    if data["newPassword"] == data["currentPassword"]:
+        return error_response(400, "La contraseña nueva debe ser distinta de la actual.")
+
+    user.password_hash = generate_password_hash(data["newPassword"])
+    user.must_change_password = False
+    close_sessions(user)
+    register_success(LOGIN, attempts_key)
+    add_audit_log("user", user.id, "password_changed", None, actor=user)
+    db.session.commit()
+    return jsonify({
+        "message": "Contraseña cambiada",
+        "token": generate_token(user),
+        "user": user.to_dict(),
+    })
 
 
 # --- Cambio de guardia con PIN en la tablet (HU-010, CU-008 y RN-029) ---------

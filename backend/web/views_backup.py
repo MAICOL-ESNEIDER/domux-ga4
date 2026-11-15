@@ -18,7 +18,7 @@ from web import bp
 from web.api import Api
 from web.exports import xlsx_response
 from web.forms import checked
-from web.security import login_required
+from web.security import login_required, password_confirmation_required
 
 
 @bp.get("/respaldo")
@@ -29,6 +29,7 @@ def backup_page():
 
 @bp.get("/respaldo/descargar")
 @login_required
+@password_confirmation_required("web.backup_page")
 def backup_download():
     result = Api(g.web_user).get("/api/admin/export/legal-report")
     if not result.ok:
