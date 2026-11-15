@@ -135,6 +135,8 @@ def start_session(user):
     session.clear()
     session.permanent = True
     session["uid"] = user.id
+    # La versión de las sesiones de la persona: si sube (le restablecen la contraseña), esta se cierra.
+    session["ver"] = user.token_version or 0
     session["seen"] = int(time.time())
     session["csrf"] = secrets.token_urlsafe(32)
 
@@ -160,6 +162,9 @@ def current_admin():
     if user is None or not user.is_active or user.role != "ADMIN":
         end_session()
         return None, "Tu sesión ya no es válida. Inicia sesión de nuevo."
+    if int(session.get("ver", 0)) != (user.token_version or 0):
+        end_session()
+        return None, "Tu sesión se cerró porque cambió tu contraseña. Inicia sesión de nuevo."
     session["seen"] = now
     return user, None
 

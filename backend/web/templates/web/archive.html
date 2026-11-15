@@ -1,0 +1,109 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import checkbox %}
+{% from "web/_macros.html" import badge %}
+{% set page_title = "Archivo histórico" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Archivo histórico y copia de respaldo</h1>
+    <p>Nada se borra: los registros que cumplen su plazo pasan a un archivo comprimido por tipo y por mes, y se pueden volver a cargar.</p>
+  </div>
+</div>
+
+<section class="card" aria-labelledby="archive-pending">
+  <h2 id="archive-pending">Registros que ya cumplieron su plazo</h2>
+  <p>Las visitas, los códigos QR, los vehículos, los paquetes, las reservas, las PQRS y los comunicados se quedan 5 años en la base de datos; las notificaciones, 1 año. Los usuarios, los hogares y la estructura de la unidad nunca salen.</p>
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">Registros que ya cumplieron su plazo, por tipo</caption>
+      <thead>
+        <tr>
+          <th scope="col">Tipo</th>
+          <th scope="col">Plazo en la base</th>
+          <th scope="col">Listos para archivar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in pending %}
+        <tr>
+          <td data-label="Tipo">{{ item.label }}</td>
+          <td data-label="Plazo en la base">{{ item.years }} {{ "año" if item.years == 1 else "años" }}</td>
+          <td data-label="Listos para archivar">{{ item.count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pending_total %}
+  <form method="post" action="{{ url_for('web.archive_run') }}">
+    {{ csrf_input() }}
+    {{ checkbox("confirm", "Entiendo que esos registros salen de las listas y quedan guardados en el archivo.",
+                help="Primero se guarda el archivo y se comprueba su huella; solo entonces los registros salen de la base.") }}
+    <div class="form-actions">
+      <button type="submit" class="btn">Pasar al archivo ({{ pending_total }})</button>
+    </div>
+  </form>
+  {% else %}
+  <p class="help">Por ahora no hay nada para archivar.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="archive-files">
+  <h2 id="archive-files">Archivos guardados</h2>
+  {% if archives %}
+  <p>Cada archivo tiene una huella (SHA-256): un código que cambia si alguien modifica el archivo. Descarga el manifiesto y guárdalo aparte para poder comparar las huellas después.</p>
+  <p><a class="btn btn-quiet" href="{{ url_for('web.archive_manifest') }}">Descargar el manifiesto</a></p>
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">Archivos históricos, del mes más reciente al más antiguo</caption>
+      <thead>
+        <tr>
+          <th scope="col">Tipo</th>
+          <th scope="col">Mes</th>
+          <th scope="col">Registros</th>
+          <th scope="col">Tamaño</th>
+          <th scope="col">Huella SHA-256</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in archives %}
+        <tr>
+          <td data-label="Tipo">{{ item.label }}</td>
+          <td data-label="Mes">{{ item.row.period }}</td>
+          <td data-label="Registros">{{ item.row.record_count }}</td>
+          <td data-label="Tamaño">{{ item.size }}</td>
+          <td data-label="Huella SHA-256"><code class="hash" title="{{ item.row.sha256 }}">{{ item.row.sha256[:16] }}…</code></td>
+          <td data-label="Estado">
+            {% if item.row.restored_at %}{{ badge("Se volvió a cargar", "progress") }}{% else %}{{ badge("Archivado", "neutral") }}{% endif %}
+          </td>
+          <td data-label="Acciones">
+            <a class="btn btn-quiet btn-small" href="{{ url_for('web.archive_download', archive_id=item.row.id) }}"
+               aria-label="Descargar el archivo de {{ item.label }} de {{ item.row.period }}">Descargar</a>
+            {% if not item.row.restored_at %}
+            <form method="post" action="{{ url_for('web.archive_restore', archive_id=item.row.id) }}" class="inline-form">
+              {{ csrf_input() }}
+              <button type="submit" class="btn btn-quiet btn-small"
+                      aria-label="Volver a cargar en la base el archivo de {{ item.label }} de {{ item.row.period }}">Volver a cargar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="help">Todavía no hay archivos: aparecen cuando algún registro cumple su plazo y lo pasas al archivo.</p>
+  {% endif %}
+</section>
+
+<section class="card form-narrow" aria-labelledby="archive-backup">
+  <h2 id="archive-backup">Copia de respaldo</h2>
+  <p>Descarga una copia comprimida de la información de la unidad, para guardarla fuera del servidor. No trae contraseñas, PIN ni códigos de acceso; los archivos históricos se descargan aparte, arriba.</p>
+  <p class="help">Tiene datos personales y fotos: guárdala en un lugar seguro y no la compartas (Ley 1581 de 2012). Puede tardar si hay muchas fotos. La descarga queda registrada con su huella.</p>
+  <p><a class="btn" href="{{ url_for('web.archive_backup') }}">Descargar la copia de respaldo</a></p>
+</section>
+{% endblock %}

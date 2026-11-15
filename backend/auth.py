@@ -61,6 +61,8 @@ def generate_token(user: User) -> str:
     payload = {
         "user_id": user.id,
         "role": user.role,
+        # La versión de las sesiones de la persona: si sube, este token deja de servir.
+        "ver": user.token_version or 0,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXP_HOURS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -91,6 +93,10 @@ def token_required(f):
             return error_response(401, "El usuario del token ya no existe")
         if not getattr(user, "is_active", True):
             return error_response(401, "Tu cuenta se encuentra inhabilitada")
+        # Un token de antes de entregar el turno o de cambiar la contraseña ya no sirve. Los tokens
+        # anteriores a esta regla no traen versión y valen como la 0.
+        if payload.get("ver", 0) != (user.token_version or 0):
+            return error_response(401, "Tu sesión se cerró, inicia sesión de nuevo")
 
         g.current_user = user
         return f(*args, **kwargs)
@@ -117,3 +123,8 @@ def role_required(*roles_permitidos):
         return wrapper
 
     return decorator
+
+
+def close_sessions(user: User) -> None:
+    """Deja sin efecto los tokens que la persona tiene abiertos; queda guardado con el próximo commit."""
+    user.token_version = (user.token_version or 0) + 1

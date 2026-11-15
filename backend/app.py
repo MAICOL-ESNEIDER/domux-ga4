@@ -12,6 +12,7 @@ from errors import error_response, is_web_path, register_error_handlers
 from extensions import db, migrations
 from logging_config import configure_logging
 from models import Apartment, Pqrs, PqrsMessage, ResidentialUnit, User
+from services.history_archive_service import purge_login_attempts
 from routes.admin import bp as admin_bp
 from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
@@ -376,6 +377,9 @@ def create_app():
         prepare_database()
         seed_if_empty()
         sync_demo_passwords()
+        # Limpia los intentos fallidos de inicio de sesión que ya no sirven (no hay tarea programada).
+        purge_login_attempts()
+        db.session.commit()
         # Completan datos de registros viejos; no hacen nada si ya están al día.
         migrate_resident_profiles()
         migrate_pqrs_conversations()

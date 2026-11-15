@@ -32,6 +32,7 @@ def init_web(app):
     from web import (  # noqa: F401
         pages,
         views_announcements,
+        views_archive,
         views_auth,
         views_backup,
         views_notifications,

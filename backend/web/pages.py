@@ -37,6 +37,7 @@ MENU = (
         ("Datos de la unidad", "web.unit_data", "card", "web.unit"),
         ("Zonas comunes y reglas", "web.zones_list", "sliders", "web.zone"),
         ("Respaldo legal", "web.backup_page", "archive", "web.backup"),
+        ("Archivo histórico", "web.archive_page", "archive", "web.archive"),
     )),
 )
 

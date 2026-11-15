@@ -1,7 +1,7 @@
 from flask import Blueprint, g, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from auth import generate_token, role_required, token_required
+from auth import close_sessions, generate_token, role_required, token_required
 from errors import error_response
 from extensions import db
 from models import User
@@ -168,6 +168,9 @@ def guard_shift():
 
     register_success(PIN, subject)
     add_audit_log("user", guard.id, "guard_shift", {"previousGuardId": g.current_user.id}, actor=guard)
+    # El guardia que entrega el turno ya no puede seguir registrando con su sesión anterior.
+    if g.current_user.id != guard.id:
+        close_sessions(g.current_user)
     db.session.commit()
     return jsonify({
         "message": f"Turno tomado por {guard.full_name}",

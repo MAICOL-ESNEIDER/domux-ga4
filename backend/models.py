@@ -145,6 +145,9 @@ class User(db.Model):
     social_networks = db.Column(db.String(500), nullable=True, default="")
     birth_date = db.Column(db.String(20), nullable=True)
     parental_consent = db.Column(db.Boolean, default=False, nullable=False)
+    # Sube cada vez que hay que cerrar las sesiones abiertas de la persona (entrega el turno de
+    # portería o le restablecen la contraseña): un token con un número viejo deja de servir.
+    token_version = db.Column(db.Integer, default=0, nullable=False, server_default="0")
     data_processing_consent = db.Column(db.Boolean, nullable=False, default=False)
     data_processing_consent_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -1710,3 +1713,45 @@ class LoginAttempt(db.Model):
     failed_count = db.Column(db.Integer, nullable=False, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
     last_failed_at = db.Column(db.DateTime, nullable=True)
+
+
+class HistoryArchive(db.Model):
+    """Un archivo histórico: los registros de un tipo y de un mes que ya cumplieron su plazo (ADR-013).
+
+    Nada se borra (DEC-090): cuando un registro cumple su plazo en la base, pasa a un archivo JSON
+    comprimido que se guarda aquí con su huella SHA-256, y solo después de comprobarlo sale de su
+    tabla. El archivo se puede descargar desde la web y volver a cargar si hace falta.
+    """
+
+    __tablename__ = "history_archives"
+
+    id = db.Column(db.Integer, primary_key=True)
+    #: Qué se archivó: «visitas», «paquetes», «reservas», «pqrs», «comunicados», «notificaciones» o «qr».
+    kind = db.Column(db.String(30), nullable=False, index=True)
+    #: El mes de los registros, como «2021-10».
+    period = db.Column(db.String(7), nullable=False)
+    record_count = db.Column(db.Integer, nullable=False)
+    size_bytes = db.Column(db.Integer, nullable=False)
+    #: La huella del archivo comprimido: si alguien lo cambia, la huella ya no coincide.
+    sha256 = db.Column(db.String(64), nullable=False)
+    content = db.deferred(db.Column(db.LargeBinary, nullable=False))
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    restored_at = db.Column(db.DateTime, nullable=True)
+
+    @property
+    def file_name(self):
+        return f"DOMUX_archivo_{self.kind}_{self.period}_{self.id}.json.gz"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "period": self.period,
+            "recordCount": self.record_count,
+            "sizeBytes": self.size_bytes,
+            "sha256": self.sha256,
+            "fileName": self.file_name,
+            "createdAt": _fmt(self.created_at),
+            "restoredAt": _fmt(self.restored_at),
+        }

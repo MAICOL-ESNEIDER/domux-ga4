@@ -6,7 +6,7 @@ from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
-from auth import role_required, token_required
+from auth import close_sessions, role_required, token_required
 from errors import error_response
 from extensions import db
 from models import (
@@ -536,6 +536,8 @@ def reset_user_password(user_id):
     if user is None:
         return error_response(404, "Usuario no encontrado")
     user.password_hash = generate_password_hash(data["password"])
+    # Las sesiones abiertas con la clave anterior se cierran.
+    close_sessions(user)
     # Con la clave nueva la persona debe poder entrar: se quita el bloqueo por intentos (HU-006).
     register_success(LOGIN, user.email.strip().lower()[:160])
     db.session.commit()

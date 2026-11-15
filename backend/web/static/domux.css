@@ -278,6 +278,9 @@ input[type="checkbox"], input[type="radio"] { width: 1.15rem; height: 1.15rem; a
 .badge-alert { background: var(--bad-bg); color: var(--bad); border-color: var(--bad-line); }
 .badge-neutral { background: var(--surface); color: var(--soft); border-color: var(--line); }
 
+.inline-form { display: inline; }
+.hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; word-break: break-all; }
+
 .tabs { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: 1rem; padding: .35rem; background: var(--surface);
   border: 1px solid var(--line); border-radius: 16px; }
 .tabs a {
