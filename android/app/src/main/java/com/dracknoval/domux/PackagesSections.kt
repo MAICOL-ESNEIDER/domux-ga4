@@ -86,23 +86,26 @@ fun PackageListSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedTextField(
-            value = searchText,
-            onValueChange = { searchText = it },
-            label = { Text("Buscar residente, apartamento, guía o paquete") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // El buscador con el botón «Filtros»: el estado del paquete se elige en la hoja.
+        val activeFilters = buildList {
+            state.statusFilter?.let { status ->
+                val label = filters.firstOrNull { it.second == status }?.first ?: status
+                add(DomuxActiveFilter("Estado: $label") { onStatusFilter(null) })
+            }
+        }
+        DomuxSearchFilterBar(
+            active = activeFilters,
+            onClearFilters = { onStatusFilter(null) },
+            search = searchText,
+            onSearch = { searchText = it },
+            searchLabel = "Buscar paquete",
+            searchHint = "Residente, apartamento, guía o paquete",
+            sheetTitle = "Filtros de paquetes"
         ) {
-            filters.forEach { (label, value) ->
-                FilterChip(
-                    selected = state.statusFilter == value,
-                    onClick = { onStatusFilter(value) },
-                    label = { Text(label) }
-                )
+            DomuxFilterGroup("Estado") {
+                filters.forEach { (label, value) ->
+                    DomuxFilterOption(label, state.statusFilter == value) { onStatusFilter(value) }
+                }
             }
         }
         if (unclaimed.isNotEmpty()) {

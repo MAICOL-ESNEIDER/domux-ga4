@@ -653,32 +653,32 @@ private fun VehicleHistorySection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedTextField(
-            value = plate,
-            onValueChange = { plate = cleanPlate(it) },
-            label = { Text("Buscar por placa") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // El buscador por placa con el botón «Filtros»: la situación del vehículo se elige en la hoja.
+        val activeFilters = buildList {
+            if (state.entriesOverdueOnly) {
+                add(DomuxActiveFilter("Pasaron el tiempo máximo") { onFilter(false, false) })
+            } else if (state.entriesInsideOnly) {
+                add(DomuxActiveFilter("Adentro") { onFilter(false, false) })
+            }
+        }
+        DomuxSearchFilterBar(
+            active = activeFilters,
+            onClearFilters = { onFilter(false, false) },
+            search = plate,
+            onSearch = { plate = cleanPlate(it) },
+            searchLabel = "Buscar por placa",
+            searchHint = "Por ejemplo, ABC123",
+            sheetTitle = "Filtros de vehículos"
         ) {
-            FilterChip(
-                selected = !state.entriesInsideOnly && !state.entriesOverdueOnly,
-                onClick = { onFilter(false, false) },
-                label = { Text("Todos") }
-            )
-            FilterChip(
-                selected = state.entriesInsideOnly && !state.entriesOverdueOnly,
-                onClick = { onFilter(true, false) },
-                label = { Text("Adentro") }
-            )
-            FilterChip(
-                selected = state.entriesOverdueOnly,
-                onClick = { onFilter(false, true) },
-                label = { Text("Pasaron el tiempo máximo") }
-            )
+            DomuxFilterGroup("Situación") {
+                DomuxFilterOption("Todos", !state.entriesInsideOnly && !state.entriesOverdueOnly) {
+                    onFilter(false, false)
+                }
+                DomuxFilterOption("Adentro", state.entriesInsideOnly && !state.entriesOverdueOnly) {
+                    onFilter(true, false)
+                }
+                DomuxFilterOption("Pasaron el tiempo máximo", state.entriesOverdueOnly) { onFilter(false, true) }
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),

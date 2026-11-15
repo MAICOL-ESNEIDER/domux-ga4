@@ -178,17 +178,16 @@ private fun UsersList(state: UsersUiState, viewModel: UsersViewModel, navControl
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = filters.search,
-                    onValueChange = { v -> viewModel.updateFilters { it.copy(search = v) } },
-                    label = { Text("Buscar por nombre, correo, teléfono, documento o apartamento") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextButton(onClick = viewModel::toggleAdvancedFilters) {
-                    Text(if (state.showAdvancedFilters) "Ocultar filtros avanzados" else "Mostrar filtros avanzados")
-                }
-                if (state.showAdvancedFilters) AdvancedFilters(filters, viewModel)
+                DomuxSearchFilterBar(
+                    active = activeUserFilters(filters, viewModel),
+                    // Quitar los filtros no borra lo que está escrito en el buscador.
+                    onClearFilters = { viewModel.updateFilters { UserFilters(search = it.search) } },
+                    search = filters.search,
+                    onSearch = { v -> viewModel.updateFilters { it.copy(search = v) } },
+                    searchLabel = "Buscar usuario",
+                    searchHint = "Nombre, correo, teléfono, documento o apartamento",
+                    sheetTitle = "Filtros de usuarios"
+                ) { AdvancedFilters(filters, viewModel) }
                 Text("${state.total} usuarios - página ${state.page} de ${state.totalPages}")
             }
         }
@@ -220,67 +219,85 @@ private fun UsersList(state: UsersUiState, viewModel: UsersViewModel, navControl
     }
 }
 
+/** Los filtros de usuarios que están puestos, en palabras, cada uno con cómo quitarlo. */
+private fun activeUserFilters(filters: UserFilters, viewModel: UsersViewModel): List<DomuxActiveFilter> = buildList {
+    if (filters.occupancy.isNotEmpty()) {
+        val label = occupancyOptions.firstOrNull { it.first == filters.occupancy }?.second ?: filters.occupancy
+        add(DomuxActiveFilter("Tipo: $label") { viewModel.updateFilters { it.copy(occupancy = "") } })
+    }
+    if (filters.apartmentFrom.isNotBlank() || filters.apartmentTo.isNotBlank()) {
+        add(
+            DomuxActiveFilter("Aptos: ${filters.apartmentFrom.ifBlank { "…" }} a ${filters.apartmentTo.ifBlank { "…" }}") {
+                viewModel.updateFilters { it.copy(apartmentFrom = "", apartmentTo = "") }
+            }
+        )
+    }
+    if (filters.minAge.isNotBlank() || filters.maxAge.isNotBlank()) {
+        add(
+            DomuxActiveFilter("Edad: ${filters.minAge.ifBlank { "…" }} a ${filters.maxAge.ifBlank { "…" }}") {
+                viewModel.updateFilters { it.copy(minAge = "", maxAge = "") }
+            }
+        )
+    }
+    filters.active?.let { add(DomuxActiveFilter("Activo: ${filterLabel(it)}") { viewModel.updateFilters { f -> f.copy(active = null) } }) }
+    filters.pets?.let { add(DomuxActiveFilter("Mascotas: ${filterLabel(it)}") { viewModel.updateFilters { f -> f.copy(pets = null) } }) }
+    filters.vehicles?.let { add(DomuxActiveFilter("Vehículos: ${filterLabel(it)}") { viewModel.updateFilters { f -> f.copy(vehicles = null) } }) }
+    filters.parking?.let { add(DomuxActiveFilter("Parqueadero: ${filterLabel(it)}") { viewModel.updateFilters { f -> f.copy(parking = null) } }) }
+    filters.storage?.let { add(DomuxActiveFilter("Cuarto útil: ${filterLabel(it)}") { viewModel.updateFilters { f -> f.copy(storage = null) } }) }
+}
+
+/** Lo que va dentro de la hoja «Filtros de usuarios». Cada toque en «Sí / No» pasa a la opción siguiente. */
 @Composable
 private fun AdvancedFilters(filters: UserFilters, viewModel: UsersViewModel) {
+    DomuxFilterGroup("Tipo de residente") {
+        occupancyOptions.forEach { (value, label) ->
+            DomuxFilterOption(label, filters.occupancy == value) {
+                viewModel.updateFilters { it.copy(occupancy = if (it.occupancy == value) "" else value) }
+            }
+        }
+    }
+    DomuxFilterGroup("Cuenta y hogar (toca para cambiar entre Todos, Sí y No)") {
+        DomuxFilterOption("Activo: ${filterLabel(filters.active)}", filters.active != null) {
+            viewModel.updateFilters { it.copy(active = nextFilter(it.active)) }
+        }
+        DomuxFilterOption("Mascotas: ${filterLabel(filters.pets)}", filters.pets != null) {
+            viewModel.updateFilters { it.copy(pets = nextFilter(it.pets)) }
+        }
+        DomuxFilterOption("Vehículos: ${filterLabel(filters.vehicles)}", filters.vehicles != null) {
+            viewModel.updateFilters { it.copy(vehicles = nextFilter(it.vehicles)) }
+        }
+        DomuxFilterOption("Parqueadero: ${filterLabel(filters.parking)}", filters.parking != null) {
+            viewModel.updateFilters { it.copy(parking = nextFilter(it.parking)) }
+        }
+        DomuxFilterOption("Cuarto útil: ${filterLabel(filters.storage)}", filters.storage != null) {
+            viewModel.updateFilters { it.copy(storage = nextFilter(it.storage)) }
+        }
+    }
+    Text("Número de apartamento", style = MaterialTheme.typography.labelLarge, color = DomuxColor.TextSoft)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = filters.apartmentFrom,
-            onValueChange = { v -> viewModel.updateFilters { it.copy(apartmentFrom = v) } },
-            label = { Text("Apto desde") },
+            onValueChange = { v -> viewModel.updateFilters { it.copy(apartmentFrom = v.filter(Char::isDigit).take(5)) } },
+            label = { Text("Desde") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1f)
         )
         OutlinedTextField(
             value = filters.apartmentTo,
-            onValueChange = { v -> viewModel.updateFilters { it.copy(apartmentTo = v) } },
-            label = { Text("Apto hasta") },
+            onValueChange = { v -> viewModel.updateFilters { it.copy(apartmentTo = v.filter(Char::isDigit).take(5)) } },
+            label = { Text("Hasta") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1f)
         )
     }
-    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        occupancyOptions.forEach { (value, label) ->
-            FilterChip(
-                selected = filters.occupancy == value,
-                onClick = { viewModel.updateFilters { it.copy(occupancy = if (it.occupancy == value) "" else value) } },
-                label = { Text(label) }
-            )
-        }
-    }
-    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        FilterChip(
-            selected = filters.active == true,
-            onClick = { viewModel.updateFilters { it.copy(active = nextFilter(it.active)) } },
-            label = { Text("Activo: ${filterLabel(filters.active)}") }
-        )
-        FilterChip(
-            selected = filters.pets == true,
-            onClick = { viewModel.updateFilters { it.copy(pets = nextFilter(it.pets)) } },
-            label = { Text("Mascotas: ${filterLabel(filters.pets)}") }
-        )
-        FilterChip(
-            selected = filters.vehicles == true,
-            onClick = { viewModel.updateFilters { it.copy(vehicles = nextFilter(it.vehicles)) } },
-            label = { Text("Vehículos: ${filterLabel(filters.vehicles)}") }
-        )
-    }
-    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        FilterChip(
-            selected = filters.parking == true,
-            onClick = { viewModel.updateFilters { it.copy(parking = nextFilter(it.parking)) } },
-            label = { Text("Parqueadero: ${filterLabel(filters.parking)}") }
-        )
-        FilterChip(
-            selected = filters.storage == true,
-            onClick = { viewModel.updateFilters { it.copy(storage = nextFilter(it.storage)) } },
-            label = { Text("Cuarto útil: ${filterLabel(filters.storage)}") }
-        )
-    }
+    Text("Edad", style = MaterialTheme.typography.labelLarge, color = DomuxColor.TextSoft)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = filters.minAge,
             onValueChange = { v -> viewModel.updateFilters { it.copy(minAge = v.filter(Char::isDigit).take(3)) } },
-            label = { Text("Edad mínima") },
+            label = { Text("Mínima") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1f)
@@ -288,7 +305,7 @@ private fun AdvancedFilters(filters: UserFilters, viewModel: UsersViewModel) {
         OutlinedTextField(
             value = filters.maxAge,
             onValueChange = { v -> viewModel.updateFilters { it.copy(maxAge = v.filter(Char::isDigit).take(3)) } },
-            label = { Text("Edad máxima") },
+            label = { Text("Máxima") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1f)

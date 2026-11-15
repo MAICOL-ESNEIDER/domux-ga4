@@ -162,7 +162,6 @@ data class UsersUiState(
     val totalPages: Int = 1,
     val total: Int = 0,
     val filters: UserFilters = UserFilters(),
-    val showAdvancedFilters: Boolean = false,
     val form: NewUserForm = NewUserForm(),
     // Ventanas abiertas. Si algo falla, el error se muestra dentro de la ventana, que es lo que se ve.
     val editing: UserData? = null,
@@ -210,10 +209,6 @@ class UsersViewModel : DomuxViewModel() {
     }
 
     // ---- Lista y filtros ----
-
-    fun toggleAdvancedFilters() {
-        _state.update { it.copy(showAdvancedFilters = !it.showAdvancedFilters) }
-    }
 
     /** Cambia un filtro; la lista se vuelve a pedir cuando la persona deja de escribir un momento. */
     fun updateFilters(change: (UserFilters) -> UserFilters) {

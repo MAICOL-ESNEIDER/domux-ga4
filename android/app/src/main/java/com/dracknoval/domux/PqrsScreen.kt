@@ -137,40 +137,50 @@ private fun PqrsList(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedTextField(
-            value = searchText,
-            onValueChange = { searchText = it },
-            label = { Text("Buscar por asunto, residente o radicado") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            pqrsStates.forEach { (label, value) ->
-                FilterChip(
-                    selected = state.statusFilter == value,
-                    onClick = { viewModel.setStatusFilter(value) },
-                    label = { Text(label) }
-                )
+        // El buscador con el botón «Filtros»: estado, categoría y, para la administración, las archivadas.
+        val activeFilters = buildList {
+            state.statusFilter?.let { status ->
+                val label = pqrsStates.firstOrNull { it.second == status }?.first ?: status
+                add(DomuxActiveFilter("Estado: $label") { viewModel.setStatusFilter(null) })
+            }
+            state.categoryFilter?.let { category ->
+                add(DomuxActiveFilter("Categoría: $category") { viewModel.setCategoryFilter(null) })
+            }
+            if (state.includeArchived) {
+                add(DomuxActiveFilter("Con archivadas") { viewModel.setIncludeArchived(false) })
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        DomuxSearchFilterBar(
+            active = activeFilters,
+            onClearFilters = {
+                viewModel.setStatusFilter(null)
+                viewModel.setCategoryFilter(null)
+                viewModel.setIncludeArchived(false)
+            },
+            search = searchText,
+            onSearch = { searchText = it },
+            searchLabel = "Buscar PQRS",
+            searchHint = "Asunto, residente o radicado",
+            sheetTitle = "Filtros de PQRS"
         ) {
-            FilterChip(
-                selected = state.categoryFilter == null,
-                onClick = { viewModel.setCategoryFilter(null) },
-                label = { Text("Todas las categorías") }
-            )
-            pqrsCategories.forEach { value ->
-                FilterChip(
-                    selected = state.categoryFilter == value,
-                    onClick = { viewModel.setCategoryFilter(value) },
-                    label = { Text(value) }
-                )
+            DomuxFilterGroup("Estado") {
+                pqrsStates.forEach { (label, value) ->
+                    DomuxFilterOption(label, state.statusFilter == value) { viewModel.setStatusFilter(value) }
+                }
+            }
+            DomuxFilterGroup("Categoría") {
+                DomuxFilterOption("Todas", state.categoryFilter == null) { viewModel.setCategoryFilter(null) }
+                pqrsCategories.forEach { value ->
+                    DomuxFilterOption(value, state.categoryFilter == value) { viewModel.setCategoryFilter(value) }
+                }
+            }
+            // El respaldo en Excel y archivar se hacen en la web, desde el computador; aquí solo se ven.
+            if (Session.isAdmin) {
+                DomuxFilterGroup("Archivadas") {
+                    DomuxFilterOption("Ver también las archivadas", state.includeArchived) {
+                        viewModel.setIncludeArchived(!state.includeArchived)
+                    }
+                }
             }
         }
         if (Session.isAdmin && state.selectedVisibleCount > 0) {
@@ -183,16 +193,6 @@ private fun PqrsList(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Las archivadas se ven aquí; el respaldo en Excel y archivar se hacen en la web, desde el computador.
-            if (Session.isAdmin) {
-                item {
-                    FilterChip(
-                        selected = state.includeArchived,
-                        onClick = { viewModel.setIncludeArchived(!state.includeArchived) },
-                        label = { Text("Ver archivadas") }
-                    )
-                }
-            }
             if (state.residentFilterId != null) {
                 item {
                     Row(

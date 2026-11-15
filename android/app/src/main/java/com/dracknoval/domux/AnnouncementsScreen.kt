@@ -145,30 +145,39 @@ private fun AnnouncementList(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            FilterChip(
-                selected = state.category == null,
-                onClick = { onCategory(null) },
-                label = { Text("Todas") }
-            )
-            announcementCategories.forEach { option ->
-                FilterChip(
-                    selected = state.category == option.key,
-                    onClick = { onCategory(option.key) },
-                    label = { Text(option.label) }
-                )
+        // El botón «Filtros»: la categoría y, para el residente, los que le faltan por leer.
+        // Solo el residente tiene comunicados sin leer, y solo entre los vigentes (HU-059).
+        val canFilterUnread = Session.isResident && !archived
+        val activeFilters = buildList {
+            state.category?.let { key ->
+                val label = announcementCategories.firstOrNull { it.key == key }?.label ?: key
+                add(DomuxActiveFilter("Categoría: $label") { onCategory(null) })
+            }
+            if (canFilterUnread && state.unreadOnly) {
+                add(DomuxActiveFilter("Sin leer") { onUnreadOnly(false) })
             }
         }
-        // Solo el residente tiene comunicados sin leer, y solo entre los vigentes (HU-059).
-        if (Session.isResident && !archived) {
-            FilterChip(
-                selected = state.unreadOnly,
-                onClick = { onUnreadOnly(!state.unreadOnly) },
-                label = { Text("Sin leer (${state.unreadCount})") }
-            )
+        DomuxSearchFilterBar(
+            active = activeFilters,
+            onClearFilters = {
+                onCategory(null)
+                if (canFilterUnread) onUnreadOnly(false)
+            },
+            sheetTitle = "Filtros de comunicados"
+        ) {
+            DomuxFilterGroup("Categoría") {
+                DomuxFilterOption("Todas", state.category == null) { onCategory(null) }
+                announcementCategories.forEach { option ->
+                    DomuxFilterOption(option.label, state.category == option.key) { onCategory(option.key) }
+                }
+            }
+            if (canFilterUnread) {
+                DomuxFilterGroup("Lectura") {
+                    DomuxFilterOption("Sin leer (${state.unreadCount})", state.unreadOnly) {
+                        onUnreadOnly(!state.unreadOnly)
+                    }
+                }
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),

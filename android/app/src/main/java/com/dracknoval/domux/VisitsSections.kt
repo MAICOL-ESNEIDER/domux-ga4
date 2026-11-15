@@ -89,7 +89,6 @@ fun VisitListSection(
 ) {
     // El texto del buscador vive aquí y el ViewModel recibe el valor ya aplicado, tras una pausa.
     var searchText by rememberSaveable { mutableStateOf("") }
-    var showDates by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(searchText) {
         if (searchText.isNotBlank()) delay(300)
         onSearch(searchText)
@@ -107,81 +106,68 @@ fun VisitListSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedTextField(
-            value = searchText,
-            onValueChange = { searchText = it },
-            label = { Text("Buscar visitante, residente o apartamento") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            statusFilters.forEach { (label, value) ->
-                FilterChip(
-                    selected = state.statusFilter == value,
-                    onClick = { onStatusFilter(value) },
-                    label = { Text(label) }
+        // El buscador con el botón «Filtros»: estado, sin salida y fechas se eligen en la hoja.
+        val activeFilters = buildList {
+            state.statusFilter?.let { status ->
+                val label = statusFilters.firstOrNull { it.second == status }?.first ?: status
+                add(DomuxActiveFilter("Estado: $label") { onStatusFilter(null) })
+            }
+            if (state.insideOnly) add(DomuxActiveFilter("Sin salida") { onInsideOnly(false) })
+            if (dateRangeSet) {
+                add(
+                    DomuxActiveFilter("Fechas: ${state.dateFrom.ifBlank { "…" }} a ${state.dateTo.ifBlank { "…" }}") {
+                        onDates("", "")
+                    }
                 )
             }
+        }
+        DomuxSearchFilterBar(
+            active = activeFilters,
+            onClearFilters = {
+                onStatusFilter(null)
+                onInsideOnly(false)
+                onDates("", "")
+            },
+            search = searchText,
+            onSearch = { searchText = it },
+            searchLabel = "Buscar visita",
+            searchHint = "Visitante, residente o apartamento",
+            sheetTitle = "Filtros de visitas"
+        ) {
+            DomuxFilterGroup("Estado") {
+                statusFilters.forEach { (label, value) ->
+                    DomuxFilterOption(label, state.statusFilter == value) { onStatusFilter(value) }
+                }
+            }
             // Las que entraron y todavía no registran salida (HU-032).
-            FilterChip(
-                selected = state.insideOnly,
-                onClick = { onInsideOnly(!state.insideOnly) },
-                label = { Text("Sin salida") }
-            )
+            DomuxFilterGroup("Salida") {
+                DomuxFilterOption("Solo las que no han salido", state.insideOnly) { onInsideOnly(!state.insideOnly) }
+            }
+            DomuxFilterGroup("Fechas") {
+                DomuxFilterOption("Hoy", state.dateFrom == dayText(0) && state.dateTo == dayText(0)) {
+                    onDates(dayText(0), dayText(0))
+                }
+                DomuxFilterOption("Últimos 7 días", state.dateFrom == dayText(6) && state.dateTo == dayText(0)) {
+                    onDates(dayText(6), dayText(0))
+                }
+                DomuxFilterOption("Últimos 30 días", state.dateFrom == dayText(29) && state.dateTo == dayText(0)) {
+                    onDates(dayText(29), dayText(0))
+                }
+                DomuxFilterOption("Sin fechas", !dateRangeSet) { onDates("", "") }
+            }
+            DatePickerField("Desde", state.dateFrom, { onDates(it, state.dateTo) })
+            DatePickerField("Hasta", state.dateTo, { onDates(state.dateFrom, it) })
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { showDates = !showDates }) {
-                Text(
-                    if (dateRangeSet) {
-                        "Fechas: ${state.dateFrom.ifBlank { "…" }} a ${state.dateTo.ifBlank { "…" }}"
-                    } else {
-                        "Filtrar por fechas"
-                    }
-                )
-            }
-            TextButton(onClick = onRefresh) { Text("Actualizar") }
-        }
-        if (showDates) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                FilterChip(
-                    selected = state.dateFrom == dayText(0) && state.dateTo == dayText(0),
-                    onClick = { onDates(dayText(0), dayText(0)) },
-                    label = { Text("Hoy") }
-                )
-                FilterChip(
-                    selected = state.dateFrom == dayText(6) && state.dateTo == dayText(0),
-                    onClick = { onDates(dayText(6), dayText(0)) },
-                    label = { Text("Últimos 7 días") }
-                )
-                FilterChip(
-                    selected = state.dateFrom == dayText(29) && state.dateTo == dayText(0),
-                    onClick = { onDates(dayText(29), dayText(0)) },
-                    label = { Text("Últimos 30 días") }
-                )
-                FilterChip(
-                    selected = !dateRangeSet,
-                    onClick = { onDates("", "") },
-                    label = { Text("Sin fechas") }
-                )
-            }
-            DatePickerField("Desde", state.dateFrom, { onDates(it, state.dateTo) })
-            DatePickerField("Hasta", state.dateTo, { onDates(state.dateFrom, it) })
-        }
-        if (state.page.total > 0) {
             Text(
-                "Mostrando ${state.visits.size} de ${state.page.total} visitas",
+                if (state.page.total > 0) "Mostrando ${state.visits.size} de ${state.page.total} visitas" else "",
                 style = MaterialTheme.typography.bodySmall
             )
+            TextButton(onClick = onRefresh) { Text("Actualizar") }
         }
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
