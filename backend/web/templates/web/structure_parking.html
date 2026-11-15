@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import structure_tabs, pager, badge %}
+{% from "web/_forms.html" import filter_bar %}
 {% set page_title = "Parqueaderos" %}
 
 {% block content %}
@@ -16,28 +17,28 @@
 
 {{ structure_tabs("parqueaderos") }}
 
-<form class="filters" method="get" action="{{ url_for('web.structure_parking') }}" role="search" aria-label="Filtrar parqueaderos">
+{% set chips = filter_chips("web.structure_parking", filters, [
+     ("tipo", ("Tipo: " ~ dict(kind_options)[filters.tipo]) if filters.tipo else ""),
+     ("asignado", ("Asignación: " ~ dict(assigned_options)[filters.asignado]) if filters.asignado else ""),
+   ]) %}
+{% call filter_bar(url_for('web.structure_parking'), "Filtrar parqueaderos", value=filters.q,
+                   placeholder="Código o ubicación", chips=chips,
+                   clear_url=url_for('web.structure_parking') if filtered else None) %}
   <div class="field">
     <label for="tipo">Tipo</label>
-    <select id="tipo" name="tipo" data-autosubmit>
+    <select id="tipo" name="tipo">
       <option value="">Todos</option>
       {% for value, label in kind_options %}<option value="{{ value }}"{% if filters.tipo == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
     </select>
   </div>
   <div class="field">
     <label for="asignado">Asignación</label>
-    <select id="asignado" name="asignado" data-autosubmit>
+    <select id="asignado" name="asignado">
       <option value="">Todos</option>
       {% for value, label in assigned_options %}<option value="{{ value }}"{% if filters.asignado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
     </select>
   </div>
-  <div class="field grow">
-    <label for="q">Buscar</label>
-    <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off" placeholder="Código o ubicación">
-  </div>
-  <button type="submit" class="btn">Filtrar</button>
-  {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.structure_parking') }}">Quitar filtros</a>{% endif %}
-</form>
+{% endcall %}
 
 <section class="card" aria-label="Lista de parqueaderos">
   {% if spots %}

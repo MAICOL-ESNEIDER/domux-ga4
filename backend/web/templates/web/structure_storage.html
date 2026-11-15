@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import structure_tabs, pager %}
+{% from "web/_forms.html" import filter_bar %}
 {% set page_title = "Cuartos útiles" %}
 
 {% block content %}
@@ -16,21 +17,20 @@
 
 {{ structure_tabs("cuartos") }}
 
-<form class="filters" method="get" action="{{ url_for('web.structure_storage') }}" role="search" aria-label="Filtrar cuartos útiles">
+{% set chips = filter_chips("web.structure_storage", filters, [
+     ("asignado", ("Asignación: " ~ dict(assigned_options)[filters.asignado]) if filters.asignado else ""),
+   ]) %}
+{% call filter_bar(url_for('web.structure_storage'), "Filtrar cuartos útiles", value=filters.q,
+                   placeholder="Código del cuarto", chips=chips,
+                   clear_url=url_for('web.structure_storage') if filtered else None) %}
   <div class="field">
     <label for="asignado">Asignación</label>
-    <select id="asignado" name="asignado" data-autosubmit>
+    <select id="asignado" name="asignado">
       <option value="">Todos</option>
       {% for value, label in assigned_options %}<option value="{{ value }}"{% if filters.asignado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
     </select>
   </div>
-  <div class="field grow">
-    <label for="q">Buscar</label>
-    <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off" placeholder="Código del cuarto">
-  </div>
-  <button type="submit" class="btn">Filtrar</button>
-  {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.structure_storage') }}">Quitar filtros</a>{% endif %}
-</form>
+{% endcall %}
 
 <section class="card" aria-label="Lista de cuartos útiles">
   {% if rooms %}

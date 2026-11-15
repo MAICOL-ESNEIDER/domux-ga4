@@ -22,6 +22,7 @@ from web.exports import RESERVATION_COLUMNS, excel_download, filters_text
 from web.forms import compact, text
 from web.security import login_required, safe_next
 from web.support import file_response, flash_result
+from web.uploads import attach_media
 
 #: Filas de la lista por página.
 PAGE_SIZE = 15
@@ -234,7 +235,12 @@ def reservation_message(res_id):
         # Un enlace a esta dirección (por ejemplo, el de otra página de la lista tras un error) vuelve a la reserva.
         return redirect(url_for("web.reservation_detail", res_id=res_id, **_list_args()))
     reply = {"message": text("message")}
-    result = Api(g.web_user).post(f"/api/reservations/{res_id}/messages", compact(reply))
+    body = compact(reply)
+    # El mensaje puede llevar una foto, un video, un audio o un PDF, como en la app.
+    if problem := attach_media(body, request.files.get("media")):
+        flash(problem, "error")
+        return _page(res_id, reply=reply, status=400)
+    result = Api(g.web_user).post(f"/api/reservations/{res_id}/messages", body)
     if result.ok:
         flash("Mensaje enviado. El residente recibió un aviso en la app.", "success")
         return redirect(url_for("web.reservation_detail", res_id=res_id, **_list_args()))

@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import badge, pager, registry_tabs, status_tabs %}
+{% from "web/_forms.html" import filter_bar %}
 {% set page_title = "Paquetería y visitas" %}
 
 {% block content %}
@@ -19,15 +20,10 @@
 {{ registry_tabs("vehiculos") }}
 {{ status_tabs(tabs, "Situación de los vehículos") }}
 
-<form class="filters" method="get" action="{{ url_for('web.registry_vehicles') }}" role="search" aria-label="Buscar por placa">
-  {% if filters.estado != "todos" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
-  <div class="field grow">
-    <label for="placa">Placa</label>
-    <input type="search" id="placa" name="placa" value="{{ filters.placa }}" autocomplete="off" placeholder="Por ejemplo, ABC123">
-  </div>
-  <button type="submit" class="btn">Buscar</button>
-  {% if filters.placa %}<a class="btn btn-quiet" href="{{ url_for('web.registry_vehicles', **tab_args) }}">Quitar búsqueda</a>{% endif %}
-</form>
+{{ filter_bar(url_for('web.registry_vehicles'), "Buscar por placa", value=filters.placa, name="placa",
+              search_label="Placa", placeholder="Por ejemplo, ABC123", hidden=tab_args,
+              clear_url=url_for('web.registry_vehicles', **tab_args) if filters.placa else None,
+              clear_label="Quitar búsqueda") }}
 {% if hint %}<p class="muted small">{{ hint }}</p>{% endif %}
 
 <section class="card" aria-label="Entradas de vehículos de visitantes">

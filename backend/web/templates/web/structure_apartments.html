@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import structure_tabs, pager %}
+{% from "web/_forms.html" import filter_bar %}
 {% set page_title = "Apartamentos" %}
 
 {% block content %}
@@ -17,21 +18,20 @@
 
 {{ structure_tabs("apartamentos") }}
 
-<form class="filters" method="get" action="{{ url_for('web.structure_apartments') }}" role="search" aria-label="Filtrar apartamentos">
+{% set chips = filter_chips("web.structure_apartments", filters, [
+     ("torre", ("Torre: " ~ (towers|selectattr("id", "equalto", filters.torre)|map(attribute="name")|first)) if filters.torre else ""),
+   ]) %}
+{% call filter_bar(url_for('web.structure_apartments'), "Filtrar apartamentos", value=filters.q,
+                   placeholder="Código del apartamento", chips=chips,
+                   clear_url=url_for('web.structure_apartments') if filtered else None) %}
   <div class="field">
     <label for="torre">Torre</label>
-    <select id="torre" name="torre" data-autosubmit>
+    <select id="torre" name="torre">
       <option value="">Todas</option>
       {% for tower in towers %}<option value="{{ tower.id }}"{% if filters.torre == tower.id %} selected{% endif %}>{{ tower.name }}</option>{% endfor %}
     </select>
   </div>
-  <div class="field grow">
-    <label for="q">Buscar</label>
-    <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off" placeholder="Código del apartamento">
-  </div>
-  <button type="submit" class="btn">Filtrar</button>
-  {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.structure_apartments') }}">Quitar filtros</a>{% endif %}
-</form>
+{% endcall %}
 
 <section class="card" aria-label="Lista de apartamentos">
   {% if apartments %}

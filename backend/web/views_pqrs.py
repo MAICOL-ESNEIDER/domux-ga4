@@ -20,6 +20,7 @@ from web.forms import compact, number, text
 from web.security import login_required
 from web.support import fetch_all, file_response
 from web.texts import PQRS_STATUSES, plural
+from web.uploads import attach_media
 
 #: Filas de la bandeja por página.
 PAGE_SIZE = 15
@@ -165,7 +166,12 @@ def pqrs_respond(pqrs_id):
         # Un enlace a esta dirección (por ejemplo, el de otra página de la bandeja tras un error) vuelve a la solicitud.
         return redirect(url_for("web.pqrs_detail", pqrs_id=pqrs_id, **_list_args()))
     reply = {"status": text("status"), "adminResponse": text("adminResponse")}
-    result = Api(g.web_user).put(f"/api/pqrs/{pqrs_id}/respond", compact(reply))
+    body = compact(reply)
+    # La respuesta puede llevar una foto, un video, un audio o un PDF, como en la app.
+    if problem := attach_media(body, request.files.get("media")):
+        flash(problem, "error")
+        return _inbox(pqrs_id, reply=reply, status=400)
+    result = Api(g.web_user).put(f"/api/pqrs/{pqrs_id}/respond", body)
     if result.ok:
         flash("PQRS actualizada.", "success")
         return redirect(url_for("web.pqrs_detail", pqrs_id=pqrs_id, **_list_args()))
@@ -218,6 +224,9 @@ def pqrs_new():
             "residentId": number("residentId"), "category": values["category"],
             "subject": values["subject"], "message": values["message"],
         })
+        if problem := attach_media(body, request.files.get("media")):
+            flash(problem, "error")
+            return _new_page(api, values, 400)
         result = api.post("/api/pqrs", body)
         if result.ok:
             flash("PQRS registrada a nombre del residente. Se le avisó en la app.", "success")

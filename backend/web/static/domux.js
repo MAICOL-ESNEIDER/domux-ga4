@@ -1,7 +1,7 @@
 /*
  * Comportamientos pequeños de la web de administración. Todo funciona también sin este archivo
  * (los formularios se envían igual); aquí solo se agregan comodidades: el menú del celular, la
- * confirmación antes de una acción delicada, los filtros que se aplican al cambiar, la selección
+ * confirmación antes de una acción delicada, el botón «Filtros», cerrar un aviso, la selección
  * de varias filas y el foco en el detalle que se abre. Va como archivo aparte porque la política de seguridad no admite scripts dentro
  * de la página.
  */
@@ -133,6 +133,49 @@
     var field = event.target;
     if (field.matches && field.matches("[data-autosubmit]") && field.form) {
       field.form.submit();
+    }
+  });
+
+  // --- Botón «Filtros» ---------------------------------------------------------------------------
+  // <button data-filters-toggle aria-controls="panel"> abre y cierra el panel de filtros sin recargar
+  // la página (sin JavaScript, el mismo botón la recarga con el panel abierto).
+  function setFilters(button, panel, open) {
+    panel.hidden = !open;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  document.querySelectorAll("[data-filters-toggle]").forEach(function (button) {
+    var panel = document.getElementById(button.getAttribute("aria-controls"));
+    if (!panel) {
+      return;
+    }
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      var open = panel.hidden;
+      setFilters(button, panel, open);
+      if (open) {
+        var first = panel.querySelector("select, input, textarea");
+        if (first) {
+          first.focus();
+        }
+      }
+    });
+    panel.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        setFilters(button, panel, false);
+        button.focus();
+      }
+    });
+  });
+
+  // --- Cerrar un aviso -------------------------------------------------------------------------------
+  document.addEventListener("click", function (event) {
+    var close = event.target.closest && event.target.closest("[data-dismiss-notice]");
+    if (close) {
+      var notice = close.closest(".notice");
+      if (notice) {
+        notice.remove();
+      }
     }
   });
 

@@ -1,13 +1,14 @@
 {# Piezas que se repiten en varias páginas. #}
 
+{# Insignia de estado: como en la app, lleva un ícono además del color (el tono neutro no). #}
 {% macro badge(text, tone="neutral") -%}
-<span class="badge badge-{{ tone }}">{{ text }}</span>
+<span class="badge badge-{{ tone }}">{{ tone_icon(tone) }}{{ text }}</span>
 {%- endmacro %}
 
 {# Aviso de estado con el texto y el tono de la app: status_badge("pqrs", "abierta"). #}
 {% macro status_badge(kind, value) -%}
 {% set info = badge_info(kind, value) -%}
-<span class="badge badge-{{ info.tone }}">{{ info.label }}</span>
+<span class="badge badge-{{ info.tone }}">{{ tone_icon(info.tone) }}{{ info.label }}</span>
 {%- endmacro %}
 
 {# Contador grande del panel; si trae «href» es un enlace a la lista. #}

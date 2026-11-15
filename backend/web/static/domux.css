@@ -9,6 +9,7 @@
   --surface: #091426;
   --card: #0f1e33;
   --line: #1e334d;
+  --field: #64748b;
   --text: #f1f5f9;
   --soft: #cbd5e1;
   --muted: #94a3b8;
@@ -214,31 +215,64 @@ input[type="text"], input[type="email"], input[type="password"], input[type="num
 input[type="date"], input[type="time"], input[type="search"], input[type="tel"], input[type="file"],
 select, textarea {
   width: 100%; min-height: 44px; padding: .55rem .75rem; border-radius: 12px;
-  background: var(--surface); color: var(--text); border: 1px solid var(--line); font: inherit;
+  /* El borde de los campos es más claro que las líneas de las tarjetas (como en la app), para que
+     se distinga dónde se escribe: contraste de 3 a 1 contra el fondo (HU-086). */
+  background: var(--surface); color: var(--text); border: 1px solid var(--field); font: inherit;
 }
 textarea { min-height: 7rem; resize: vertical; }
-input:hover, select:hover, textarea:hover { border-color: var(--muted); }
+input:hover, select:hover, textarea:hover { border-color: var(--soft); }
 input[type="checkbox"], input[type="radio"] { width: 1.15rem; height: 1.15rem; accent-color: var(--primary); }
 .check { display: flex; align-items: center; gap: .6rem; min-height: 44px; }
 .check label { margin: 0; }
 
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
-.filters { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; margin-bottom: 1rem; }
-.filters .field { margin: 0; min-width: 150px; }
-.filters .field.grow { min-width: 220px; }
+/* El buscador de una lista con el botón «Filtros»: los filtros van en un panel que se abre con el
+   botón, y los que están puestos salen debajo como etiquetas que se quitan con un clic. */
+.filters { margin-bottom: 1rem; }
+.filters-bar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }
+.filters-bar .field { margin: 0; min-width: 220px; }
+.filters-toggle.is-on { border-color: var(--primary); color: var(--primary); background: rgba(56, 189, 248, .12); }
+.filters-panel {
+  margin-top: .75rem; padding: 1rem; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.filters-fields {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem 1rem;
+  align-items: end; margin-bottom: 1rem;
+}
+.filters-fields .field { margin: 0; }
+.filters-active { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: .65rem 0 0; padding: 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: .4rem; min-height: 36px; padding: .2rem .8rem;
+  border-radius: 999px; border: 1px solid var(--primary); background: rgba(56, 189, 248, .12);
+  color: var(--text); text-decoration: none; font-size: .9rem;
+}
+.chip:hover { background: rgba(56, 189, 248, .24); color: var(--text); }
 
 .notice {
   border: 1px solid; border-radius: 12px; padding: .75rem 1rem; margin-bottom: 1rem; display: block;
 }
+/* Los avisos de resultado llevan su ícono y un botón para cerrarlos, como en la app. */
+.notice-flash { display: flex; align-items: flex-start; gap: .6rem; }
+.notice-flash p { margin: 0; flex: 1 1 auto; }
+.notice-flash > .icon { margin-top: .1rem; }
+.notice-close {
+  flex: none; display: none; align-items: center; justify-content: center; width: 32px; height: 32px;
+  margin: -.25rem -.4rem -.25rem 0; padding: 0; border: 0; border-radius: 8px; background: transparent;
+  color: inherit; cursor: pointer;
+}
+.js .notice-close.js-only { display: inline-flex; }
+.notice-close:hover { background: rgba(255, 255, 255, .1); }
 .notice-success { background: #052e16; color: var(--ok); border-color: #10b981; }
 .notice-error { background: var(--bad-bg); color: var(--bad); border-color: #ef4444; }
 .notice-info { background: var(--card); color: var(--soft); border-color: var(--line); }
 .notice-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
 
 .badge {
-  display: inline-block; padding: .1rem .65rem; border-radius: 999px; border: 1px solid;
-  font-size: .8rem; font-weight: 600; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: .3rem; padding: .1rem .65rem; border-radius: 999px;
+  border: 1px solid; font-size: .8rem; font-weight: 600; white-space: nowrap; vertical-align: middle;
 }
+.badge .icon { width: 14px; height: 14px; stroke-width: 2.2; }
 .badge-success { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
 .badge-progress { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
 .badge-alert { background: var(--bad-bg); color: var(--bad); border-color: var(--bad-line); }
@@ -290,10 +324,10 @@ dialog .dialog-actions { display: flex; gap: .5rem; justify-content: flex-end; m
 
 .inbox-list .card, .inbox-detail .card { margin-bottom: 1rem; }
 /* En la bandeja los filtros van compactos: la búsqueda sola, los tres filtros juntos y los botones. */
-.inbox-list .filters { gap: .5rem .75rem; margin-bottom: .75rem; }
-.inbox-list .filters .field { flex: 1 1 100px; min-width: 0; }
-.inbox-list .filters .field.grow { flex: 1 1 100%; }
-.inbox-list .filters .field.field-date { flex: 1 1 140px; }
+.inbox-list .filters { margin-bottom: .75rem; }
+.inbox-list .filters-bar { gap: .5rem; }
+.inbox-list .filters-bar .field.grow { flex: 1 1 100%; min-width: 0; }
+.inbox-list .filters-fields { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .inbox-card { padding: .25rem 0 1rem; }
 .inbox-card > .empty, .inbox-card > .pager { padding-left: 1.25rem; padding-right: 1.25rem; }
 .inbox-tools { padding: .25rem 1.25rem 0; border-bottom: 1px solid var(--line); }

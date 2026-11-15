@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import status_badge, badge, pager, attachment %}
+{% from "web/_forms.html" import filter_bar %}
 {% set page_title = "Comunicados" %}
 
 {% block content %}
@@ -26,30 +27,28 @@
 
   {# --- La lista -------------------------------------------------------------------------------- #}
   <section class="inbox-list" aria-label="Lista de comunicados">
-    <form class="filters" method="get" action="{{ url_for('web.announcements_list') }}" role="search" aria-label="Filtrar comunicados">
-      {% if filters.estado != "vigentes" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
-      <div class="field grow">
-        <label for="q">Buscar</label>
-        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
-               placeholder="Palabras del título o del mensaje">
-      </div>
+    {% set chips = filter_chips("web.announcements_list", filters, [
+         ("categoria", ("Categoría: " ~ dict(category_options)[filters.categoria]) if filters.categoria else ""),
+         ("torre", ("Para: " ~ dict(tower_options).get(filters.torre, filters.torre)) if filters.torre else ""),
+       ], {"estado": "vigentes"}) %}
+    {% call filter_bar(url_for('web.announcements_list'), "Filtrar comunicados", value=filters.q,
+                       placeholder="Palabras del título o del mensaje", hidden=tab_args, chips=chips,
+                       clear_url=url_for('web.announcements_list', **tab_args) if filtered else None) %}
       <div class="field">
         <label for="categoria">Categoría</label>
-        <select id="categoria" name="categoria" data-autosubmit>
+        <select id="categoria" name="categoria">
           <option value="">Todas</option>
           {% for value, label in category_options %}<option value="{{ value }}"{% if filters.categoria == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
       </div>
       <div class="field">
         <label for="torre">Para</label>
-        <select id="torre" name="torre" data-autosubmit>
+        <select id="torre" name="torre">
           <option value="">Todos</option>
           {% for value, label in tower_options %}<option value="{{ value }}"{% if filters.torre == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
       </div>
-      <button type="submit" class="btn">Filtrar</button>
-      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.announcements_list', **tab_args) }}">Quitar filtros</a>{% endif %}
-    </form>
+    {% endcall %}
 
     <div class="card inbox-card">
       {% if items %}

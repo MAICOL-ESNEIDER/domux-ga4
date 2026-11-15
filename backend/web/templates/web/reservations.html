@@ -1,6 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import status_badge, badge, pager, attachment %}
-{% from "web/_forms.html" import textarea %}
+{% from "web/_forms.html" import textarea, filter_bar, attachment_field %}
 {% set page_title = "Reservas" %}
 
 {% block content %}
@@ -29,16 +29,18 @@
 
   {# --- La lista -------------------------------------------------------------------------------- #}
   <section class="inbox-list" aria-label="Lista de reservas">
-    <form class="filters" method="get" action="{{ url_for('web.reservations_list') }}" role="search" aria-label="Filtrar reservas">
-      {% if filters.estado != "por_aprobar" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
-      <div class="field grow">
-        <label for="q">Buscar</label>
-        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
-               placeholder="Residente, apartamento o zona">
-      </div>
+    {% set chips = filter_chips("web.reservations_list", filters, [
+         ("zona", ("Zona: " ~ dict(zone_options).get(filters.zona, filters.zona)) if filters.zona else ""),
+         ("desde", ("Desde: " ~ (filters.desde|date_es)) if filters.desde else ""),
+         ("hasta", ("Hasta: " ~ (filters.hasta|date_es)) if filters.hasta else ""),
+         ("archivadas", "Con archivadas" if filters.archivadas else ""),
+       ], {"estado": "por_aprobar"}) %}
+    {% call filter_bar(url_for('web.reservations_list'), "Filtrar reservas", value=filters.q,
+                       placeholder="Residente, apartamento o zona", hidden=tab_args, chips=chips,
+                       clear_url=url_for('web.reservations_list', **tab_args) if filtered else None) %}
       <div class="field">
         <label for="zona">Zona</label>
-        <select id="zona" name="zona" data-autosubmit>
+        <select id="zona" name="zona">
           <option value="">Todas</option>
           {% for value, label in zone_options %}<option value="{{ value }}"{% if filters.zona == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
@@ -52,12 +54,10 @@
         <input type="date" id="hasta" name="hasta" value="{{ filters.hasta }}">
       </div>
       <div class="check">
-        <input type="checkbox" id="archivadas" name="archivadas" value="1"{% if filters.archivadas %} checked{% endif %} data-autosubmit>
+        <input type="checkbox" id="archivadas" name="archivadas" value="1"{% if filters.archivadas %} checked{% endif %}>
         <label for="archivadas">Incluir archivadas</label>
       </div>
-      <button type="submit" class="btn">Filtrar</button>
-      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.reservations_list', **tab_args) }}">Quitar filtros</a>{% endif %}
-    </form>
+    {% endcall %}
 
     <div class="card inbox-card">
       {% if items %}
@@ -171,10 +171,12 @@
       <p class="muted">Esta reserva está {{ badge_info("reservation", selected.status).label|lower }}: la conversación quedó cerrada y ya no se pueden enviar mensajes.</p>
       {% else %}
       <h3 id="reply-title">Escribirle al residente</h3>
-      <form method="post" action="{{ url_for('web.reservation_message', res_id=selected.id, **list_args) }}" aria-labelledby="reply-title">
+      <form method="post" action="{{ url_for('web.reservation_message', res_id=selected.id, **list_args) }}"
+            enctype="multipart/form-data" aria-labelledby="reply-title">
         {{ csrf_input() }}
         {{ textarea("message", "Mensaje", reply.message, required=True,
                     help="El residente recibe un aviso en la app.") }}
+        {{ attachment_field("media") }}
         <div class="form-actions">
           <button type="submit" class="btn">Enviar mensaje</button>
         </div>

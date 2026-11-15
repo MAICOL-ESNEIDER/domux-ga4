@@ -59,3 +59,63 @@
   {% if help %}<p class="help" id="{{ id }}-help">{{ help }}</p>{% endif %}
 </div>
 {%- endmacro %}
+
+{# Campo para adjuntar una foto, un video, un audio o un PDF (opcional), con sus formatos y su peso máximo. #}
+{% macro attachment_field(id="media", label="Adjuntar foto, video, audio o PDF (opcional)") -%}
+{% set upload = upload_help() -%}
+<div class="field">
+  <label for="{{ id }}">{{ label }}</label>
+  <input type="file" id="{{ id }}" name="{{ id }}" accept="{{ upload.accept }}" aria-describedby="{{ id }}-help">
+  <p class="help" id="{{ id }}-help">Formatos: {{ upload.formats }}. Pesa hasta {{ upload.mb }} MB.</p>
+</div>
+{%- endmacro %}
+
+{#
+  El buscador de una lista con el botón «Filtros» al lado. Los filtros no ocupan la página: van en un
+  panel que se abre con el botón (sin JavaScript, el botón recarga la página con el panel abierto).
+  Los filtros puestos salen debajo como etiquetas; cada una es un enlace que quita ese filtro.
+
+    {% call filter_bar(url_for(...), "Filtrar PQRS", value=filters.q, placeholder="…", chips=chips, clear_url=…) %}
+      …campos de los filtros…
+    {% endcall %}
+
+  Sin «call» la lista solo tiene buscador y no sale el botón «Filtros». «hidden» son los parámetros que
+  hay que conservar (la pestaña en la que se está).
+#}
+{% macro filter_bar(action, label, value="", name="q", search_label="Buscar", placeholder="", hidden=None,
+                    chips=None, clear_url=None, clear_label="Quitar filtros", panel_id="panel-filtros") -%}
+{% set open = filters_open() -%}
+<form class="filters" method="get" action="{{ action }}" role="search" aria-label="{{ label }}">
+  {% for hidden_name, hidden_value in (hidden or {}).items() %}<input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">{% endfor %}
+  <div class="filters-bar">
+    <div class="field grow">
+      <label for="{{ name }}">{{ search_label }}</label>
+      <input type="search" id="{{ name }}" name="{{ name }}" value="{{ value }}" autocomplete="off"
+             placeholder="{{ placeholder }}">
+    </div>
+    <button type="submit" class="btn">Buscar</button>
+    {% if caller %}
+    <button type="submit" name="filtros" value="1" class="btn btn-quiet filters-toggle{% if chips %} is-on{% endif %}"
+            data-filters-toggle aria-expanded="{{ 'true' if open else 'false' }}" aria-controls="{{ panel_id }}">
+      {{ icon("filter") }}Filtros{% if chips %} · {{ chips|length }}<span class="sr-only"> puestos</span>{% endif %}
+    </button>
+    {% endif %}
+    {% if clear_url %}<a class="btn btn-quiet" href="{{ clear_url }}">{{ clear_label }}</a>{% endif %}
+  </div>
+  {% if caller %}
+  <div class="filters-panel" id="{{ panel_id }}"{% if not open %} hidden{% endif %}>
+    <div class="filters-fields">
+      {{ caller() }}
+    </div>
+    <button type="submit" class="btn">Aplicar filtros</button>
+  </div>
+  {% endif %}
+  {% if chips %}
+  <ul class="filters-active" aria-label="Filtros puestos">
+    {% for chip in chips %}
+    <li><a class="chip" href="{{ chip.url }}">{{ chip.text }}<span aria-hidden="true">×</span><span class="sr-only"> (quitar este filtro)</span></a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</form>
+{%- endmacro %}

@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import status_badge, badge, pager, attachment, registry_tabs, status_tabs %}
+{% from "web/_forms.html" import filter_bar %}
 {% set page_title = "Paquetería y visitas" %}
 
 {% block content %}
@@ -24,16 +25,10 @@
 
   {# --- La lista -------------------------------------------------------------------------------- #}
   <section class="inbox-list" aria-label="Lista de paquetes">
-    <form class="filters" method="get" action="{{ url_for('web.registry_packages') }}" role="search" aria-label="Buscar paquetes">
-      {% if filters.estado != "todos" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
-      <div class="field grow">
-        <label for="q">Buscar</label>
-        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
-               placeholder="Residente, apartamento, transportadora o guía">
-      </div>
-      <button type="submit" class="btn">Buscar</button>
-      {% if filters.q %}<a class="btn btn-quiet" href="{{ url_for('web.registry_packages', **tab_args) }}">Quitar búsqueda</a>{% endif %}
-    </form>
+    {{ filter_bar(url_for('web.registry_packages'), "Buscar paquetes", value=filters.q,
+                  placeholder="Residente, apartamento, transportadora o guía", hidden=tab_args,
+                  clear_url=url_for('web.registry_packages', **tab_args) if filters.q else None,
+                  clear_label="Quitar búsqueda") }}
     {% if hint %}<p class="muted small">{{ hint }}</p>{% endif %}
 
     <div class="card inbox-card">

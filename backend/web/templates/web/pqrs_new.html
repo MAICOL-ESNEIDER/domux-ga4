@@ -1,6 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import pqrs_tabs %}
-{% from "web/_forms.html" import field, select, textarea %}
+{% from "web/_forms.html" import field, select, textarea, attachment_field %}
 {% set page_title = "Nueva PQRS" %}
 
 {% block content %}
@@ -14,7 +14,8 @@
 {{ pqrs_tabs("nueva") }}
 
 {% if resident_options %}
-<form method="post" action="{{ url_for('web.pqrs_new') }}" class="card form-narrow" aria-label="Nueva PQRS">
+<form method="post" action="{{ url_for('web.pqrs_new') }}" enctype="multipart/form-data"
+      class="card form-narrow" aria-label="Nueva PQRS">
   {{ csrf_input() }}
   {{ select("residentId", "Residente", resident_options, value=values.residentId, required=True,
             blank="Elige un residente",
@@ -24,6 +25,7 @@
            help="Una frase corta que diga de qué trata.") }}
   {{ textarea("message", "Descripción", values.message, required=True, rows=6,
               help="Lo que contó el residente, con sus palabras. Queda como el primer mensaje de la conversación.") }}
+  {{ attachment_field("media", "Adjuntar la foto, el video, el audio o el PDF que trajo el residente (opcional)") }}
   <div class="form-actions">
     <button type="submit" class="btn">Registrar la PQRS</button>
     <a class="btn btn-quiet" href="{{ url_for('web.pqrs_list') }}">Cancelar</a>

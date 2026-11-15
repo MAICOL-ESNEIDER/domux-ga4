@@ -2,7 +2,7 @@
 
 import hashlib
 
-from flask import Response, abort, flash, request
+from flask import Response, abort, flash, request, url_for
 
 from services.media import PDF_MIME
 
@@ -22,6 +22,23 @@ def flash_result(result, success_default="Listo."):
         return True
     flash(result.error, "error")
     return False
+
+
+def filter_chips(endpoint, filters, labels, defaults=None):
+    """Los filtros que están puestos, para mostrarlos como etiquetas que se quitan con un clic.
+
+    ``filters`` son los filtros de la lista como los entrega la vista (lo vacío no cuenta), ``labels``
+    las parejas ``(filtro, texto)`` con el texto vacío si ese filtro no está puesto, y ``defaults`` los
+    valores que no se escriben en la dirección (la pestaña que se abre sola). Cada etiqueta lleva la
+    dirección de la misma lista sin ese filtro, y en la primera página.
+    """
+    defaults = defaults or {}
+    args = {name: value for name, value in filters.items() if value and defaults.get(name) != value}
+    return [
+        {"text": text, "url": url_for(endpoint, **{name: value for name, value in args.items() if name != key})}
+        for key, text in labels
+        if text
+    ]
 
 
 def paginate(items, page, size=25):

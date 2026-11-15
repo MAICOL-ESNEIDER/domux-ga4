@@ -55,9 +55,16 @@
 <main id="contenido" class="auth-wrap" tabindex="-1">
   <div class="auth-card card">
 {% endif %}
+      {# Los avisos llevan su ícono (acierto, error o información) además del color, como en la app. #}
       {% for category, message in get_flashed_messages(with_categories=true) %}
-        <p class="notice notice-{{ category if category in ('success', 'error') else 'info' }}"
-           role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% set tone = category if category in ('success', 'error') else 'info' %}
+        <div class="notice notice-flash notice-{{ tone }}" role="{{ 'alert' if category == 'error' else 'status' }}">
+          {{ tone_icon(tone) }}
+          <p>{{ message }}</p>
+          <button type="button" class="notice-close js-only" data-dismiss-notice>
+            {{ icon("close") }}<span class="sr-only">Cerrar el aviso</span>
+          </button>
+        </div>
       {% endfor %}
       {% block content %}{% endblock %}
 {% if web_user %}

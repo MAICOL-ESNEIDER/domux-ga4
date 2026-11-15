@@ -12,6 +12,7 @@ from services.media import MAX_MEDIA_BYTES, PDF_MIME, is_pdf, sniff_media
 
 __all__ = (
     "MAX_MEDIA_BYTES", "MEDIA_ACCEPT", "MEDIA_FORMATS_TEXT", "DOCUMENT_ACCEPT", "DOCUMENT_FORMATS_TEXT",
+    "attach_media",
     "UploadError", "read_media", "sniff_media",
 )
 
@@ -27,6 +28,21 @@ DOCUMENT_ACCEPT = MEDIA_ACCEPT + "," + PDF_MIME
 
 class UploadError(ValueError):
     """Un archivo que no se puede publicar. El mensaje está en español, listo para mostrárselo a la persona."""
+
+
+def attach_media(body, upload):
+    """Agrega a ``body`` el adjunto elegido en un formulario (foto, video, audio o PDF), si hay uno.
+
+    Devuelve el mensaje para la persona si el archivo no sirve, o None si todo está bien (también
+    cuando no se eligió ningún archivo).
+    """
+    try:
+        media = read_media(upload, allow_document=True)
+    except UploadError as problem:
+        return str(problem)
+    if media is not None:
+        body["mediaUrl"], body["mediaType"] = media
+    return None
 
 
 def read_media(upload, allow_document=False):

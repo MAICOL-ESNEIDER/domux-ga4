@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import status_badge, badge, pager, attachment, registry_tabs, status_tabs %}
+{% from "web/_forms.html" import filter_bar %}
 {% set page_title = "Paquetería y visitas" %}
 
 {% block content %}
@@ -25,13 +26,13 @@
 
   {# --- La lista -------------------------------------------------------------------------------- #}
   <section class="inbox-list" aria-label="Lista de visitas">
-    <form class="filters" method="get" action="{{ url_for('web.registry_visits') }}" role="search" aria-label="Filtrar visitas">
-      {% if filters.estado != "todas" %}<input type="hidden" name="estado" value="{{ filters.estado }}">{% endif %}
-      <div class="field grow">
-        <label for="q">Buscar</label>
-        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
-               placeholder="Visitante, residente o apartamento">
-      </div>
+    {% set chips = filter_chips("web.registry_visits", filters, [
+         ("desde", ("Desde: " ~ (filters.desde|date_es)) if filters.desde else ""),
+         ("hasta", ("Hasta: " ~ (filters.hasta|date_es)) if filters.hasta else ""),
+       ], {"estado": "todas"}) %}
+    {% call filter_bar(url_for('web.registry_visits'), "Filtrar visitas", value=filters.q,
+                       placeholder="Visitante, residente o apartamento", hidden=tab_args, chips=chips,
+                       clear_url=url_for('web.registry_visits', **tab_args) if filtered else None) %}
       <div class="field field-date">
         <label for="desde">Desde</label>
         <input type="date" id="desde" name="desde" value="{{ filters.desde }}">
@@ -40,9 +41,7 @@
         <label for="hasta">Hasta</label>
         <input type="date" id="hasta" name="hasta" value="{{ filters.hasta }}">
       </div>
-      <button type="submit" class="btn">Filtrar</button>
-      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.registry_visits', **tab_args) }}">Quitar filtros</a>{% endif %}
-    </form>
+    {% endcall %}
     <p class="muted small">Las fechas son las del día en que el visitante llegó a la portería.{% if hint %} {{ hint }}{% endif %}</p>
 
     <div class="card inbox-card">

@@ -1,6 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_macros.html" import status_badge, badge, pager, pqrs_tabs, attachment %}
-{% from "web/_forms.html" import select, textarea %}
+{% from "web/_forms.html" import select, textarea, filter_bar, attachment_field %}
 {% set page_title = "PQRS" %}
 
 {% block content %}
@@ -24,40 +24,41 @@
 
   {# --- La bandeja ------------------------------------------------------------------------------ #}
   <section class="inbox-list" aria-label="Bandeja de PQRS">
-    <form class="filters" method="get" action="{{ url_for('web.pqrs_list') }}" role="search" aria-label="Filtrar PQRS">
-      <div class="field grow">
-        <label for="q">Buscar</label>
-        <input type="search" id="q" name="q" value="{{ filters.q }}" autocomplete="off"
-               placeholder="Radicado, asunto, residente o apartamento">
-      </div>
+    {% set chips = filter_chips("web.pqrs_list", filters, [
+         ("estado", ("Estado: " ~ dict(status_options)[filters.estado]) if filters.estado else ""),
+         ("tipo", ("Tipo: " ~ filters.tipo) if filters.tipo else ""),
+         ("plazo", ("Plazo: " ~ dict(deadline_options)[filters.plazo]) if filters.plazo else ""),
+         ("archivadas", "Con archivadas" if filters.archivadas else ""),
+       ]) %}
+    {% call filter_bar(url_for('web.pqrs_list'), "Filtrar PQRS", value=filters.q,
+                       placeholder="Radicado, asunto, residente o apartamento", chips=chips,
+                       clear_url=url_for('web.pqrs_list') if filtered else None) %}
       <div class="field">
         <label for="estado">Estado</label>
-        <select id="estado" name="estado" data-autosubmit>
+        <select id="estado" name="estado">
           <option value="">Todos</option>
           {% for value, label in status_options %}<option value="{{ value }}"{% if filters.estado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
       </div>
       <div class="field">
         <label for="tipo">Tipo</label>
-        <select id="tipo" name="tipo" data-autosubmit>
+        <select id="tipo" name="tipo">
           <option value="">Todos</option>
           {% for value in category_options %}<option value="{{ value }}"{% if filters.tipo == value %} selected{% endif %}>{{ value }}</option>{% endfor %}
         </select>
       </div>
       <div class="field">
         <label for="plazo">Plazo</label>
-        <select id="plazo" name="plazo" data-autosubmit>
+        <select id="plazo" name="plazo">
           <option value="">Todos</option>
           {% for value, label in deadline_options %}<option value="{{ value }}"{% if filters.plazo == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
       </div>
       <div class="check">
-        <input type="checkbox" id="archivadas" name="archivadas" value="1"{% if filters.archivadas %} checked{% endif %} data-autosubmit>
+        <input type="checkbox" id="archivadas" name="archivadas" value="1"{% if filters.archivadas %} checked{% endif %}>
         <label for="archivadas">Incluir archivadas</label>
       </div>
-      <button type="submit" class="btn">Filtrar</button>
-      {% if filtered %}<a class="btn btn-quiet" href="{{ url_for('web.pqrs_list') }}">Quitar filtros</a>{% endif %}
-    </form>
+    {% endcall %}
 
     <form class="card inbox-card" method="post" action="{{ url_for('web.pqrs_batch', **list_args) }}" aria-label="Bandeja de PQRS">
       {{ csrf_input() }}
@@ -172,12 +173,14 @@
       {% endif %}
 
       <h3 id="reply-title">Responder</h3>
-      <form method="post" action="{{ url_for('web.pqrs_respond', pqrs_id=selected.id, **list_args) }}" aria-labelledby="reply-title">
+      <form method="post" action="{{ url_for('web.pqrs_respond', pqrs_id=selected.id, **list_args) }}"
+            enctype="multipart/form-data" aria-labelledby="reply-title">
         {{ csrf_input() }}
         {{ select("status", "Nuevo estado", status_reply_options, value=reply.status, required=True,
                   help="Para cambiar el estado hay que escribir la respuesta que verá el residente.") }}
         {{ textarea("adminResponse", "Respuesta para el residente", reply.adminResponse, required=True,
                     help="El residente recibe un aviso en la app con el nuevo estado.") }}
+        {{ attachment_field("media") }}
         <div class="form-actions">
           <button type="submit" class="btn">Enviar respuesta</button>
         </div>

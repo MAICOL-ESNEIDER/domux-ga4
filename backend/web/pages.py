@@ -12,6 +12,8 @@ from models import Notification
 from services import unit_service
 from web import bp, texts
 from web.security import csrf_token, current_admin
+from web.support import filter_chips
+from web.uploads import DOCUMENT_ACCEPT, DOCUMENT_FORMATS_TEXT, MAX_MEDIA_BYTES
 
 #: El menú de la barra lateral. Es el mismo de la app, agrupado como lo aprobó el equipo (DEC-097):
 #: cada página es (nombre, ruta, ícono, prefijo de sus rutas). Una página que todavía no existe
@@ -57,6 +59,14 @@ ICONS = {
     "archive": '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/>'
                '<path d="M10 12h4"/>',
     "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    "filter": '<path d="M4 7h16M7 12h10M10 17h4"/>',
+    "close": '<path d="M6 6l12 12M18 6L6 18"/>',
+    # Los mismos tres íconos de estado de la app: acierto, en curso y alerta (HU-086).
+    "check": '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    "clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    "warning": '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+    "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+    "clip": '<path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/>',
     "logout": '<path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9"/>',
 }
 
@@ -69,6 +79,31 @@ def icon(name):
         '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
         f"{ICONS.get(name, '')}</svg>"
     )
+
+
+#: El ícono que acompaña a cada tono de un aviso o de una insignia, como en la app: el color nunca
+#: es lo único que informa (HU-086). El tono neutro no lleva ícono.
+TONE_ICONS = {"success": "check", "progress": "clock", "alert": "warning", "error": "warning", "info": "info"}
+
+
+def tone_icon(tone):
+    """El ícono de un tono («success», «progress», «alert», «error» o «info»); vacío si no tiene."""
+    name = TONE_ICONS.get(tone)
+    return icon(name) if name else ""
+
+
+def filters_open():
+    """True si la página se pidió con el panel de filtros abierto (botón «Filtros» sin JavaScript)."""
+    return request.args.get("filtros") == "1"
+
+
+def upload_help():
+    """Lo que acepta un campo de adjunto de la web: tipos, formatos en palabras y peso máximo en MB."""
+    return {
+        "accept": DOCUMENT_ACCEPT,
+        "formats": DOCUMENT_FORMATS_TEXT,
+        "mb": MAX_MEDIA_BYTES // (1024 * 1024),
+    }
 
 
 def csrf_input():
@@ -148,6 +183,10 @@ def inject_layout():
 for _name, _function in (
     ("csrf_input", csrf_input),
     ("icon", icon),
+    ("tone_icon", tone_icon),
+    ("filters_open", filters_open),
+    ("filter_chips", filter_chips),
+    ("upload_help", upload_help),
     ("menu_groups", menu_groups),
     ("page_exists", page_exists),
     ("page_url", page_url),
