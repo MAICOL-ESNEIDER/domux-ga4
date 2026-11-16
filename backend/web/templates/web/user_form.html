@@ -47,6 +47,7 @@
     {% if not user or user.role != "RESIDENT" %}
     {{ checkbox("dataProcessingConsent", "La persona autorizó el tratamiento de sus datos personales", values.dataProcessingConsent,
                 help="Es obligatorio para registrar a un residente.") }}
+    <p class="help"><a href="{{ url_for('web.legal_document', slug='autorizacion-datos') }}" target="_blank" rel="noopener">Ver el texto de la autorización</a> (se abre en otra pestaña).</p>
     {% else %}
     <p class="muted">Autorización de tratamiento de datos: {% if user.dataProcessingConsent %}registrada{% else %}sin registrar{% endif %}.</p>
     {% endif %}

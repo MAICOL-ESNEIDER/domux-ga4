@@ -1,0 +1,33 @@
+DOMUX - Todos los derechos reservados
+
+Copyright (c) 2026 Maicol Esneider Posada Callejas, Sebastián Lein Castro
+Grajales y Nicolás Muñoz Hernández. Todos los derechos reservados.
+
+Este programa (el servidor, la aplicación Android, la página web de
+administración, sus pruebas, imágenes y documentación; en adelante, "DOMUX")
+es propiedad de sus tres autores. Que su código fuente se pueda ver en un
+repositorio público NO es una autorización para usarlo.
+
+Sin permiso previo y por escrito de los tres autores está prohibido:
+
+  1. copiar, modificar, traducir o crear obras derivadas de DOMUX;
+  2. distribuir, publicar, sublicenciar, prestar, alquilar o vender DOMUX o
+     copias de él, en todo o en parte;
+  3. usar DOMUX, en todo o en parte, dentro de un producto o servicio,
+     comercial o no;
+  4. quitar o cambiar este aviso de derechos de autor.
+
+Esto no limita los derechos que los Términos del Servicio de GitHub dan a
+cualquier persona que ve un repositorio público dentro de GitHub.
+
+Librerías de terceros: DOMUX usa librerías de otras personas y empresas. Cada
+una conserva su propia licencia, que se lista en el archivo
+THIRD_PARTY_NOTICES.md. Esta licencia no cambia esas licencias ni da ningún
+derecho sobre esas librerías.
+
+DOMUX se entrega "tal como está", sin garantía de ningún tipo, expresa o
+implícita, incluida la de que sirva para un fin particular. Los autores no
+responden por daños o pérdidas que resulten de usarlo.
+
+Para pedir un permiso, contactar a los autores a través del repositorio:
+https://github.com/MAICOL-ESNEIDER/domux-ga4

@@ -604,6 +604,38 @@ data class NotificationsListResponse(val notifications: List<NotificationItem>?)
 data class NotificationResponse(val message: String?, val notification: NotificationItem?)
 data class ReadAllNotificationsResponse(val message: String?, val updatedCount: Int?)
 
+// --- Documentos legales (política de datos, términos, cookies...): son públicos, se leen sin iniciar sesión ---
+data class LegalDocumentSummary(
+    val slug: String,
+    val title: String,
+    val summary: String,
+    // «pendiente»: todavía no tiene su texto final; «vigente»: ya está publicado y rige.
+    val status: String,
+    val version: String?,
+    // El día desde el que rige, como AAAA-MM-DD; viene vacío mientras está pendiente.
+    val effectiveFrom: String?
+)
+data class LegalDocumentsResponse(val documents: List<LegalDocumentSummary>?)
+
+// Un trozo del texto. «type» es heading (título), paragraph (párrafo) o list (lista) y cada clase
+// trae solo sus datos: heading → level y text; paragraph → text; list → ordered e items.
+data class LegalBlock(
+    val type: String,
+    val level: Int?,
+    val text: String?,
+    val ordered: Boolean?,
+    val items: List<String>?
+)
+data class LegalDocument(
+    val slug: String,
+    val title: String,
+    val summary: String,
+    val status: String,
+    val version: String?,
+    val effectiveFrom: String?,
+    val blocks: List<LegalBlock>?
+)
+
 // --- Inicio de la administración (HU-081): lo pendiente de hoy ---
 data class AdminSummaryCounts(
     val pqrsOpen: Int = 0,

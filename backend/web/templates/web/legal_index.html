@@ -1,0 +1,23 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import legal_status %}
+{% set page_title = "Legal y privacidad" %}
+{% set wide_card = true %}
+
+{% block content %}
+<h1>Legal y privacidad</h1>
+<p class="lead">Los documentos que explican cómo DOMUX trata tus datos personales y las reglas para usar la app y la web.</p>
+
+<ul class="legal-list">
+  {% for document in documents %}
+  <li class="card">
+    <h2><a href="{{ url_for('web.legal_document', slug=document.slug) }}">{{ document.title }}</a></h2>
+    <p>{{ document.summary }}</p>
+    <p class="small">{{ legal_status(document) }}</p>
+  </li>
+  {% endfor %}
+</ul>
+
+{% if not web_user %}
+<p class="small"><a href="{{ url_for('web.login') }}">Volver al inicio de sesión</a></p>
+{% endif %}
+{% endblock %}

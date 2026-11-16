@@ -1,4 +1,4 @@
-{% from "web/_macros.html" import brand_parts %}<!doctype html>
+{% from "web/_macros.html" import brand_parts, legal_links %}<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -54,7 +54,7 @@
     <main id="contenido" tabindex="-1">
 {% else %}
 <main id="contenido" class="auth-wrap" tabindex="-1">
-  <div class="auth-card card">
+  <div class="auth-card card{% if wide_card %} auth-card-wide{% endif %}">
 {% endif %}
       {# Los avisos llevan su ícono (acierto, error o información) además del color, como en la app. #}
       {% for category, message in get_flashed_messages(with_categories=true) %}
@@ -70,6 +70,7 @@
       {% block content %}{% endblock %}
 {% if web_user %}
     </main>
+    <footer class="site-footer">{{ legal_links() }}</footer>
   </div>
 </div>
 {% else %}

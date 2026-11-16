@@ -114,6 +114,16 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("notifications") { NotificationsScreen(navController) }
+                        // Documentos legales (públicos): sin «slug» es la lista; con «slug», el texto de ese documento.
+                        composable(
+                            "legal?slug={slug}",
+                            arguments = listOf(navArgument("slug") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            })
+                        ) { entry ->
+                            LegalScreen(navController, slug = entry.arguments?.getString("slug").orEmpty())
+                        }
                         composable("more") { MoreScreen(navController) }
                     }
                     // Con una contraseña temporal (se la restableció el administrador) esta pantalla
