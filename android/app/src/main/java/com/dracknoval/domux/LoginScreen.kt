@@ -165,5 +165,11 @@ fun LoginScreen(
             Spacer(Modifier.height(20.dp))
             DomuxMessageBanner(state.message, state.messageIsError) { viewModel.dismissMessage() }
         }
+
+        // Los documentos legales se pueden leer antes de iniciar sesión.
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = { navController.navigate("legal") }) {
+            Text("Política de datos, términos y más", color = DomuxColor.TextMuted)
+        }
     }
 }

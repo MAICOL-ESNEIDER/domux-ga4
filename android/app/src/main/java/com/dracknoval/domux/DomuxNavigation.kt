@@ -32,6 +32,7 @@ private val Reservations = DomuxDestination("Reservas", "reservations", R.drawab
 private val Pqrs = DomuxDestination("PQRS", "pqrs", R.drawable.ic_forum)
 private val Vehicles = DomuxDestination("Vehículos", "vehicles", R.drawable.ic_car)
 private val Notifications = DomuxDestination("Notificaciones", "notifications", R.drawable.ic_notifications)
+private val Legal = DomuxDestination("Legal y privacidad", "legal", R.drawable.ic_description)
 
 /** Los botones principales del rol que tiene la sesión. */
 fun mainDestinations(): List<DomuxDestination> = when {
@@ -65,14 +66,16 @@ fun moreDestinations(): List<DomuxDestination> = when {
         Vehicles,
         DomuxDestination("Usuarios", "createUser", R.drawable.ic_group),
         DomuxDestination("Estructura de la unidad", "structure", R.drawable.ic_building),
-        Notifications
+        Notifications,
+        Legal
     )
-    Session.isGuard -> listOf(Announcements, Notifications)
+    Session.isGuard -> listOf(Announcements, Notifications, Legal)
     else -> listOf(
         DomuxDestination("Mi perfil", "profile", R.drawable.ic_person),
         DomuxDestination("Mis paquetes", "registry?tab=paquetes", R.drawable.ic_package),
         DomuxDestination("Mis visitas y mi QR", "registry?tab=visitas", R.drawable.ic_qr_scan),
-        Notifications
+        Notifications,
+        Legal
     )
 }
 

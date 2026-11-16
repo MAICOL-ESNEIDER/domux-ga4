@@ -552,6 +552,8 @@ fun DomuxResidentSearchField(
 /**
  * El marco de cada pantalla: barra de arriba con el título (y «Volver» cuando la pantalla no es
  * del menú principal) y el menú del rol: abajo en el celular y a la izquierda en la tablet.
+ * [showMenu] en false lo deja sin menú; lo usan las pantallas que se abren antes de iniciar sesión
+ * (los documentos legales), porque los botones del menú llevan a pantallas que piden sesión.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -560,6 +562,7 @@ fun DomuxScreenScaffold(
     navController: NavController,
     showBackButton: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
+    showMenu: Boolean = true,
     content: @Composable (PaddingValues) -> Unit
 ) {
     // Se lee para que el menú se vuelva a dibujar si cambian los datos de la sesión (por ejemplo,
@@ -567,7 +570,7 @@ fun DomuxScreenScaffold(
     @Suppress("UNUSED_VARIABLE")
     val sessionVersion = Session.changeCount
     val entry by navController.currentBackStackEntryAsState()
-    val destinations = mainDestinations()
+    val destinations = if (showMenu) mainDestinations() else emptyList()
     val selected = destinations.firstOrNull { it.matches(entry) }
     val canGoBack = showBackButton && selected == null && navController.previousBackStackEntry != null
     // Desde 600 dp de ancho (tablet o celular acostado grande) el menú va a la izquierda.
@@ -603,10 +606,10 @@ fun DomuxScreenScaffold(
             )
         },
         bottomBar = {
-            if (!wide) DomuxBottomBar(destinations, selected, navController)
+            if (showMenu && !wide) DomuxBottomBar(destinations, selected, navController)
         }
     ) { innerPadding ->
-        if (wide) {
+        if (showMenu && wide) {
             Row(Modifier.fillMaxSize()) {
                 DomuxRail(destinations, selected, navController, Modifier.padding(top = innerPadding.calculateTopPadding()))
                 Box(Modifier.weight(1f)) { content(innerPadding) }

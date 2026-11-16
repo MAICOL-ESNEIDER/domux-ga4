@@ -55,7 +55,7 @@ fun CreateUserScreen(navController: NavController, viewModel: UsersViewModel = v
             DomuxMessageBanner(state.message, state.messageIsError) { viewModel.dismissMessage() }
             when (state.selectedTab) {
                 0 -> UsersList(state, viewModel, navController)
-                else -> CreateUserForm(state, viewModel)
+                else -> CreateUserForm(state, viewModel, navController)
             }
             // El censo en Excel se importa en la web, desde el computador: la app no guarda archivos.
             Text(
@@ -91,7 +91,7 @@ fun CreateUserScreen(navController: NavController, viewModel: UsersViewModel = v
 }
 
 @Composable
-private fun CreateUserForm(state: UsersUiState, viewModel: UsersViewModel) {
+private fun CreateUserForm(state: UsersUiState, viewModel: UsersViewModel, navController: NavController) {
     val form = state.form
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         DomuxCard(Modifier.fillMaxWidth()) {
@@ -144,6 +144,10 @@ private fun CreateUserForm(state: UsersUiState, viewModel: UsersViewModel) {
                         "El residente autorizó el tratamiento de sus datos para gestionar la vivienda.",
                         form.consentConfirmed
                     ) { checked -> viewModel.updateForm { it.copy(consentConfirmed = checked) } }
+                    // El texto de la autorización es un documento legal: se lee sin perder lo que ya se escribió.
+                    TextButton(onClick = { navController.navigate("legal?slug=autorizacion-datos") }) {
+                        Text("Ver el texto de la autorización")
+                    }
                     if (form.attempted && !form.consentConfirmed) {
                         Text("Confirma la autorización del residente.", color = MaterialTheme.colorScheme.error)
                     }

@@ -451,6 +451,13 @@ interface ApiService {
         @Body body: VehicleMovementRequest
     ): Response<VehicleMovementResponse>
 
+    // Los documentos legales son públicos (se leen antes de iniciar sesión): estas llamadas no llevan «Authorization».
+    @GET("api/legal")
+    suspend fun getLegalDocuments(): Response<LegalDocumentsResponse>
+
+    @GET("api/legal/{slug}")
+    suspend fun getLegalDocument(@Path("slug") slug: String): Response<LegalDocument>
+
     @GET("api/notifications")
     suspend fun getNotifications(@Header("Authorization") auth: String): Response<NotificationsListResponse>
 
