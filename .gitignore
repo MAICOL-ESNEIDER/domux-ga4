@@ -21,6 +21,11 @@ backend/instance/
 backend/*.db
 backend/.env
 
+# Copias de seguridad de la base de datos: llevan datos reales, nunca al repositorio
+*.dump
+*.dump.json
+*.dump.parcial
+
 # Heap dumps
 *.hprof
 
