@@ -234,4 +234,196 @@
   if (focusTarget) {
     focusTarget.focus();
   }
+
+  // --- Cuentas recientes en este equipo ---------------------------------------------------------------
+  // Si al entrar se marca «Recordar mi correo en este equipo», este navegador guarda el correo y el
+  // nombre (nunca la contraseña). En el inicio de sesión salen como una lista para tocar la cuenta y
+  // escribir solo la contraseña; cada una se quita con su X. El servidor no guarda ninguna lista.
+  var ACCOUNTS_KEY = "domux.cuentasRecientes";
+  var MAX_ACCOUNTS = 5;
+
+  function storageWorks() {
+    try {
+      var probe = ACCOUNTS_KEY + ".prueba";
+      window.localStorage.setItem(probe, "1");
+      window.localStorage.removeItem(probe);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function sameEmail(first, second) {
+    return String(first || "").trim().toLowerCase() === String(second || "").trim().toLowerCase();
+  }
+
+  function readAccounts() {
+    try {
+      var list = JSON.parse(window.localStorage.getItem(ACCOUNTS_KEY) || "[]");
+      if (!Array.isArray(list)) {
+        return [];
+      }
+      return list.filter(function (item) {
+        return item && typeof item.correo === "string" && item.correo.indexOf("@") > 0;
+      }).slice(0, MAX_ACCOUNTS);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function writeAccounts(list) {
+    try {
+      if (list.length) {
+        window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list.slice(0, MAX_ACCOUNTS)));
+      } else {
+        window.localStorage.removeItem(ACCOUNTS_KEY);
+      }
+    } catch (error) {
+      // Navegador en modo privado o sin espacio: la lista no se guarda y el ingreso sigue igual.
+    }
+  }
+
+  function initialsOf(name, email) {
+    var source = String(name || "").trim() || String(email || "").split("@")[0];
+    var words = source.split(/[\s._-]+/).filter(Boolean);
+    var letters = words.length > 1 ? words[0].charAt(0) + words[1].charAt(0) : source.slice(0, 2);
+    return letters.toUpperCase();
+  }
+
+  // Primera página después de entrar con la casilla marcada: guarda la cuenta al comienzo de la lista.
+  var accountToRemember = document.querySelector("[data-recordar-cuenta]");
+  if (accountToRemember && storageWorks()) {
+    var rememberedEmail = accountToRemember.dataset.correo;
+    var others = readAccounts().filter(function (item) {
+      return !sameEmail(item.correo, rememberedEmail);
+    });
+    writeAccounts([{ correo: rememberedEmail, nombre: accountToRemember.dataset.nombre || "" }].concat(others));
+    accountToRemember.remove();
+  }
+
+  var loginForm = document.querySelector("[data-login-form]");
+  if (loginForm && storageWorks()) {
+    var accountsBox = document.querySelector("[data-cuentas]");
+    var accountsList = document.querySelector("[data-cuentas-lista]");
+    var accountTemplate = document.querySelector("[data-cuenta-plantilla]");
+    var removedNotice = document.querySelector("[data-cuenta-quitada]");
+    var removedText = document.querySelector("[data-cuenta-quitada-texto]");
+    var chosenBox = loginForm.querySelector("[data-cuenta-elegida]");
+    var emailField = loginForm.querySelector("[data-campo-correo]");
+    var emailInput = loginForm.querySelector("input[name='email']");
+    var passwordInput = loginForm.querySelector("input[name='password']");
+    var rememberField = loginForm.querySelector("[data-campo-recordar]");
+    var rememberInput = loginForm.querySelector("input[name='recordar']");
+    var backButton = loginForm.querySelector("[data-volver-cuentas]");
+    var lastRemoved = null;
+
+    var hideRemovedNotice = function () {
+      removedNotice.hidden = true;
+      lastRemoved = null;
+    };
+
+    // Formulario de siempre (account = null) o con una cuenta de la lista ya elegida.
+    var showForm = function (account, moveFocus) {
+      accountsBox.hidden = true;
+      loginForm.hidden = false;
+      chosenBox.hidden = !account;
+      emailField.hidden = !!account;
+      rememberField.hidden = !!account;
+      backButton.hidden = readAccounts().length === 0;
+      if (account) {
+        emailInput.value = account.correo;
+        // Entrar con una cuenta de la lista la vuelve a guardar de primera, con el nombre al día.
+        rememberInput.checked = true;
+        chosenBox.querySelector("[data-elegida-iniciales]").textContent = initialsOf(account.nombre, account.correo);
+        chosenBox.querySelector("[data-elegida-nombre]").textContent = account.nombre || account.correo;
+        chosenBox.querySelector("[data-elegida-correo]").textContent = account.correo;
+        if (moveFocus) {
+          passwordInput.focus();
+        }
+      } else {
+        rememberInput.checked = false;
+        if (moveFocus) {
+          emailInput.focus();
+        }
+      }
+    };
+
+    var showList = function (moveFocus) {
+      var accounts = readAccounts();
+      if (!accounts.length) {
+        showForm(null, moveFocus);
+        return;
+      }
+      accountsList.textContent = "";
+      accounts.forEach(function (account) {
+        var item = accountTemplate.content.firstElementChild.cloneNode(true);
+        item.querySelector("[data-iniciales]").textContent = initialsOf(account.nombre, account.correo);
+        item.querySelector("[data-nombre]").textContent = account.nombre || account.correo;
+        item.querySelector("[data-correo]").textContent = account.correo;
+        item.querySelector("[data-quitar-texto]").textContent = "Quitar " + account.correo + " de este equipo";
+        item.querySelector("[data-elegir]").addEventListener("click", function () {
+          hideRemovedNotice();
+          showForm(account, true);
+        });
+        item.querySelector("[data-quitar]").addEventListener("click", function () {
+          removeAccount(account);
+        });
+        accountsList.appendChild(item);
+      });
+      emailInput.value = "";
+      loginForm.hidden = true;
+      accountsBox.hidden = false;
+      if (moveFocus) {
+        accountsList.querySelector("[data-elegir]").focus();
+      }
+    };
+
+    var removeAccount = function (account) {
+      writeAccounts(readAccounts().filter(function (item) {
+        return !sameEmail(item.correo, account.correo);
+      }));
+      lastRemoved = account;
+      removedText.textContent = "Se quitó " + account.correo + " de este equipo.";
+      removedNotice.hidden = false;
+      showList(true);
+    };
+
+    removedNotice.querySelector("[data-deshacer-quitar]").addEventListener("click", function () {
+      if (lastRemoved) {
+        var restored = lastRemoved;
+        writeAccounts([restored].concat(readAccounts().filter(function (item) {
+          return !sameEmail(item.correo, restored.correo);
+        })));
+      }
+      hideRemovedNotice();
+      showList(true);
+    });
+
+    accountsBox.querySelector("[data-usar-otra]").addEventListener("click", function () {
+      hideRemovedNotice();
+      emailInput.value = "";
+      showForm(null, true);
+    });
+
+    chosenBox.querySelector("[data-cambiar-cuenta]").addEventListener("click", function () {
+      showList(true);
+    });
+
+    backButton.addEventListener("click", function () {
+      showList(true);
+    });
+
+    // Al abrir: si volvió con un error, se queda en el formulario (con la cuenta si era de la lista);
+    // si hay cuentas guardadas, primero la lista; si no, el formulario de siempre.
+    rememberField.hidden = false;
+    var typedEmail = emailInput.value.trim();
+    if (typedEmail) {
+      var known = readAccounts().filter(function (item) {
+        return sameEmail(item.correo, typedEmail);
+      })[0];
+      showForm(known || null, false);
+    } else {
+      showList(false);
+    }
+  }
 })();

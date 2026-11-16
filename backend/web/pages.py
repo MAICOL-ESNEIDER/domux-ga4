@@ -11,7 +11,7 @@ from extensions import db
 from models import Notification
 from services import unit_service
 from web import bp, texts
-from web.security import csrf_token, current_admin
+from web.security import csrf_token, current_admin, take_account_to_remember
 from web.support import filter_chips
 from web.uploads import DOCUMENT_ACCEPT, DOCUMENT_FORMATS_TEXT, MAX_MEDIA_BYTES
 
@@ -175,8 +175,17 @@ def menu_groups():
 
 @bp.app_context_processor
 def inject_layout():
-    """Lo que toda plantilla de la web puede usar sin que cada página lo pase."""
-    return {"web_user": g.get("web_user"), "role_labels": ROLE_LABELS}
+    """Lo que toda plantilla de la web puede usar sin que cada página lo pase.
+
+    ``recordar_cuenta`` solo llega en la primera página después de entrar con «Recordar mi correo
+    en este equipo»; la plantilla base se lo pasa al navegador para que lo guarde.
+    """
+    web_user = g.get("web_user")
+    return {
+        "web_user": web_user,
+        "role_labels": ROLE_LABELS,
+        "recordar_cuenta": take_account_to_remember(web_user),
+    }
 
 
 # Funciones disponibles en todas las plantillas, también dentro de los macros importados (los

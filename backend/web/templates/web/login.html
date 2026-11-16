@@ -12,10 +12,45 @@
 <p class="notice notice-error" role="alert">{{ error }}</p>
 {% endif %}
 
-<form method="post" action="{{ url_for('web.login') }}">
+{#
+  Cuentas recientes en este equipo. Solo las muestra domux.js, con lo que este navegador guardó
+  cuando la persona marcó «Recordar mi correo»: el correo y el nombre, nunca la contraseña.
+  Sin JavaScript se ve solo el formulario de siempre.
+#}
+<div class="notice notice-info notice-account-removed" role="status" data-cuenta-quitada hidden>
+  <p data-cuenta-quitada-texto></p>
+  <button type="button" class="link-button" data-deshacer-quitar>Deshacer</button>
+</div>
+
+<div class="accounts" data-cuentas hidden>
+  <p class="accounts-title" id="titulo-cuentas">Cuentas recientes en este equipo</p>
+  <ul class="accounts-list" aria-labelledby="titulo-cuentas" data-cuentas-lista></ul>
+  <button type="button" class="btn btn-quiet btn-block" data-usar-otra>Usar otra cuenta</button>
+</div>
+
+<template data-cuenta-plantilla>
+  <li class="account">
+    <button type="button" class="account-pick" data-elegir>
+      <span class="avatar" aria-hidden="true" data-iniciales></span>
+      <span class="account-text"><span class="account-name" data-nombre></span><span class="account-email" data-correo></span></span>
+    </button>
+    <button type="button" class="account-remove" data-quitar>
+      {{ icon("close") }}<span class="sr-only" data-quitar-texto></span>
+    </button>
+  </li>
+</template>
+
+<form method="post" action="{{ url_for('web.login') }}" data-login-form>
   {{ csrf_input() }}
   <input type="hidden" name="next" value="{{ next_url or '' }}">
-  <div class="field">
+
+  <div class="account account-chosen" data-cuenta-elegida hidden>
+    <span class="avatar" aria-hidden="true" data-elegida-iniciales></span>
+    <span class="account-text"><span class="account-name" data-elegida-nombre></span><span class="account-email" data-elegida-correo></span></span>
+    <button type="button" class="link-button" data-cambiar-cuenta>Cambiar</button>
+  </div>
+
+  <div class="field" data-campo-correo>
     <label for="email">Correo electrónico</label>
     <input type="email" id="email" name="email" value="{{ email }}" autocomplete="username" required{% if not email %} autofocus{% endif %}>
   </div>
@@ -23,7 +58,17 @@
     <label for="password">Contraseña</label>
     <input type="password" id="password" name="password" autocomplete="current-password" required{% if email %} autofocus{% endif %}>
   </div>
+
+  <div class="remember" data-campo-recordar hidden>
+    <div class="check">
+      <input type="checkbox" id="recordar" name="recordar" value="1" aria-describedby="recordar-ayuda">
+      <label for="recordar">Recordar mi correo en este equipo</label>
+    </div>
+    <p class="help" id="recordar-ayuda">Solo el correo, nunca la contraseña. No la marques en un computador compartido.</p>
+  </div>
+
   <button type="submit" class="btn btn-block">Entrar</button>
+  <button type="button" class="link-button link-button-block" data-volver-cuentas hidden>Volver a las cuentas recientes</button>
 </form>
 
 <p class="small muted mt-1">

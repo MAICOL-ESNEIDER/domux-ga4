@@ -402,6 +402,46 @@ progress.reading { display: block; width: 100%; height: 12px; margin-top: .5rem;
 .auth-card .brand { justify-content: center; padding-bottom: .5rem; }
 .auth-card h1 { text-align: center; font-size: 1.35rem; }
 .auth-card .lead { text-align: center; color: var(--muted); }
+
+/* Cuentas recientes en este equipo: solo el correo y el nombre que la persona pidió recordar. */
+.accounts { margin-bottom: 1rem; }
+.accounts-title { margin: 0 0 .5rem; color: var(--soft); font-weight: 500; }
+.accounts-list { list-style: none; margin: 0 0 .75rem; padding: 0; display: grid; gap: .5rem; }
+.account {
+  display: flex; align-items: center; gap: .25rem; padding: .25rem;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+}
+.account-pick {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: .75rem; min-height: 56px;
+  padding: .5rem; border: 0; border-radius: 10px; background: transparent; color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.account-pick:hover { background: var(--card); }
+.account-remove {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--soft); cursor: pointer;
+}
+.account-remove:hover { background: var(--card); color: var(--text); }
+.avatar {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border-radius: 999px; background: var(--line); color: var(--text); font-weight: 600; font-size: .9rem;
+}
+.account-text { display: flex; flex-direction: column; min-width: 0; }
+.account-name { font-weight: 500; }
+.account-email { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.account-chosen { padding: .5rem .75rem; margin-bottom: 1rem; gap: .75rem; }
+.account-chosen .link-button { margin-left: auto; }
+.remember { margin-bottom: 1rem; }
+.remember .help { margin: 0 0 0 1.75rem; color: var(--muted); font-size: .85rem; }
+.link-button {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 .4rem; border: 0;
+  background: transparent; color: var(--primary); font: inherit; font-weight: 500;
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.link-button:hover { color: var(--cyan); }
+.link-button-block { width: 100%; justify-content: center; margin-top: .5rem; }
+.notice-account-removed { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.notice-account-removed p { margin: 0; }
 .error-page { text-align: center; padding: 3rem 1rem; }
 .error-page .code { font-size: 4rem; font-weight: 700; color: var(--primary); line-height: 1; }
 
