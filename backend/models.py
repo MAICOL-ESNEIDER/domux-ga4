@@ -817,6 +817,7 @@ class AnnouncementRead(db.Model):
         db.Integer,
         db.ForeignKey("apartments.id", name="fk_announcement_reads_apartment_id_apartments"),
         nullable=True,
+        index=True,
     )
     read_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
@@ -833,7 +834,7 @@ class Pqrs(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     radicado = db.Column(db.String(30), unique=True, index=True, nullable=True)
-    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     created_by_admin_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     category = db.Column(db.String(40), default="Petición")
     subject = db.Column(db.String(150), nullable=False)
@@ -1095,7 +1096,7 @@ class Reservation(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     created_by_admin_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     common_area_id = db.Column(db.Integer, db.ForeignKey("common_areas.id"), nullable=False)
     date = db.Column(db.String(20), nullable=False)
@@ -1209,7 +1210,7 @@ class PackageItem(db.Model):
     __tablename__ = "packages"
 
     id = db.Column(db.Integer, primary_key=True)
-    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     registered_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     description = db.Column(db.String(200), nullable=True)
     carrier = db.Column(db.String(60), nullable=True)
@@ -1351,7 +1352,7 @@ class Visit(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    resident_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     registered_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     visitor_name = db.Column(db.String(120), nullable=False)
     visitor_document = db.Column(db.String(40), nullable=True)

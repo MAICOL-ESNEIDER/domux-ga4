@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícono para Android 7 (los celulares con Android 8 o más usan el adaptable de mipmap-anydpi-v26). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:pathData="M12,0h24a12,12 0 0,1 12,12v24a12,12 0 0,1 -12,12h-24a12,12 0 0,1 -12,-12v-24a12,12 0 0,1 12,-12z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="48"
+                android:endY="48"
+                android:startX="0"
+                android:startY="0"
+                android:type="linear">
+                <item
+                    android:color="#FF38BDF8"
+                    android:offset="0.0" />
+                <item
+                    android:color="#FF818CF8"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FF07111F"
+        android:fillType="evenOdd"
+        android:pathData="M15,12h9a12,12 0 0,1 0,24h-9z M21,18v12h3a6,6 0 0,0 0,-12z" />
+</vector>

@@ -783,7 +783,7 @@ private fun ParkingFormDialog(
     var apartment by remember(editing?.id) {
         mutableStateOf<ApartmentOption?>(
             if (initialApartmentId != null) {
-                ApartmentOption(initialApartmentId, editing?.apartment.orEmpty())
+                ApartmentOption(initialApartmentId, editing.apartment.orEmpty())
             } else {
                 null
             }
@@ -874,7 +874,7 @@ private fun StorageFormDialog(
     var apartment by remember(editing?.id) {
         mutableStateOf<ApartmentOption?>(
             if (initialApartmentId != null) {
-                ApartmentOption(initialApartmentId, editing?.apartment.orEmpty())
+                ApartmentOption(initialApartmentId, editing.apartment.orEmpty())
             } else {
                 null
             }

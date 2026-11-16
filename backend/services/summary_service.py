@@ -8,9 +8,9 @@ un programador) y sin cargar los adjuntos de las PQRS, que pueden pesar varios m
 
 from datetime import timedelta
 
-from sqlalchemy.orm import load_only
+from sqlalchemy.orm import joinedload, load_only
 
-from models import UNCLAIMED_ORANGE_HOURS, Notification, PackageItem, Pqrs, Reservation
+from models import UNCLAIMED_ORANGE_HOURS, Notification, PackageItem, Pqrs, Reservation, User
 from services.alert_service import run_alerts
 from services.pqrs_rules import RED, RUNNING_STATUSES, YELLOW, pqrs_semaphore
 from services.reservation_service import PENDING_RESERVATION_STATUSES
@@ -48,8 +48,14 @@ def _urgent_pqrs():
     overdue = sum(1 for row in rated if row[3]["color"] == RED)
     due_soon = sum(1 for row in rated if row[3]["color"] == YELLOW)
     rows = []
-    for _days, _id, item, semaphore in rated[:PANEL_ROWS]:
-        resident = item.resident
+    shown = rated[:PANEL_ROWS]
+    # Los residentes de las filas que se muestran, en una sola consulta.
+    residents = {
+        person.id: person
+        for person in User.query.filter(User.id.in_({row[2].resident_id for row in shown}))
+    }
+    for _days, _id, item, semaphore in shown:
+        resident = residents.get(item.resident_id)
         rows.append({
             "id": item.id,
             "radicado": item.radicado,
@@ -73,7 +79,10 @@ def _pending_reservations():
     )
     total = query.count()
     rows = []
-    for item in query.order_by(Reservation.date, Reservation.created_at, Reservation.id).limit(PANEL_ROWS):
+    shown = query.options(
+        joinedload(Reservation.resident), joinedload(Reservation.common_area)
+    ).order_by(Reservation.date, Reservation.created_at, Reservation.id).limit(PANEL_ROWS)
+    for item in shown:
         resident = item.resident
         rows.append({
             "id": item.id,

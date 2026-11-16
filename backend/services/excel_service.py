@@ -14,6 +14,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import false, or_
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import defer, selectinload
 from werkzeug.security import generate_password_hash
 
 from extensions import db
@@ -23,6 +24,7 @@ from models import (
     Pqrs,
     PqrsMessage,
     Reservation,
+    ReservationMessage,
     User,
     Vehicle,
 )
@@ -33,7 +35,7 @@ from services.structure_service import (
     ensure_unit,
 )
 from time_utils import colombia_today, to_colombia, utc_now
-from validators import normalize_phone, validate_colombian_plate
+from validators import normalize_phone, normalize_plate, validate_colombian_plate
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 CENSUS_HEADERS = (
@@ -189,7 +191,12 @@ def _normalized_rows(file_bytes, filename):
         }
 
 
-def _upsert_census_row(row):
+def _checked_census_row(row):
+    """Revisa lo que la fila debe traer sí o sí y devuelve esos datos ya limpios.
+
+    Lanza ValueError con el motivo si falta algo o no es válido (ese texto le llega al administrador
+    como el error de esa fila).
+    """
     apartment_text = row.get("apartment", "").strip()
     name = row.get("name", "").strip()
     if not apartment_text or not name:
@@ -215,7 +222,19 @@ def _upsert_census_row(row):
     occupancy_type = row.get("occupancy_type", "").strip().lower() or "propietario"
     if occupancy_type not in ("propietario", "arrendatario", "residente"):
         occupancy_type = "residente"
+    return {
+        "apartment": apartment, "name": name, "email": email, "document_id": document_id,
+        "birth_date": birth_date, "occupancy_type": occupancy_type,
+    }
 
+
+def _census_user(checked):
+    """La persona de la fila: la que ya existe con ese correo o documento, o una cuenta nueva.
+
+    Devuelve (usuario, fue_creada). Lanza ValueError si el correo y el documento son de personas
+    distintas o si el correo ya es de otra cuenta.
+    """
+    email, document_id = checked["email"], checked["document_id"]
     identity_filters = []
     if email:
         identity_filters.append(db.func.lower(User.email) == email)
@@ -224,48 +243,127 @@ def _upsert_census_row(row):
     matches = User.query.filter(or_(*identity_filters)).all()
     if len(matches) > 1:
         raise ValueError("Correo y Documento pertenecen a usuarios distintos.")
-    user = matches[0] if matches else None
-    created = user is None
-    if user is None:
-        if email is None:
-            email = f"censo-{document_id}@domux.invalid"
+    if not matches:
         # Sin contraseña conocida: nadie entra hasta que el administrador la restablezca
         # (SEC: ninguna cuenta nace con una clave que otros conozcan).
         user = User(
-            name=name,
-            email=email,
+            name=checked["name"],
+            email=email or f"censo-{document_id}@domux.invalid",
             password_hash=generate_password_hash(secrets.token_urlsafe(24)),
             role="RESIDENT",
         )
         db.session.add(user)
-    elif email and User.query.filter(
-        db.func.lower(User.email) == email, User.id != user.id
-    ).first():
+        return user, True
+    user = matches[0]
+    if email and User.query.filter(db.func.lower(User.email) == email, User.id != user.id).first():
         raise ValueError("El correo ya está asociado a otro usuario.")
+    return user, False
 
-    user.name = name
+
+def _apply_census_user(user, checked, row):
+    """Escribe en la cuenta lo que trae la fila; una columna que no vino no toca nada."""
+    user.name = checked["name"]
     if "last_name" in row:
         user.last_name = row["last_name"].strip()
-    user.email = email or user.email
+    user.email = checked["email"] or user.email
     if "phone" in row:
         # Igual que en la app y la web: se guardan solo los 10 números (sin +57 ni espacios).
         phone, phone_error = normalize_phone(row["phone"])
         if phone_error:
             raise ValueError(phone_error)
         user.phone = phone or None
-    if document_id:
-        user.document_id = document_id
+    if checked["document_id"]:
+        user.document_id = checked["document_id"]
     user.role = "RESIDENT"
-    user.apartment_ref = apartment
+    user.apartment_ref = checked["apartment"]
     if "occupancy_type" in row:
-        user.occupancy_type = occupancy_type
+        user.occupancy_type = checked["occupancy_type"]
     if "birth_date" in row:
-        user.birth_date = birth_date
+        user.birth_date = checked["birth_date"]
     if "parental_consent" in row:
         user.parental_consent = _parse_bool(row["parental_consent"])
     user.data_processing_consent = True
     if user.data_processing_consent_at is None:
         user.data_processing_consent_at = utc_now()
+
+
+def _census_pet(row, unit):
+    """Agrega la mascota de la fila o actualiza la edad de la que ya está vigente (TT-032)."""
+    pet_name = row.get("pet_name", "").strip()
+    pet_species = row.get("pet_species", "").strip()
+    pet_breed = row.get("pet_breed", "").strip()
+    pet_age = row.get("pet_age", "").strip()
+    if not any((pet_name, pet_species, pet_breed, pet_age)):
+        return
+    if not all((pet_name, pet_species, pet_breed, pet_age)):
+        raise ValueError("Los datos de mascota requieren nombre, especie, raza y edad.")
+    try:
+        age_years = int(float(pet_age))
+    except ValueError as error:
+        raise ValueError("Mascota_Edad debe ser un número entero.") from error
+    if age_years < 0:
+        raise ValueError("Mascota_Edad no puede ser negativa.")
+    # Solo cuentan las mascotas vigentes; una retirada se vuelve a agregar (TT-032).
+    existing_pet = Pet.query.filter_by(
+        unit_id=unit.id, name=pet_name, species=pet_species, breed=pet_breed, retired_at=None
+    ).first()
+    if existing_pet is None:
+        db.session.add(Pet(
+            unit_id=unit.id, name=pet_name, species=pet_species, breed=pet_breed, age_years=age_years,
+        ))
+    else:
+        existing_pet.age_years = age_years
+
+
+def _census_vehicle(row, unit, user):
+    """Agrega el vehículo de la fila o actualiza el que ya está vigente en esta unidad (IDX-013)."""
+    plate = row.get("vehicle_plate", "").strip().upper()
+    vehicle_type = row.get("vehicle_type", "").strip().lower()
+    make_model = row.get("vehicle_make_model", "").strip()
+    vehicle_year = row.get("vehicle_year", "").strip()
+    if not any((plate, vehicle_type, make_model, vehicle_year)):
+        return
+    if not all((plate, vehicle_type, make_model, vehicle_year)):
+        raise ValueError("Los datos de vehículo requieren placa, tipo, marca/modelo y año.")
+    if error := validate_colombian_plate(plate):
+        raise ValueError(error)
+    try:
+        year = int(float(vehicle_year))
+    except ValueError as error:
+        raise ValueError("Vehiculo_Anio debe ser un año numérico.") from error
+    if not 1900 <= year <= colombia_today().year + 1:
+        raise ValueError("Vehiculo_Anio está fuera de rango.")
+    normalized_plate = normalize_plate(plate)
+    color = row.get("vehicle_color", "").strip() or None
+    # Solo cuentan los vehículos vigentes: una placa retirada puede volver (IDX-013).
+    existing_vehicle = Vehicle.query.filter_by(plate=normalized_plate, retired_at=None).first()
+    if existing_vehicle is None:
+        db.session.add(Vehicle(
+            unit_id=unit.id,
+            plate=normalized_plate,
+            vehicle_type=vehicle_type[:10],
+            make_model=make_model[:120],
+            year=year,
+            registered_owner=user.full_name[:120],
+            color=color,
+        ))
+    elif existing_vehicle.unit_id == unit.id:
+        existing_vehicle.vehicle_type = vehicle_type[:10]
+        existing_vehicle.make_model = make_model[:120]
+        existing_vehicle.year = year
+        existing_vehicle.registered_owner = user.full_name[:120]
+        existing_vehicle.color = color
+
+
+def _upsert_census_row(row):
+    """Crea o actualiza a la persona de una fila del censo y los datos de su hogar.
+
+    Devuelve (fue_creada, id_del_apartamento). Cualquier ValueError es el error de esa fila.
+    """
+    checked = _checked_census_row(row)
+    apartment = checked["apartment"]
+    user, created = _census_user(checked)
+    _apply_census_user(user, checked, row)
     db.session.flush()
 
     unit = ensure_unit(apartment)
@@ -278,69 +376,8 @@ def _upsert_census_row(row):
     if "pet_insurance" in row:
         unit.pet_insurance = _parse_bool(row["pet_insurance"])
 
-    pet_name = row.get("pet_name", "").strip()
-    pet_species = row.get("pet_species", "").strip()
-    pet_breed = row.get("pet_breed", "").strip()
-    pet_age = row.get("pet_age", "").strip()
-    if any((pet_name, pet_species, pet_breed, pet_age)):
-        if not all((pet_name, pet_species, pet_breed, pet_age)):
-            raise ValueError("Los datos de mascota requieren nombre, especie, raza y edad.")
-        try:
-            age_years = int(float(pet_age))
-        except ValueError as error:
-            raise ValueError("Mascota_Edad debe ser un número entero.") from error
-        if age_years < 0:
-            raise ValueError("Mascota_Edad no puede ser negativa.")
-        # Solo cuentan las mascotas vigentes; una retirada se vuelve a agregar (TT-032).
-        existing_pet = Pet.query.filter_by(
-            unit_id=unit.id, name=pet_name, species=pet_species, breed=pet_breed, retired_at=None
-        ).first()
-        if existing_pet is None:
-            db.session.add(Pet(
-                unit_id=unit.id,
-                name=pet_name,
-                species=pet_species,
-                breed=pet_breed,
-                age_years=age_years,
-            ))
-        else:
-            existing_pet.age_years = age_years
-
-    plate = row.get("vehicle_plate", "").strip().upper()
-    vehicle_type = row.get("vehicle_type", "").strip().lower()
-    make_model = row.get("vehicle_make_model", "").strip()
-    vehicle_year = row.get("vehicle_year", "").strip()
-    if any((plate, vehicle_type, make_model, vehicle_year)):
-        if not all((plate, vehicle_type, make_model, vehicle_year)):
-            raise ValueError("Los datos de vehículo requieren placa, tipo, marca/modelo y año.")
-        if error := validate_colombian_plate(plate):
-            raise ValueError(error)
-        try:
-            year = int(float(vehicle_year))
-        except ValueError as error:
-            raise ValueError("Vehiculo_Anio debe ser un año numérico.") from error
-        if not 1900 <= year <= colombia_today().year + 1:
-            raise ValueError("Vehiculo_Anio está fuera de rango.")
-        normalized_plate = re.sub(r"[\s-]", "", plate)
-        # Solo cuentan los vehículos vigentes: una placa retirada puede volver (IDX-013).
-        existing_vehicle = Vehicle.query.filter_by(plate=normalized_plate, retired_at=None).first()
-        if existing_vehicle is None:
-            db.session.add(Vehicle(
-                unit_id=unit.id,
-                plate=normalized_plate,
-                vehicle_type=vehicle_type[:10],
-                make_model=make_model[:120],
-                year=year,
-                registered_owner=user.full_name[:120],
-                color=row.get("vehicle_color", "").strip() or None,
-            ))
-        elif existing_vehicle.unit_id == unit.id:
-            existing_vehicle.vehicle_type = vehicle_type[:10]
-            existing_vehicle.make_model = make_model[:120]
-            existing_vehicle.year = year
-            existing_vehicle.registered_owner = user.full_name[:120]
-            existing_vehicle.color = row.get("vehicle_color", "").strip() or None
-
+    _census_pet(row, unit)
+    _census_vehicle(row, unit, user)
     return created, apartment.id
 
 
@@ -439,16 +476,7 @@ def generate_list_xlsx(title, headers, rows, about) -> bytes:
     con qué filtros y que tiene datos personales. Un texto que empieza por «=», «+», «-» o «@» se
     guarda como texto, nunca como fórmula.
     """
-    workbook = Workbook()
-    workbook.remove(workbook.active)
-    _append_sheet(workbook, title[:31], tuple(headers), rows)
-    info = _append_sheet(workbook, "Acerca de", ("Dato", "Valor"), about)
-    info.column_dimensions["B"].width = 90
-    for row in info.iter_rows(min_row=2):
-        row[1].alignment = Alignment(wrap_text=True, vertical="top")
-    stream = io.BytesIO()
-    workbook.save(stream)
-    return stream.getvalue()
+    return generate_workbook_xlsx([(title, headers, rows)], about)
 
 
 def generate_workbook_xlsx(sheets, about) -> bytes:
@@ -514,13 +542,24 @@ def generate_legal_report_xlsx(
         pqrs_query = pqrs_query.filter(false())
         reservation_query = reservation_query.filter(false())
 
-    pqrs_items = pqrs_query.order_by(Pqrs.id).all()
+    # El reporte es de texto: nunca se cargan los adjuntos (fotos, videos y PDF), que pueden pesar
+    # varios megas por fila, y lo que cada fila necesita de otra tabla viene en la misma lectura.
+    pqrs_items = pqrs_query.options(
+        defer(Pqrs.media_url), selectinload(Pqrs.resident), selectinload(Pqrs.satisfaction_ratings),
+    ).order_by(Pqrs.id).all()
     pqrs_ids = [item.id for item in pqrs_items]
-    messages = PqrsMessage.query.filter(PqrsMessage.pqrs_id.in_(pqrs_ids)).order_by(
+    messages = PqrsMessage.query.options(
+        defer(PqrsMessage.media_url), selectinload(PqrsMessage.author),
+    ).filter(PqrsMessage.pqrs_id.in_(pqrs_ids)).order_by(
         PqrsMessage.created_at, PqrsMessage.id
     ).all() if pqrs_ids else []
-    reservations = reservation_query.order_by(Reservation.id).all()
-    audit_logs = AuditLog.query.order_by(AuditLog.created_at, AuditLog.id).all()
+    reservations = reservation_query.options(
+        selectinload(Reservation.resident), selectinload(Reservation.common_area),
+        selectinload(Reservation.messages).defer(ReservationMessage.media_url),
+    ).order_by(Reservation.id).all()
+    audit_logs = AuditLog.query.options(selectinload(AuditLog.actor)).order_by(
+        AuditLog.created_at, AuditLog.id
+    ).all()
 
     _append_sheet(
         workbook,

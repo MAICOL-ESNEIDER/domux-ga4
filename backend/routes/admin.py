@@ -1,22 +1,19 @@
 import base64
 import binascii
-from datetime import date, datetime
+from datetime import datetime
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
 from auth import close_sessions, role_required, token_required
-from errors import error_response
+from errors import ApiError, error_response
 from extensions import db
 from models import (
     DevicePushToken,
     HouseholdMember,
-    ParkingSpot,
     Pet,
-    ResidentialUnit,
     ROLES,
-    StorageRoom,
     User,
     Vehicle,
     VisitQrPass,
@@ -30,6 +27,7 @@ from services.excel_service import (
     generate_legal_report_xlsx,
     import_census_from_bytes,
 )
+from services.household_service import parse_members, parse_pets, parse_vehicles, sync_items
 from services.structure_service import (
     apartment_by_text,
     apartment_from_payload,
@@ -37,16 +35,14 @@ from services.structure_service import (
     find_apartment,
 )
 from services.summary_service import admin_summary
+from services.user_search import filtered_users, normalize_role
 from validators import (
-    HOUSEHOLD_RELATIONSHIPS,
     OCCUPANCY_TYPES,
     normalize_phone,
-    parse_optional_bool,
     require_non_empty_fields,
     validate_occupancy_type,
     validate_pin,
     validate_strong_password,
-    validate_colombian_plate,
     validate_iso_date,
 )
 from time_utils import colombia_today, utc_now
@@ -61,10 +57,6 @@ OCCUPANCY_REQUIRED_MESSAGE = (
 
 def _encode_base64(value):
     return base64.b64encode(value).decode("ascii")
-
-
-def _normalize_role(value):
-    return value.strip().upper() if isinstance(value, str) else None
 
 
 @bp.get("/admin/census-template")
@@ -145,141 +137,7 @@ def get_legal_report():
 @role_required("ADMIN")
 def get_users():
     page, page_size = page_args()
-
-    query = User.query
-    search = (request.args.get("search") or "").strip()
-    if search:
-        pattern = f"%{search}%"
-        member_match = db.session.query(HouseholdMember.id).join(
-            ResidentialUnit, HouseholdMember.unit_id == ResidentialUnit.id
-        ).filter(
-            ResidentialUnit.apartment_id == User.apartment_id,
-            HouseholdMember.retired_at.is_(None),
-            db.or_(
-                HouseholdMember.name.ilike(pattern),
-                HouseholdMember.last_name.ilike(pattern),
-                HouseholdMember.document_id.ilike(pattern),
-            ),
-        ).exists()
-        query = query.filter(db.or_(
-            User.name.ilike(pattern),
-            (User.name + " " + User.last_name).ilike(pattern),
-            User.last_name.ilike(pattern),
-            User.email.ilike(pattern),
-            User.phone.ilike(pattern),
-            User.document_id.ilike(pattern),
-            User.apartment.ilike(pattern),
-            member_match,
-        ))
-
-    role = request.args.get("role")
-    if role:
-        normalized_role = _normalize_role(role)
-        if normalized_role not in ROLES:
-            return error_response(400, "Rol inválido.")
-        query = query.filter(User.role == normalized_role)
-
-    occupancy = request.args.get("occupancyType")
-    if occupancy:
-        if occupancy not in OCCUPANCY_TYPES:
-            return error_response(400, "Tipo de residente inválido.")
-        query = query.filter(User.occupancy_type == occupancy, User.role == "RESIDENT")
-
-    apartment_from = request.args.get("apartmentFrom")
-    apartment_to = request.args.get("apartmentTo")
-    if apartment_from:
-        if not apartment_from.isdigit():
-            return error_response(400, "El apartamento inicial debe ser numérico.")
-        query = query.filter(User.apartment_number >= int(apartment_from))
-    if apartment_to:
-        if not apartment_to.isdigit():
-            return error_response(400, "El apartamento final debe ser numérico.")
-        query = query.filter(User.apartment_number <= int(apartment_to))
-    if apartment_from and apartment_to and int(apartment_from) > int(apartment_to):
-        return error_response(400, "El apartamento inicial no puede superar al final.")
-
-    for parameter, column in (
-        ("hasPets", db.session.query(Pet.id).join(
-            ResidentialUnit, Pet.unit_id == ResidentialUnit.id
-        ).filter(
-            ResidentialUnit.apartment_id == User.apartment_id, Pet.retired_at.is_(None)
-        ).exists()),
-        ("hasVehicles", db.session.query(Vehicle.id).join(
-            ResidentialUnit, Vehicle.unit_id == ResidentialUnit.id
-        ).filter(
-            ResidentialUnit.apartment_id == User.apartment_id, Vehicle.retired_at.is_(None)
-        ).exists()),
-        # Los parqueaderos y cuartos útiles se asignan al apartamento (HU-015 y HU-016).
-        ("hasParking", db.session.query(ParkingSpot.id).filter(
-            ParkingSpot.apartment_id == User.apartment_id,
-            ParkingSpot.kind == "residente",
-            ParkingSpot.retired_at.is_(None),
-        ).exists()),
-        ("hasStorage", db.session.query(StorageRoom.id).filter(
-            StorageRoom.apartment_id == User.apartment_id,
-            StorageRoom.retired_at.is_(None),
-        ).exists()),
-    ):
-        value, error = parse_optional_bool(request.args.get(parameter), parameter)
-        if error:
-            return error_response(400, error)
-        if value is not None:
-            query = query.filter(column if value else ~column, User.role == "RESIDENT")
-
-    active, error = parse_optional_bool(request.args.get("isActive"), "isActive")
-    if error:
-        return error_response(400, error)
-    if active is not None:
-        query = query.filter(User.is_active.is_(active))
-
-    minimum_age = request.args.get("minAge")
-    maximum_age = request.args.get("maxAge")
-    if minimum_age is not None or maximum_age is not None:
-        try:
-            minimum_age = int(minimum_age) if minimum_age is not None else None
-            maximum_age = int(maximum_age) if maximum_age is not None else None
-        except ValueError:
-            return error_response(400, "Los límites de edad deben ser números.")
-        if (
-            (minimum_age is not None and minimum_age < 0)
-            or (maximum_age is not None and maximum_age < 0)
-            or (minimum_age is not None and maximum_age is not None and minimum_age > maximum_age)
-        ):
-            return error_response(400, "El rango de edad es inválido.")
-        today = colombia_today()
-
-        def years_before(years):
-            try:
-                return today.replace(year=today.year - years)
-            except ValueError:
-                return today.replace(year=today.year - years, day=28)
-
-        user_birth_date_conditions = [User.birth_date.isnot(None)]
-        member_birth_date_conditions = []
-        if minimum_age is not None:
-            latest_birth_date = years_before(minimum_age)
-            user_birth_date_conditions.append(User.birth_date <= latest_birth_date.isoformat())
-            member_birth_date_conditions.append(
-                HouseholdMember.birth_date <= latest_birth_date.isoformat()
-            )
-        if maximum_age is not None:
-            earliest_birth_date = years_before(maximum_age + 1)
-            user_birth_date_conditions.append(User.birth_date > earliest_birth_date.isoformat())
-            member_birth_date_conditions.append(
-                HouseholdMember.birth_date > earliest_birth_date.isoformat()
-            )
-        member_age_match = db.session.query(HouseholdMember.id).join(
-            ResidentialUnit, HouseholdMember.unit_id == ResidentialUnit.id
-        ).filter(
-            ResidentialUnit.apartment_id == User.apartment_id,
-            HouseholdMember.retired_at.is_(None),
-            *member_birth_date_conditions,
-        ).exists()
-        query = query.filter(
-            db.or_(db.and_(*user_birth_date_conditions), member_age_match),
-            User.role == "RESIDENT",
-        )
-
+    query = filtered_users(request.args)
     total = query.count()
     users = query.order_by(User.apartment_number, User.apartment, User.id).offset(
         (page - 1) * page_size
@@ -305,6 +163,55 @@ def get_user(user_id):
     return jsonify({"user": user.to_dict()})
 
 
+def _checked_birth_date(value):
+    """Una fecha de nacimiento AAAA-MM-DD que no sea futura."""
+    if error := validate_iso_date(value):
+        raise ApiError(error)
+    if datetime.strptime(value, "%Y-%m-%d").date() > colombia_today():
+        raise ApiError("La fecha de nacimiento no puede ser futura.")
+    return value
+
+
+def _new_account_identity(data):
+    """El correo, el rol y el apartamento de una cuenta nueva, ya revisados."""
+    email = data["email"].strip().lower()
+    role = normalize_role(data.get("role"))
+    if "@" not in email or role not in ROLES:
+        raise ApiError("Correo o rol inválido")
+    if password_error := validate_strong_password(data["password"]):
+        raise ApiError(password_error)
+    if role != "RESIDENT":
+        return email, role, None
+    # El residente se vincula a un apartamento que existe en la estructura (HU-017).
+    apartment = apartment_from_payload(data)
+    if apartment is None:
+        raise ApiError("El residente necesita un apartamento")
+    if "occupancyType" not in data:
+        raise ApiError(OCCUPANCY_REQUIRED_MESSAGE)
+    if data.get("dataProcessingConsent") is not True:
+        raise ApiError("Debes registrar la autorización de tratamiento de datos del residente.")
+    return email, role, apartment
+
+
+def _new_account_profile(data):
+    """Los datos personales opcionales de una cuenta nueva, ya revisados."""
+    if "birthDate" in data:
+        _checked_birth_date(data["birthDate"])
+    parental_consent = data.get("parentalConsent", False)
+    if not isinstance(parental_consent, bool):
+        raise ApiError("parentalConsent debe ser verdadero o falso.")
+    occupancy_type = data.get("occupancyType", "propietario")
+    if not isinstance(occupancy_type, str) or occupancy_type not in OCCUPANCY_TYPES:
+        raise ApiError(validate_occupancy_type(occupancy_type))
+    for field in ("lastName", "phone", "documentId"):
+        if field in data and not isinstance(data[field], str):
+            raise ApiError(f"El campo '{field}' debe ser texto")
+    phone, phone_error = normalize_phone(data.get("phone"))
+    if phone_error:
+        raise ApiError(phone_error)
+    return {"occupancy_type": occupancy_type, "phone": phone, "parental_consent": parental_consent}
+
+
 @bp.post("/users")
 @bp.post("/admin/users")
 @token_required
@@ -320,38 +227,8 @@ def create_user():
     if validation_error:
         return error_response(400, validation_error)
 
-    email = data["email"].strip().lower()
-    role = _normalize_role(data.get("role"))
-    occupancy_type = data.get("occupancyType", "propietario")
-    if "@" not in email or role not in ROLES:
-        return error_response(400, "Correo o rol inválido")
-    password_error = validate_strong_password(data["password"])
-    if password_error:
-        return error_response(400, password_error)
-    # El residente se vincula a un apartamento que existe en la estructura (HU-017).
-    apartment = apartment_from_payload(data) if role == "RESIDENT" else None
-    if role == "RESIDENT" and apartment is None:
-        return error_response(400, "El residente necesita un apartamento")
-    if role == "RESIDENT" and "occupancyType" not in data:
-        return error_response(400, OCCUPANCY_REQUIRED_MESSAGE)
-    if role == "RESIDENT" and data.get("dataProcessingConsent") is not True:
-        return error_response(400, "Debes registrar la autorización de tratamiento de datos del residente.")
-    if "birthDate" in data:
-        if error := validate_iso_date(data["birthDate"]):
-            return error_response(400, error)
-        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > colombia_today():
-            return error_response(400, "La fecha de nacimiento no puede ser futura.")
-    parental_consent = data.get("parentalConsent", False)
-    if not isinstance(parental_consent, bool):
-        return error_response(400, "parentalConsent debe ser verdadero o falso.")
-    if not isinstance(occupancy_type, str) or occupancy_type not in OCCUPANCY_TYPES:
-        return error_response(400, validate_occupancy_type(occupancy_type))
-    for field in ("lastName", "phone", "documentId"):
-        if field in data and not isinstance(data[field], str):
-            return error_response(400, f"El campo '{field}' debe ser texto")
-    phone, phone_error = normalize_phone(data.get("phone"))
-    if phone_error:
-        return error_response(400, phone_error)
+    email, role, apartment = _new_account_identity(data)
+    profile = _new_account_profile(data)
     if User.query.filter(db.func.lower(User.email) == email).first():
         return error_response(409, "Ese correo ya está registrado")
 
@@ -359,15 +236,15 @@ def create_user():
         name=data["name"].strip(),
         last_name=data.get("lastName", "").strip(),
         email=email,
-        phone=phone,
+        phone=profile["phone"],
         document_id=data.get("documentId", "").strip(),
         password_hash=generate_password_hash(data["password"]),
         role=role,
         apartment_ref=apartment,
-        occupancy_type=occupancy_type,
+        occupancy_type=profile["occupancy_type"],
         social_networks="",
         birth_date=data.get("birthDate"),
-        parental_consent=parental_consent,
+        parental_consent=profile["parental_consent"],
         data_processing_consent=role == "RESIDENT",
         data_processing_consent_at=utc_now() if role == "RESIDENT" else None,
         is_active=True,
@@ -401,6 +278,109 @@ def _close_access_of_deactivated_user(user):
     return {"revokedQrPasses": len(passes), "removedPushTokens": removed_tokens}
 
 
+def _refuse_own_lockout(user, data):
+    """Quien administra no se cierra la puerta a sí mismo.
+
+    Si el único administrador se desactivara o se cambiara el rol, nadie podría volver a entrar
+    para arreglarlo.
+    """
+    if user.id != g.current_user.id:
+        return
+    if data.get("isActive") is False:
+        raise ApiError("No puedes desactivar tu propia cuenta. Pídele a otro administrador que lo haga.", 409)
+    if "role" in data and normalize_role(data["role"]) != user.role:
+        raise ApiError("No puedes cambiar tu propio rol. Pídele a otro administrador que lo haga.", 409)
+
+
+def _require_text(data, key, message):
+    if not isinstance(data[key], str):
+        raise ApiError(message)
+    return data[key].strip()
+
+
+def _checked_new_email(user, value):
+    """Un correo válido que no sea de otra cuenta."""
+    if not isinstance(value, str) or "@" not in value:
+        raise ApiError("Correo inválido")
+    email = value.strip().lower()
+    if User.query.filter(db.func.lower(User.email) == email, User.id != user.id).first():
+        raise ApiError("Ese correo ya está registrado", 409)
+    return email
+
+
+def _update_personal_data(user, data):
+    """Fecha de nacimiento, consentimiento de padres, nombre, apellido, correo, teléfono y documento."""
+    if "birthDate" in data:
+        user.birth_date = _checked_birth_date(data["birthDate"])
+    if "parentalConsent" in data:
+        if not isinstance(data["parentalConsent"], bool):
+            raise ApiError("parentalConsent debe ser verdadero o falso.")
+        user.parental_consent = data["parentalConsent"]
+    if "name" in data:
+        user.name = _require_text(data, "name", "El nombre debe ser texto")
+    if "lastName" in data:
+        user.last_name = _require_text(data, "lastName", "El apellido debe ser texto")
+    if "email" in data:
+        user.email = _checked_new_email(user, data["email"])
+    if "phone" in data:
+        phone, phone_error = normalize_phone(data["phone"])
+        if phone_error:
+            raise ApiError(phone_error)
+        user.phone = phone
+    if "documentId" in data:
+        user.document_id = _require_text(data, "documentId", "El documento debe ser texto")
+
+
+def _update_role(user, data):
+    """El rol. Quien pasa a ser residente necesita su ocupación y la autorización de datos (RN-007)."""
+    if "role" in data:
+        role = normalize_role(data["role"])
+        if role not in ROLES:
+            raise ApiError("Rol inválido")
+        if role == "RESIDENT" and user.role != "RESIDENT":
+            if "occupancyType" not in data:
+                raise ApiError(OCCUPANCY_REQUIRED_MESSAGE)
+            if data.get("dataProcessingConsent") is not True:
+                raise ApiError("Debes registrar la autorización de tratamiento de datos del residente.")
+            user.data_processing_consent = True
+            user.data_processing_consent_at = utc_now()
+        user.role = role
+    if user.role != "GUARD":
+        # El PIN de turno es solo de los guardias: quien deja de serlo lo pierde (RN-029).
+        user.pin_hash = None
+
+
+def _update_occupancy_and_apartment(user, data):
+    """El tipo de ocupación y el apartamento; solo los residentes tienen apartamento."""
+    if "occupancyType" in data:
+        if error := validate_occupancy_type(data["occupancyType"]):
+            raise ApiError(error)
+        user.occupancy_type = data["occupancyType"]
+    if "apartment" in data or "apartmentId" in data:
+        # Un valor nulo desvincula al usuario; uno que no existe en la estructura se rechaza.
+        user.apartment_ref = apartment_from_payload(data)
+    if user.role == "RESIDENT" and user.apartment_ref is None:
+        raise ApiError("El residente necesita un apartamento")
+    if user.role != "RESIDENT":
+        user.apartment_ref = None
+    else:
+        ensure_unit(user.apartment_ref)
+
+
+def _update_active_flag(user, data):
+    """Activar o desactivar la cuenta; al desactivar se cierra lo que aún podría usar (TT-027)."""
+    if "isActive" not in data:
+        return
+    if not isinstance(data["isActive"], bool):
+        raise ApiError("isActive debe ser verdadero o falso")
+    was_active = user.is_active
+    user.is_active = data["isActive"]
+    if was_active and not user.is_active:
+        add_audit_log("user", user.id, "deactivated", _close_access_of_deactivated_user(user))
+    elif not was_active and user.is_active:
+        add_audit_log("user", user.id, "reactivated")
+
+
 @bp.put("/users/<int:user_id>")
 @bp.put("/admin/users/<int:user_id>")
 @token_required
@@ -417,100 +397,12 @@ def update_user(user_id):
     user = db.session.get(User, user_id)
     if user is None:
         return error_response(404, "Usuario no encontrado")
-    # Quien administra no se cierra la puerta a sí mismo: si el único administrador se desactivara
-    # o se cambiara el rol, nadie podría volver a entrar para arreglarlo.
-    if user.id == g.current_user.id:
-        if data.get("isActive") is False:
-            return error_response(
-                409, "No puedes desactivar tu propia cuenta. Pídele a otro administrador que lo haga."
-            )
-        if "role" in data and _normalize_role(data["role"]) != user.role:
-            return error_response(
-                409, "No puedes cambiar tu propio rol. Pídele a otro administrador que lo haga."
-            )
 
-    if "birthDate" in data:
-        if error := validate_iso_date(data["birthDate"]):
-            return error_response(400, error)
-        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > colombia_today():
-            return error_response(400, "La fecha de nacimiento no puede ser futura.")
-        user.birth_date = data["birthDate"]
-    if "parentalConsent" in data:
-        if not isinstance(data["parentalConsent"], bool):
-            return error_response(400, "parentalConsent debe ser verdadero o falso.")
-        user.parental_consent = data["parentalConsent"]
-
-    if "name" in data:
-        if not isinstance(data["name"], str):
-            return error_response(400, "El nombre debe ser texto")
-        user.name = data["name"].strip()
-    if "lastName" in data:
-        if not isinstance(data["lastName"], str):
-            return error_response(400, "El apellido debe ser texto")
-        user.last_name = data["lastName"].strip()
-    if "email" in data:
-        if not isinstance(data["email"], str) or "@" not in data["email"]:
-            return error_response(400, "Correo inválido")
-        email = data["email"].strip().lower()
-        duplicate = User.query.filter(
-            db.func.lower(User.email) == email,
-            User.id != user.id,
-        ).first()
-        if duplicate:
-            return error_response(409, "Ese correo ya está registrado")
-        user.email = email
-    if "phone" in data:
-        phone, phone_error = normalize_phone(data["phone"])
-        if phone_error:
-            return error_response(400, phone_error)
-        user.phone = phone
-    if "documentId" in data:
-        if not isinstance(data["documentId"], str):
-            return error_response(400, "El documento debe ser texto")
-        user.document_id = data["documentId"].strip()
-
-    if "role" in data:
-        role = _normalize_role(data["role"])
-        if role not in ROLES:
-            return error_response(400, "Rol inválido")
-        if role == "RESIDENT" and user.role != "RESIDENT":
-            if "occupancyType" not in data:
-                return error_response(400, OCCUPANCY_REQUIRED_MESSAGE)
-            if data.get("dataProcessingConsent") is not True:
-                return error_response(
-                    400,
-                    "Debes registrar la autorización de tratamiento de datos del residente.",
-                )
-            user.data_processing_consent = True
-            user.data_processing_consent_at = utc_now()
-        user.role = role
-    if user.role != "GUARD":
-        # El PIN de turno es solo de los guardias: quien deja de serlo lo pierde (RN-029).
-        user.pin_hash = None
-    if "occupancyType" in data:
-        error = validate_occupancy_type(data["occupancyType"])
-        if error:
-            return error_response(400, error)
-        user.occupancy_type = data["occupancyType"]
-    if "apartment" in data or "apartmentId" in data:
-        # Un valor nulo desvincula al usuario; uno que no existe en la estructura se rechaza.
-        user.apartment_ref = apartment_from_payload(data)
-    if user.role == "RESIDENT" and user.apartment_ref is None:
-        return error_response(400, "El residente necesita un apartamento")
-    if user.role != "RESIDENT":
-        user.apartment_ref = None
-    else:
-        ensure_unit(user.apartment_ref)
-    if "isActive" in data:
-        if not isinstance(data["isActive"], bool):
-            return error_response(400, "isActive debe ser verdadero o falso")
-        was_active = user.is_active
-        user.is_active = data["isActive"]
-        if was_active and not user.is_active:
-            add_audit_log("user", user.id, "deactivated", _close_access_of_deactivated_user(user))
-        elif not was_active and user.is_active:
-            add_audit_log("user", user.id, "reactivated")
-
+    _refuse_own_lockout(user, data)
+    _update_personal_data(user, data)
+    _update_role(user, data)
+    _update_occupancy_and_apartment(user, data)
+    _update_active_flag(user, data)
     if user.role == "RESIDENT" and user.is_active and user.apartment_ref.is_retired:
         return error_response(
             400, "El apartamento de este residente ya no existe: asígnale otro apartamento."
@@ -667,91 +559,6 @@ def get_unit_profile():
     return jsonify({"unit": apartment.unit.to_dict()})
 
 
-def _item_id_error(item, label, index):
-    """Revisa el id opcional de un elemento de la ficha; devuelve el error o None."""
-    item_id = item.get("id")
-    if item_id is None or (isinstance(item_id, int) and not isinstance(item_id, bool)):
-        return None
-    return f"El id de {label} #{index + 1} no es válido."
-
-
-#: Salud de cada mascota (RN-028): nombre, llave del JSON y columna del «al día»
-#: y de la fecha de la última aplicación.
-PET_HEALTH_FIELDS = (
-    ("vacunación", "vaccinesUpToDate", "vaccines_up_to_date",
-     "lastVaccinationDate", "last_vaccination_date"),
-    ("desparasitación", "dewormingUpToDate", "deworming_up_to_date",
-     "lastDewormingDate", "last_deworming_date"),
-)
-
-
-def _pet_health_fields(pet, index):
-    """Lee la vacunación y la desparasitación de una mascota (RN-028, HU-021).
-
-    Cada una dice si está al día y la fecha de la última (AAAA-MM-DD, no futura).
-    Si está al día, la fecha es obligatoria. Devuelve (campos, error).
-    """
-    fields = {}
-    for label, flag_key, flag_column, date_key, date_column in PET_HEALTH_FIELDS:
-        up_to_date = pet.get(flag_key, False)
-        if not isinstance(up_to_date, bool):
-            return None, f"Mascota #{index + 1}: indica si la {label} está al día (sí o no)."
-        last_date = pet.get(date_key)
-        if last_date is not None:
-            if validate_iso_date(last_date) or last_date > colombia_today().isoformat():
-                return None, f"Mascota #{index + 1}: la fecha de la última {label} no es válida."
-        elif up_to_date:
-            return None, f"Mascota #{index + 1}: escribe la fecha de la última {label}."
-        fields[flag_column] = up_to_date
-        fields[date_column] = last_date
-    return fields, None
-
-
-def _natural_key(source, names):
-    """Lo que identifica un registro que llega sin id: documento, placa o nombre y especie."""
-    def value(name):
-        raw = source[name] if isinstance(source, dict) else getattr(source, name)
-        return str(raw).strip().lower()
-    return tuple(value(name) for name in names)
-
-
-def _sync_household_items(model, unit, current, incoming, natural_key=()):
-    """Aplica una lista de la ficha del hogar sin borrar nada (TT-032, DEC-090).
-
-    current son los registros vigentes del apartamento e incoming la lista que
-    envió la app. Lo que llega con el id de un registro vigente (o sin id, pero
-    con el mismo documento o la misma placa) se mantiene y se actualiza; lo
-    nuevo se agrega; y lo vigente que ya no llega se retira con la fecha y
-    quién lo hizo. Devuelve cuántos se agregaron, se mantuvieron y se retiraron.
-    """
-    pending = {item.id: item for item in current}
-    by_key = {_natural_key(item, natural_key): item for item in current} if natural_key else {}
-    kept, added = [], []
-    for fields in incoming:
-        fields = dict(fields)
-        item = pending.pop(fields.pop("id", None), None)
-        if item is None and natural_key:
-            match = by_key.get(_natural_key(fields, natural_key))
-            if match is not None and match.id in pending:
-                item = pending.pop(match.id)
-        if item is None:
-            added.append(fields)
-        else:
-            kept.append((item, fields))
-
-    # Primero se retira lo que salió de la lista: así una placa que pasa a otro
-    # registro no choca con el registro que se va.
-    for item in pending.values():
-        item.retire(g.current_user)
-    db.session.flush()
-    for item, fields in kept:
-        for name, value in fields.items():
-            setattr(item, name, value)
-    for fields in added:
-        db.session.add(model(unit=unit, **fields))
-    return {"added": len(added), "kept": len(kept), "retired": len(pending)}
-
-
 @bp.put("/admin/units")
 @token_required
 @role_required("ADMIN")
@@ -775,122 +582,19 @@ def update_unit_profile():
     if data.get("petInsurer") is not None and not isinstance(data["petInsurer"], str):
         return error_response(400, "El campo 'petInsurer' debe ser texto.")
 
-    parsed_members = []
-    for index, member in enumerate(data["members"]):
-        if not isinstance(member, dict):
-            return error_response(400, f"El miembro #{index + 1} no es válido.")
-        required = require_non_empty_fields(
-            member,
-            (("name", "nombre"), ("documentId", "documento"), ("birthDate", "fecha de nacimiento"),
-             ("relationship", "parentesco")),
-        )
-        if required:
-            return error_response(400, f"Miembro #{index + 1}: {required}")
-        if error := _item_id_error(member, "el miembro", index):
-            return error_response(400, error)
-        try:
-            birth_date = date.fromisoformat(member["birthDate"])
-        except ValueError:
-            return error_response(400, f"La fecha de nacimiento del miembro #{index + 1} no es válida.")
-        if birth_date.isoformat() != member["birthDate"] or birth_date > colombia_today():
-            return error_response(400, f"La fecha de nacimiento del miembro #{index + 1} no es válida.")
-        relationship = member["relationship"]
-        if relationship not in HOUSEHOLD_RELATIONSHIPS:
-            return error_response(400, f"El parentesco del miembro #{index + 1} no es válido.")
-        other_relationship = member.get("otherRelationship")
-        if relationship == "otro" and (
-            not isinstance(other_relationship, str) or not other_relationship.strip()
-        ):
-            return error_response(400, "Especifica el parentesco cuando se selecciona 'otro'.")
-        for field in ("lastName", "phone"):
-            if member.get(field) is not None and not isinstance(member[field], str):
-                return error_response(400, f"El campo '{field}' del miembro debe ser texto.")
-        member_phone, phone_error = normalize_phone(member.get("phone"), f"El teléfono del miembro #{index + 1}")
-        if phone_error:
-            return error_response(400, phone_error)
-        parsed_members.append({
-            "id": member.get("id"),
-            "name": member["name"].strip(),
-            "last_name": (member.get("lastName") or "").strip(),
-            "document_id": member["documentId"].strip(),
-            "birth_date": birth_date.isoformat(),
-            "phone": member_phone or None,
-            "relationship": relationship,
-            "other_relationship": (other_relationship or "").strip() or None,
-        })
-
-    parsed_pets = []
-    for index, pet in enumerate(data["pets"]):
-        if not isinstance(pet, dict):
-            return error_response(400, f"La mascota #{index + 1} no es válida.")
-        required = require_non_empty_fields(
-            pet, (("name", "nombre"), ("species", "especie"), ("breed", "raza"))
-        )
-        if required:
-            return error_response(400, f"Mascota #{index + 1}: {required}")
-        if error := _item_id_error(pet, "la mascota", index):
-            return error_response(400, error)
-        age = pet.get("ageYears")
-        if not isinstance(age, int) or isinstance(age, bool) or not 0 <= age <= 100:
-            return error_response(400, f"La edad de la mascota #{index + 1} debe estar entre 0 y 100.")
-        health, error = _pet_health_fields(pet, index)
-        if error:
-            return error_response(400, error)
-        parsed_pets.append({
-            "id": pet.get("id"),
-            "name": pet["name"].strip(),
-            "species": pet["species"].strip(),
-            "breed": pet["breed"].strip(),
-            "age_years": age,
-            **health,
-        })
-
-    parsed_vehicles = []
-    seen_plates = set()
-    for index, vehicle in enumerate(data["vehicles"]):
-        if not isinstance(vehicle, dict):
-            return error_response(400, f"El vehículo #{index + 1} no es válido.")
-        required = require_non_empty_fields(
-            vehicle,
-            (("plate", "placa"), ("type", "tipo"), ("makeModel", "marca y modelo"),
-             ("registeredOwner", "titular registrado")),
-        )
-        if required:
-            return error_response(400, f"Vehículo #{index + 1}: {required}")
-        if error := _item_id_error(vehicle, "el vehículo", index):
-            return error_response(400, error)
-        plate = vehicle["plate"].replace("-", "").replace(" ", "").upper()
-        if error := validate_colombian_plate(plate):
-            return error_response(400, error)
-        if plate in seen_plates:
-            return error_response(409, f"La placa {plate} está repetida en esta unidad.")
-        seen_plates.add(plate)
-        if vehicle["type"] not in ("carro", "moto"):
-            return error_response(400, f"El tipo del vehículo #{index + 1} debe ser carro o moto.")
-        year = vehicle.get("year")
-        if not isinstance(year, int) or isinstance(year, bool) or not 1950 <= year <= colombia_today().year + 1:
-            return error_response(400, f"El año del vehículo #{index + 1} no es válido.")
-        for field in ("color",):
-            if vehicle.get(field) is not None and not isinstance(vehicle[field], str):
-                return error_response(400, f"El campo '{field}' del vehículo debe ser texto.")
-        parsed_vehicles.append({
-            "id": vehicle.get("id"),
-            "plate": plate,
-            "vehicle_type": vehicle["type"],
-            "make_model": vehicle["makeModel"].strip(),
-            "year": year,
-            "registered_owner": vehicle["registeredOwner"].strip(),
-            "color": (vehicle.get("color") or "").strip() or None,
-        })
+    members = parse_members(data["members"])
+    pets = parse_pets(data["pets"])
+    vehicles = parse_vehicles(data["vehicles"])
 
     unit = ensure_unit(apartment)
     db.session.flush()
     # Solo chocan las placas vigentes de otro apartamento; las retiradas pueden volver.
+    plates = {vehicle["plate"] for vehicle in vehicles}
     conflicts = Vehicle.query.filter(
-        Vehicle.plate.in_(seen_plates),
+        Vehicle.plate.in_(plates),
         Vehicle.unit_id != unit.id,
         Vehicle.retired_at.is_(None),
-    ).all() if seen_plates else []
+    ).all() if plates else []
     if conflicts:
         return jsonify({
             "error": "Una o más placas ya están registradas en otra unidad.",
@@ -902,16 +606,11 @@ def update_unit_profile():
     # en la estructura de la unidad (HU-015 y HU-016), y los que lleguen se ignoran.
     unit.pet_insurance = data.get("petInsurance", False)
     unit.pet_insurer = (data.get("petInsurer") or "").strip() or None if unit.pet_insurance else None
+    actor = g.current_user
     changes = {
-        "members": _sync_household_items(
-            HouseholdMember, unit, unit.active_members, parsed_members, ("document_id",)
-        ),
-        "pets": _sync_household_items(
-            Pet, unit, unit.active_pets, parsed_pets, ("name", "species")
-        ),
-        "vehicles": _sync_household_items(
-            Vehicle, unit, unit.active_vehicles, parsed_vehicles, ("plate",)
-        ),
+        "members": sync_items(HouseholdMember, unit, unit.active_members, members, actor, ("document_id",)),
+        "pets": sync_items(Pet, unit, unit.active_pets, pets, actor, ("name", "species")),
+        "vehicles": sync_items(Vehicle, unit, unit.active_vehicles, vehicles, actor, ("plate",)),
     }
     add_audit_log("residential_unit", unit.id, "household_updated", {
         "apartment": unit.apartment, **changes,

@@ -21,7 +21,7 @@ data class DomuxDestination(val label: String, val route: String, val icon: Int)
         val current = entry?.destination?.route?.substringBefore("?") ?: return false
         if (current != base) return false
         val wanted = tab ?: return true
-        val open = entry?.arguments?.getString("tab").orEmpty().ifEmpty { "paquetes" }
+        val open = entry.arguments?.getString("tab").orEmpty().ifEmpty { "paquetes" }
         return open == wanted
     }
 }

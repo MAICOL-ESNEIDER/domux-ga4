@@ -290,10 +290,6 @@ class VisitsViewModel : DomuxViewModel() {
         _state.update { it.copy(scannedToken = token, qrInspection = response.body()) }
     }
 
-    fun clearScannedQr() {
-        _state.update { it.copy(scannedToken = null, qrInspection = null) }
-    }
-
     /** Entrada de una persona nueva por el QR escaneado (HU-033: el nombre puede venir de la lista del QR). */
     fun enterQrVisitor(name: String, stayMinutes: Int?, onSuccess: () -> Unit) {
         val token = _state.value.scannedToken ?: return

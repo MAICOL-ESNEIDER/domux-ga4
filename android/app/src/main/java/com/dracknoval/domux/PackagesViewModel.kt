@@ -202,7 +202,7 @@ class PackagesViewModel : DomuxViewModel() {
                 showError("El servidor no devolvió el código. Inténtalo de nuevo.")
                 return@launch
             }
-            _state.update { it.copy(pickupCode = code, pickupCodePackage = body?.packageItem ?: item) }
+            _state.update { it.copy(pickupCode = code, pickupCodePackage = body.packageItem ?: item) }
             loadPackages()
         }
     }

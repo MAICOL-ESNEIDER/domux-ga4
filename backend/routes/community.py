@@ -3,6 +3,7 @@ from datetime import date
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import contains_eager, selectinload
 
 from auth import role_required, token_required
 from errors import ApiError, error_response
@@ -399,7 +400,13 @@ def get_pqrs():
     if view is not None:
         page, size = page_args(default_size=25, max_size=100)
         return jsonify(pqrs_service.summary_page(query, page, size))
-    items = query.order_by(Pqrs.created_at.desc()).all()
+    # La conversación, quien escribió cada mensaje, las calificaciones y el residente se traen junto con
+    # la lista: así no se hace una consulta aparte por cada PQRS.
+    items = query.options(
+        selectinload(Pqrs.conversation).selectinload(PqrsMessage.author),
+        selectinload(Pqrs.satisfaction_ratings),
+        contains_eager(Pqrs.resident),
+    ).order_by(Pqrs.created_at.desc()).all()
     return jsonify({"pqrs": [item.to_dict() for item in items]})
 
 
@@ -810,7 +817,13 @@ def get_reservations():
             **reservation_view.summary_page(query, page, size),
             "counts": reservation_view.status_counts(unfiltered),
         })
-    items = query.order_by(Reservation.created_at.desc()).all()
+    # Las reservas traen junto con la lista la conversación, quien escribió cada mensaje, el residente
+    # y la zona: así no se hace una consulta aparte por cada reserva.
+    items = query.options(
+        selectinload(Reservation.messages).selectinload(ReservationMessage.author),
+        contains_eager(Reservation.resident),
+        contains_eager(Reservation.common_area),
+    ).order_by(Reservation.created_at.desc()).all()
     return jsonify({"reservations": [item.to_dict() for item in items]})
 
 
