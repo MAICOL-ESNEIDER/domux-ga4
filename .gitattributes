@@ -1,0 +1,2 @@
+# Los atajos de Windows (.bat) se guardan con saltos de línea de Windows.
+*.bat text eol=crlf
