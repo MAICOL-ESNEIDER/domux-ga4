@@ -7,7 +7,7 @@ from flask_cors import CORS
 from flask_migrate import stamp, upgrade
 from sqlalchemy import inspect
 
-from config import cors_origins
+from config import cors_origins, database_url
 from errors import error_response, is_web_path, register_error_handlers
 from extensions import db, migrations
 from logging_config import configure_logging
@@ -322,11 +322,7 @@ def create_app():
     if allowed_origins:
         CORS(app, origins=allowed_origins)
 
-    database_url = os.environ.get("DATABASE_URL", "sqlite:///domux.db")
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     db.init_app(app)
     migrations.init_app(app, db, directory=MIGRATIONS_DIR, render_as_batch=True)

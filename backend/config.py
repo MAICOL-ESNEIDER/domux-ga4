@@ -25,6 +25,26 @@ def is_production() -> bool:
     )
 
 
+#: La base que se usa si no se indica otra: un archivo SQLite en la carpeta ``instance`` (no necesita instalar nada).
+DEFAULT_DATABASE_URL = "sqlite:///domux.db"
+
+
+def database_url() -> str:
+    """Devuelve la dirección de la base de datos que debe usar el servidor.
+
+    Se lee de ``DATABASE_URL``. Si la variable no existe, está vacía o solo tiene espacios, se usa
+    SQLite. Esto último pasa cuando se copia ``.env.example`` como ``.env`` y no se llena esa línea:
+    sin este cuidado el servidor no arrancaba (SQLAlchemy no entiende una dirección vacía).
+
+    Algunos servicios (Render, por ejemplo) entregan la dirección de PostgreSQL con ``postgres://``;
+    SQLAlchemy solo entiende ``postgresql://``, así que aquí se corrige.
+    """
+    url = (os.environ.get("DATABASE_URL") or "").strip() or DEFAULT_DATABASE_URL
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 def cors_origins() -> list[str]:
     """Devuelve las páginas web de otro dominio que pueden llamar a la API.
 
