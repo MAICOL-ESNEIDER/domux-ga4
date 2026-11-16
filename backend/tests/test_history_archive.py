@@ -415,7 +415,9 @@ class ArchiveWebTests(ArchiveTestCase):
 
         self.assertIn("Archivo histórico y copia de respaldo", body)
         self.assertIn("Pasar al archivo (1)", body)
-        self.assertIn('href="/web/archivo-historico"', self.page("/web/"))
+        # Se llega desde «Descargas», que es la entrada del menú.
+        self.assertIn('href="/web/descargas"', self.page("/web/"))
+        self.assertIn('href="/web/archivo-historico"', self.page("/web/descargas"))
 
     def test_sin_marcar_la_casilla_no_archiva(self):
         self.visit(self.old)

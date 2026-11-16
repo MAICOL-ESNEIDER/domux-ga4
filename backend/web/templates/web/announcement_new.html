@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% from "web/_forms.html" import field, select, textarea %}
+{% from "web/_forms.html" import field, select, textarea, download_permission %}
 {% set page_title = "Nuevo comunicado" %}
 
 {% block content %}
@@ -34,6 +34,7 @@
     <input type="file" id="media" name="media" accept="{{ media_accept }}" aria-describedby="media-help">
     <p class="help" id="media-help">Formatos: {{ media_formats }}. Pesa hasta {{ media_mb }} MB.</p>
   </div>
+  {{ download_permission("media") }}
 
   <div class="form-actions">
     <button type="submit" class="btn"

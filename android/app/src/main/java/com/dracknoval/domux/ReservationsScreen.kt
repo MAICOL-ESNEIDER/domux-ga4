@@ -250,7 +250,11 @@ private fun ReservationCard(
                     style = MaterialTheme.typography.labelSmall
                 )
                 if (!item.message.isNullOrBlank()) Text(item.message)
-                MediaAttachmentChip(item.mediaUrl, item.mediaType)
+                MediaAttachmentChip(
+                    item.mediaUrl, item.mediaType,
+                    // Lo propio siempre se puede guardar; lo de la otra parte, solo si lo permitió.
+                    canSave = item.mediaDownloadable || item.authorRole == Session.role
+                )
             }
             DomuxStatusBadge(
                 reservation.status.replaceFirstChar(Char::uppercase).replace('_', ' '),
@@ -330,6 +334,7 @@ private fun ReservationReplyBox(
         },
         { onNotice(it) },
         kinds = AttachmentKinds.MEDIA_AND_PDF,
+        askDownloadPermission = true,
         onClear = { mediaUrl = null; mediaType = null; mediaName = null }
     )
     TextButton(
@@ -539,6 +544,7 @@ private fun ReservationForm(
                     },
                     { onNotice(it) },
                     kinds = AttachmentKinds.MEDIA_AND_PDF,
+                    askDownloadPermission = true,
                     onClear = { mediaUrl = null; mediaType = null; mediaName = null }
                 )
                 Button(

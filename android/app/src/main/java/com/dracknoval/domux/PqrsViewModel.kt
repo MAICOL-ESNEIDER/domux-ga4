@@ -234,7 +234,8 @@ class PqrsViewModel : DomuxViewModel() {
                             incidentTime,
                             mediaUrl,
                             mediaType,
-                            if (Session.isAdmin) resident?.id else null
+                            if (Session.isAdmin) resident?.id else null,
+                            mediaDownloadable = DownloadPermissions.take(mediaUrl)
                         )
                     )
                 }
@@ -254,7 +255,7 @@ class PqrsViewModel : DomuxViewModel() {
         viewModelScope.launch {
             withBusy {
                 attempt("No se pudo actualizar la PQRS") {
-                    api.respondPqrs(auth(), pqrs.id, RespondPqrsRequest(status, text, mediaUrl, mediaType))
+                    api.respondPqrs(auth(), pqrs.id, RespondPqrsRequest(status, text, mediaUrl, mediaType, mediaDownloadable = DownloadPermissions.take(mediaUrl)))
                 }
             } ?: return@launch
             showSuccess("PQRS actualizada.")
@@ -275,7 +276,10 @@ class PqrsViewModel : DomuxViewModel() {
                 attempt("No se pudieron responder las PQRS") {
                     api.respondPqrsBatch(
                         auth(),
-                        BatchRespondPqrsRequest(ids, status, text, mediaUrl, mediaType)
+                        BatchRespondPqrsRequest(
+                            ids, status, text, mediaUrl, mediaType,
+                            mediaDownloadable = DownloadPermissions.take(mediaUrl)
+                        )
                     )
                 }
             } ?: return@launch
@@ -292,7 +296,7 @@ class PqrsViewModel : DomuxViewModel() {
         viewModelScope.launch {
             withBusy {
                 attempt("No se pudo enviar el mensaje") {
-                    api.addPqrsMessage(auth(), pqrs.id, AddPqrsMessageRequest(text, mediaUrl, mediaType))
+                    api.addPqrsMessage(auth(), pqrs.id, AddPqrsMessageRequest(text, mediaUrl, mediaType, mediaDownloadable = DownloadPermissions.take(mediaUrl)))
                 }
             } ?: return@launch
             showSuccess("Mensaje enviado.")

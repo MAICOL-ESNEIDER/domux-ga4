@@ -68,6 +68,13 @@
   <input type="file" id="{{ id }}" name="{{ id }}" accept="{{ upload.accept }}" aria-describedby="{{ id }}-help">
   <p class="help" id="{{ id }}-help">Formatos: {{ upload.formats }}. Pesa hasta {{ upload.mb }} MB.</p>
 </div>
+{{ download_permission(id) }}
+{%- endmacro %}
+
+{# La casilla con la que quien adjunta un archivo decide si los demás lo pueden descargar. #}
+{% macro download_permission(id="media") -%}
+{{ checkbox(id ~ "_downloadable", "Permitir que quien lo reciba lo descargue",
+            help="Si no lo marcas, el archivo solo se puede ver. Tú decides y respondes por lo que compartes.") }}
 {%- endmacro %}
 
 {#

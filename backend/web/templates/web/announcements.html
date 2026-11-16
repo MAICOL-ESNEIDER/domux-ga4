@@ -91,7 +91,7 @@
       </p>
 
       <p class="prewrap">{{ selected.message }}</p>
-      {% if selected.hasMedia %}{{ attachment(url_for('web.announcement_attachment', announcement_id=selected.id), selected.mediaType) }}{% endif %}
+      {% if selected.hasMedia %}{{ attachment(url_for('web.announcement_attachment', announcement_id=selected.id), selected.mediaType, download=True) }}{% endif %}
 
       <dl class="facts mt-1">
         <dt>Publicado</dt><dd>{{ selected.createdAt|date_es }}{% if selected.authorName %} · {{ selected.authorName }}{% endif %}</dd>

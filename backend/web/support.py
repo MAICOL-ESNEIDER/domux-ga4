@@ -1,6 +1,7 @@
 """Ayudas que comparten las páginas de la web: avisos de resultado, paginación y entrega de adjuntos."""
 
 import hashlib
+import re
 
 from flask import Response, abort, flash, request, url_for
 
@@ -69,18 +70,37 @@ def fetch_all(api, path, key, max_pages=20, **params):
     return rows, None
 
 
-def file_response(found):
+#: La terminación del archivo que se descarga, según su tipo.
+DOWNLOAD_EXTENSIONS = {
+    "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm",
+    "video/quicktime": "mov", "video/3gpp": "3gp", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac",
+    "audio/ogg": "ogg", "audio/wav": "wav", "audio/webm": "weba", "audio/3gpp": "3gp", PDF_MIME: "pdf",
+}
+
+
+def wants_download():
+    """Dice si la página pidió el adjunto para guardarlo (``?descargar=1``) y no solo para verlo."""
+    return request.args.get("descargar") == "1"
+
+
+def file_response(found, downloadable=True):
     """La respuesta con un adjunto, o un 404 si no existe o no es una imagen, un video, un audio o un PDF.
 
     ``found`` es lo que entregan los servicios: ``(bytes, tipo)`` o None. La respuesta lleva una
     política de seguridad propia (sin scripts, sin cargar nada y en una caja aislada) y se puede pedir
-    por partes, para que un video avance y retroceda.
+    por partes, para que un video avance y retroceda. Con ``?descargar=1`` el archivo baja al equipo,
+    pero solo si quien lo subió lo permitió (``downloadable``); si no, responde 403.
     """
     if found is None:
         abort(404)
+    if wants_download() and not downloadable:
+        abort(403)
     raw, mime = found
     response = Response(raw, mimetype=mime)
-    if mime == PDF_MIME:
+    if wants_download():
+        extension = DOWNLOAD_EXTENSIONS.get(mime) or re.sub(r"[^a-z0-9]", "", mime.split("/")[-1])[:5] or "bin"
+        response.headers["Content-Disposition"] = f'attachment; filename="adjunto.{extension}"'
+    elif mime == PDF_MIME:
         # Un PDF puede traer formularios o código: no se abre dentro de la web, se descarga.
         response.headers["Content-Disposition"] = 'attachment; filename="adjunto.pdf"'
     response.set_etag(hashlib.sha256(raw).hexdigest())

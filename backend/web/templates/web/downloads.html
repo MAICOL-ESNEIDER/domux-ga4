@@ -1,0 +1,126 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import download_tabs %}
+{% set page_title = "Descargas" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Descargas</h1>
+    <p>Saca en Excel la información de la unidad: elige qué quieres y de qué fechas. Lo que ya está en el archivo histórico se incluye solo.</p>
+  </div>
+</div>
+
+{{ download_tabs("descargas") }}
+
+<form method="get" action="{{ url_for('web.downloads_page') }}" class="card" aria-labelledby="download-title">
+  <h2 id="download-title">Descargar información</h2>
+
+  <fieldset class="field">
+    <legend>1. ¿Qué quieres descargar?</legend>
+    <div class="check-grid">
+      {% for key, label in choices %}
+      <div class="check">
+        <input type="checkbox" id="tipo-{{ key }}" name="tipo" value="{{ key }}"{% if key in choice["keys"] %} checked{% endif %}>
+        <label for="tipo-{{ key }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="help">Cada cosa marcada sale en una hoja aparte. Los usuarios salen como están hoy: no dependen de las fechas.</p>
+  </fieldset>
+
+  <fieldset class="field">
+    <legend>2. ¿De qué fechas?</legend>
+    <div class="check-grid">
+      {% for key, label in periods %}
+      <div class="check">
+        <input type="radio" id="periodo-{{ key }}" name="periodo" value="{{ key }}"{% if key == choice.period %} checked{% endif %}>
+        <label for="periodo-{{ key }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label for="desde">Desde</label>
+        <input type="date" id="desde" name="desde" value="{{ choice.since_text }}" aria-describedby="fechas-help">
+      </div>
+      <div class="field">
+        <label for="hasta">Hasta</label>
+        <input type="date" id="hasta" name="hasta" value="{{ choice.until_text }}" aria-describedby="fechas-help">
+      </div>
+    </div>
+    <p class="help" id="fechas-help">Las dos fechas solo cuentan si marcas «Elegir fechas». Se usa la fecha en que se creó cada registro.</p>
+  </fieldset>
+
+  <div class="field">
+    <label for="apto">3. Un solo apartamento (opcional)</label>
+    <select id="apto" name="apto">
+      <option value="">Todos los apartamentos</option>
+      {% for apartment_id, label in choice.apartments %}
+      <option value="{{ apartment_id }}"{% if apartment_id == choice.apartment_id %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <p class="help">Los comunicados no dependen de un apartamento: salen todos los de esas fechas.</p>
+  </div>
+
+  {% if summary is not none %}
+  <div class="notice notice-info" role="status">
+    <div>
+      <strong>{{ total }} {{ "registro" if total == 1 else "registros" }}</strong> · {{ period_text }}{% if choice.apartment_label %} · {{ choice.apartment_label }}{% endif %}.
+      {% if archived %}{{ archived }} {{ "sale" if archived == 1 else "salen" }} del archivo histórico.{% endif %}
+      <ul class="plain-list">
+        {% for sheet in summary %}
+        <li>{{ sheet.label }}: {{ sheet.count }}{% if sheet.archived %} ({{ sheet.archived }} del archivo histórico){% endif %}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn" formaction="{{ url_for('web.downloads_excel') }}">Descargar Excel</button>
+    <button type="submit" class="btn btn-quiet" name="contar" value="1">Ver cuántos registros son</button>
+  </div>
+  <p class="help">Para descargar se pide otra vez tu contraseña. El archivo tiene datos personales: guárdalo en un lugar seguro y no lo compartas (Ley 1581 de 2012).</p>
+</form>
+
+<section class="card" aria-labelledby="other-title">
+  <h2 id="other-title">Otras formas de descargar</h2>
+  <ul class="plain-list">
+    <li><strong>Lo que estás viendo en una lista:</strong> en PQRS, Reservas, Paquetería y visitas y Usuarios, el botón «Descargar Excel» baja la lista con los filtros que tengas puestos.</li>
+    <li><strong>Una sola PQRS o una sola reserva:</strong> ábrela y usa «Descargar esta PQRS» o «Descargar esta reserva».</li>
+    <li><strong><a href="{{ url_for('web.archive_page') }}">Archivo histórico</a>:</strong> pasa al archivo lo que ya cumplió su plazo, descarga los archivos comprimidos y la copia de respaldo de toda la unidad.</li>
+    <li><strong><a href="{{ url_for('web.backup_page') }}">Respaldo legal</a>:</strong> el libro de Excel con PQRS, conversaciones, reservas y auditoría.</li>
+  </ul>
+</section>
+
+<section class="card" aria-labelledby="history-title">
+  <h2 id="history-title">Últimas descargas</h2>
+  {% if history %}
+  <div class="table-wrap">
+    <table class="table-stack">
+      <caption class="sr-only">Últimas descargas, de la más reciente a la más antigua</caption>
+      <thead>
+        <tr>
+          <th scope="col">Cuándo</th>
+          <th scope="col">Quién</th>
+          <th scope="col">Qué</th>
+          <th scope="col">Registros</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in history %}
+        <tr>
+          <td data-label="Cuándo">{{ item.when }}</td>
+          <td data-label="Quién">{{ item.who }}</td>
+          <td data-label="Qué">{{ item.what }}</td>
+          <td data-label="Registros">{{ item.rows if item.rows != "" else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="help">Todavía no se ha descargado nada.</p>
+  {% endif %}
+</section>
+{% endblock %}

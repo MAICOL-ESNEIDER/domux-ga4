@@ -12,13 +12,16 @@ nada (ver ``file_response``).
 
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
+from extensions import db
+from models import Pqrs, PqrsMessage
 from services import pqrs_service
+from services.audit_service import add_audit_log
 from web import bp
 from web.api import Api
 from web.exports import PQRS_COLUMNS, excel_download, filters_text
 from web.forms import compact, number, text
 from web.security import login_required
-from web.support import fetch_all, file_response
+from web.support import fetch_all, file_response, wants_download
 from web.texts import PQRS_STATUSES, plural
 from web.uploads import attach_media
 
@@ -242,12 +245,28 @@ def pqrs_new():
 @bp.get("/pqrs/<int:pqrs_id>/adjunto")
 @login_required
 def pqrs_attachment(pqrs_id):
-    """El adjunto con el que el residente radicó la PQRS."""
-    return file_response(pqrs_service.attachment(pqrs_id))
+    """El adjunto con el que el residente radicó la PQRS; se descarga solo si quien lo subió lo permitió."""
+    allowed = bool(db.session.query(Pqrs.media_downloadable).filter(Pqrs.id == pqrs_id).scalar())
+    _note_download(pqrs_id, allowed)
+    return file_response(pqrs_service.attachment(pqrs_id), allowed)
 
 
 @bp.get("/pqrs/<int:pqrs_id>/mensajes/<int:message_id>/adjunto")
 @login_required
 def pqrs_message_attachment(pqrs_id, message_id):
-    """El adjunto de un mensaje de la conversación."""
-    return file_response(pqrs_service.attachment(pqrs_id, message_id))
+    """El adjunto de un mensaje; los que subió la administración siempre los puede descargar."""
+    row = (
+        db.session.query(PqrsMessage.media_downloadable, PqrsMessage.author_role)
+        .filter(PqrsMessage.pqrs_id == pqrs_id, PqrsMessage.id == message_id)
+        .first()
+    )
+    allowed = row is not None and (bool(row.media_downloadable) or row.author_role == "ADMIN")
+    _note_download(pqrs_id, allowed)
+    return file_response(pqrs_service.attachment(pqrs_id, message_id), allowed)
+
+
+def _note_download(pqrs_id, allowed):
+    """Deja en la auditoría que la administración descargó un adjunto."""
+    if allowed and wants_download():
+        add_audit_log("pqrs", pqrs_id, "attachment_downloaded", None, actor=g.web_user)
+        db.session.commit()

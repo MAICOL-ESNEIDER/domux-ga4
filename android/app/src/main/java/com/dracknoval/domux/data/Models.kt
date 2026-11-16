@@ -201,7 +201,9 @@ data class Announcement(
     val isRead: Boolean = false,
     // Solo la administración ve cuántos apartamentos lo leyeron y de cuántos (HU-062).
     val readApartments: Int? = null,
-    val totalApartments: Int? = null
+    val totalApartments: Int? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class AnnouncementsListResponse(
     val announcements: List<Announcement>?,
@@ -224,7 +226,9 @@ data class CreateAnnouncementRequest(
     val eventDate: String? = null,
     val eventTime: String? = null,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class CreateAnnouncementResponse(val message: String?, val announcement: Announcement?)
 data class AnnouncementReadResponse(
@@ -263,7 +267,9 @@ data class Pqrs(
     // Días hábiles que faltan para vencer; negativo si ya venció.
     val daysRemaining: Int? = null,
     // Último día para responder (AAAA-MM-DD).
-    val dueDate: String? = null
+    val dueDate: String? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class PqrsMessageItem(
     val id: Int,
@@ -274,7 +280,9 @@ data class PqrsMessageItem(
     val message: String?,
     val mediaUrl: String?,
     val mediaType: String?,
-    val createdAt: String?
+    val createdAt: String?,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class PqrsListResponse(val pqrs: List<Pqrs>?)
 data class CreatePqrsRequest(
@@ -285,19 +293,25 @@ data class CreatePqrsRequest(
     val incidentTime: String? = null,
     val mediaUrl: String? = null,
     val mediaType: String? = null,
-    val residentId: Int? = null
+    val residentId: Int? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class CreatePqrsResponse(val message: String?, val pqrs: Pqrs?)
 data class RespondPqrsRequest(
     val status: String,
     val adminResponse: String,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class AddPqrsMessageRequest(
     val message: String? = null,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class RatePqrsRequest(val rating: Int, val comment: String? = null)
 data class BatchRespondPqrsRequest(
@@ -305,7 +319,9 @@ data class BatchRespondPqrsRequest(
     val status: String,
     val message: String,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class BatchRespondPqrsResponse(
     val message: String?,
@@ -371,7 +387,9 @@ data class ReservationMessageItem(
     val message: String?,
     val mediaUrl: String?,
     val mediaType: String?,
-    val createdAt: String?
+    val createdAt: String?,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class ReservationsListResponse(val reservations: List<Reservation>?)
 data class CreateReservationRequest(
@@ -382,12 +400,16 @@ data class CreateReservationRequest(
     val message: String? = null,
     val mediaUrl: String? = null,
     val mediaType: String? = null,
-    val attendees: Int? = null
+    val attendees: Int? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class AddReservationMessageRequest(
     val message: String? = null,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    // Quien subió el archivo decide si los demás lo pueden descargar.
+    val mediaDownloadable: Boolean = false
 )
 data class ReservationCalendarResponse(
     val commonAreaId: Int,

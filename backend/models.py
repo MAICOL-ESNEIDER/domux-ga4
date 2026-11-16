@@ -751,6 +751,8 @@ class Announcement(RetirableMixin, db.Model):
     event_time = db.Column(db.String(20), nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
+    # Quien sube el archivo decide si los demás lo pueden descargar; si no, solo se ve.
+    media_downloadable = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=utc_now)
 
@@ -777,6 +779,7 @@ class Announcement(RetirableMixin, db.Model):
             "eventTime": self.event_time,
             "mediaUrl": self.media_url,
             "mediaType": self.media_type,
+            "mediaDownloadable": bool(self.media_downloadable),
             "createdAt": _fmt(self.created_at),
             "authorName": self.author.full_name if self.author else None,
             "isRetired": self.is_retired,
@@ -841,6 +844,8 @@ class Pqrs(db.Model):
     incident_time = db.Column(db.String(20), nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
+    # Quien sube el archivo decide si los demás lo pueden descargar; si no, solo se ve.
+    media_downloadable = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
     archived_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now)
@@ -888,6 +893,7 @@ class Pqrs(db.Model):
             "incidentTime": self.incident_time,
             "mediaUrl": self.media_url,
             "mediaType": self.media_type,
+            "mediaDownloadable": bool(self.media_downloadable),
             "messages": [message.to_dict() for message in self.conversation],
             "satisfactionRating": latest_rating.rating if latest_rating else None,
             "satisfactionComment": latest_rating.comment if latest_rating else None,
@@ -925,6 +931,8 @@ class PqrsMessage(db.Model):
     message = db.Column(db.Text, nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
+    # Quien sube el archivo decide si los demás lo pueden descargar; si no, solo se ve.
+    media_downloadable = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     pqrs = db.relationship("Pqrs", back_populates="conversation")
@@ -940,6 +948,7 @@ class PqrsMessage(db.Model):
             "message": self.message,
             "mediaUrl": self.media_url,
             "mediaType": self.media_type,
+            "mediaDownloadable": bool(self.media_downloadable),
             "createdAt": _fmt(self.created_at),
         }
 
@@ -1166,6 +1175,8 @@ class ReservationMessage(db.Model):
     message = db.Column(db.Text, nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
+    # Quien sube el archivo decide si los demás lo pueden descargar; si no, solo se ve.
+    media_downloadable = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     reservation = db.relationship("Reservation", back_populates="messages")
@@ -1181,6 +1192,7 @@ class ReservationMessage(db.Model):
             "message": self.message,
             "mediaUrl": self.media_url,
             "mediaType": self.media_type,
+            "mediaDownloadable": bool(self.media_downloadable),
             "createdAt": _fmt(self.created_at),
         }
 

@@ -451,6 +451,26 @@ def generate_list_xlsx(title, headers, rows, about) -> bytes:
     return stream.getvalue()
 
 
+def generate_workbook_xlsx(sheets, about) -> bytes:
+    """Un Excel con varias hojas y la hoja «Acerca de» al final.
+
+    ``sheets`` son ternas (nombre de la hoja, encabezados, filas) y ``about`` las parejas
+    (dato, valor) que dicen quién lo descargó, cuándo y qué trae. Igual que en las listas, un texto
+    que empieza por «=», «+», «-» o «@» se guarda como texto, nunca como fórmula.
+    """
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for title, headers, rows in sheets:
+        _append_sheet(workbook, title[:31], tuple(headers), rows)
+    info = _append_sheet(workbook, "Acerca de", ("Dato", "Valor"), about)
+    info.column_dimensions["B"].width = 90
+    for row in info.iter_rows(min_row=2):
+        row[1].alignment = Alignment(wrap_text=True, vertical="top")
+    stream = io.BytesIO()
+    workbook.save(stream)
+    return stream.getvalue()
+
+
 def generate_census_template_xlsx() -> bytes:
     """Generate an example census workbook with a styled header row."""
     workbook = Workbook()

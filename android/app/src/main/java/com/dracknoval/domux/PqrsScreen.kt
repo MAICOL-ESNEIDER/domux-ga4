@@ -353,7 +353,11 @@ private fun PqrsCard(
                 val messages = pqrs.messages.orEmpty()
                 if (messages.isEmpty()) {
                     Text(pqrs.message)
-                    MediaAttachmentChip(pqrs.mediaUrl, pqrs.mediaType)
+                    MediaAttachmentChip(
+                        pqrs.mediaUrl, pqrs.mediaType,
+                        // El residente guarda lo de su propia PQRS; la administración, solo si él lo permitió.
+                        canSave = pqrs.mediaDownloadable || Session.isResident
+                    )
                     if (!pqrs.adminResponse.isNullOrBlank()) Text("Respuesta anterior: ${pqrs.adminResponse}")
                 } else {
                     messages.forEach { item ->
@@ -363,7 +367,10 @@ private fun PqrsCard(
                             color = MaterialTheme.colorScheme.secondary
                         )
                         if (!item.message.isNullOrBlank()) Text(item.message)
-                        MediaAttachmentChip(item.mediaUrl, item.mediaType)
+                        MediaAttachmentChip(
+                            item.mediaUrl, item.mediaType,
+                            canSave = item.mediaDownloadable || item.authorRole == Session.role
+                        )
                         Spacer(Modifier.height(4.dp))
                     }
                 }
@@ -406,6 +413,7 @@ private fun PqrsCard(
                         },
                         { viewModel.showNotice(it) },
                         kinds = AttachmentKinds.MEDIA_AND_PDF,
+                        askDownloadPermission = true,
                         onClear = { responseMediaUrl = null; responseMediaType = null; responseMediaName = null }
                     )
                     Button(
@@ -436,6 +444,7 @@ private fun PqrsCard(
                         },
                         { viewModel.showNotice(it) },
                         kinds = AttachmentKinds.MEDIA_AND_PDF,
+                        askDownloadPermission = true,
                         onClear = { replyMediaUrl = null; replyMediaType = null; replyMediaName = null }
                     )
                     Button(
@@ -534,6 +543,7 @@ private fun PqrsBatchDialog(state: PqrsUiState, viewModel: PqrsViewModel, onClos
                     },
                     { viewModel.showNotice(it) },
                     kinds = AttachmentKinds.MEDIA_AND_PDF,
+                    askDownloadPermission = true,
                     onClear = { mediaUrl = null; mediaType = null; mediaName = null }
                 )
             }
@@ -665,6 +675,7 @@ private fun PqrsForm(
                     },
                     { viewModel.showNotice(it) },
                     kinds = AttachmentKinds.MEDIA_AND_PDF,
+                    askDownloadPermission = true,
                     onClear = { mediaUrl = null; mediaType = null; mediaName = null }
                 )
                 Button(

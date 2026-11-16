@@ -135,7 +135,9 @@ fun MediaAttachmentPicker(
     onAttachment: (mediaUrl: String, mediaType: String, fileName: String) -> Unit,
     onError: (String) -> Unit,
     kinds: AttachmentKinds = AttachmentKinds.MEDIA,
-    onClear: (() -> Unit)? = null
+    onClear: (() -> Unit)? = null,
+    // true donde el archivo le llega a otra persona: sale la casilla para permitir que lo descargue.
+    askDownloadPermission: Boolean = false
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -145,6 +147,8 @@ fun MediaAttachmentPicker(
     var working by remember { mutableStateOf(false) }
     // Lo último que se eligió, para verlo antes de enviar.
     var preview by remember { mutableStateOf<ReadyAttachment?>(null) }
+    // Lo que la persona marcó para el adjunto elegido; cada adjunto nuevo empieza sin permiso.
+    var allowDownload by remember { mutableStateOf(false) }
     // Mientras la cámara está abierta la app puede cerrarse: la ruta del archivo se guarda aparte.
     var pendingCapture by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingPermission by rememberSaveable { mutableStateOf<String?>(null) }
@@ -154,6 +158,7 @@ fun MediaAttachmentPicker(
         scope.launch {
             try {
                 val ready = withContext(Dispatchers.IO) { read() }
+                allowDownload = false
                 preview = ready
                 onAttachment(ready.dataUrl, ready.type, ready.name)
             } catch (exception: CancellationException) {
@@ -297,12 +302,22 @@ fun MediaAttachmentPicker(
                 )
                 if (onClear != null) {
                     TextButton(onClick = {
+                        preview?.let { DownloadPermissions.set(it.dataUrl, false) }
+                        allowDownload = false
                         preview = null
                         onClear()
                     }) { Text("Quitar") }
                 }
             }
-            preview?.let { MediaAttachment(it.dataUrl, it.type, "Vista previa del adjunto") }
+            preview?.let { chosen ->
+                MediaAttachment(chosen.dataUrl, chosen.type, "Vista previa del adjunto")
+                if (askDownloadPermission) {
+                    DownloadPermissionCheckbox(allowDownload) { allow ->
+                        allowDownload = allow
+                        DownloadPermissions.set(chosen.dataUrl, allow)
+                    }
+                }
+            }
         }
     }
 
@@ -329,6 +344,7 @@ fun MediaAttachmentPicker(
             onUse = { url, seconds ->
                 recordingAudio = false
                 val ready = ReadyAttachment(url, "audio", "Audio grabado (${clockText(seconds * 1000)})")
+                allowDownload = false
                 preview = ready
                 onAttachment(ready.dataUrl, ready.type, ready.name)
             },

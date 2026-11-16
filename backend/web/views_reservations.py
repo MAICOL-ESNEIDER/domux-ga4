@@ -14,14 +14,17 @@ from datetime import date
 
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
+from extensions import db
+from models import ReservationMessage
 from services import reservation_view
+from services.audit_service import add_audit_log
 from services.reservation_service import CLOSED_RESERVATION_STATUSES, PENDING_RESERVATION_STATUSES
 from web import bp
 from web.api import Api
 from web.exports import RESERVATION_COLUMNS, excel_download, filters_text
 from web.forms import compact, text
 from web.security import login_required, safe_next
-from web.support import file_response, flash_result
+from web.support import file_response, flash_result, wants_download
 from web.uploads import attach_media
 
 #: Filas de la lista por página.
@@ -253,5 +256,14 @@ def reservation_message(res_id):
 @bp.get("/reservas/<int:res_id>/mensajes/<int:message_id>/adjunto")
 @login_required
 def reservation_attachment(res_id, message_id):
-    """El adjunto de un mensaje de la conversación."""
-    return file_response(reservation_view.attachment(res_id, message_id))
+    """El adjunto de un mensaje; los que subió la administración siempre los puede descargar."""
+    row = (
+        db.session.query(ReservationMessage.media_downloadable, ReservationMessage.author_role)
+        .filter(ReservationMessage.reservation_id == res_id, ReservationMessage.id == message_id)
+        .first()
+    )
+    allowed = row is not None and (bool(row.media_downloadable) or row.author_role == "ADMIN")
+    if allowed and wants_download():
+        add_audit_log("reservation", res_id, "attachment_downloaded", None, actor=g.web_user)
+        db.session.commit()
+    return file_response(reservation_view.attachment(res_id, message_id), allowed)

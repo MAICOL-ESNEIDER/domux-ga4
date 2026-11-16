@@ -18,7 +18,7 @@ from models import (
     ReservationMessage,
     User,
 )
-from routes.common import bool_arg, json_body, json_object, page_args, save_changes
+from routes.common import bool_arg, downloadable, json_body, json_object, page_args, save_changes
 from services.announcement_service import (
     announcement_payloads,
     archived_only,
@@ -254,6 +254,7 @@ def create_announcement():
         event_time=data.get("eventTime"),
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
+        media_downloadable=downloadable(data),
         author_id=g.current_user.id,
     )
     db.session.add(announcement)
@@ -473,6 +474,7 @@ def create_pqrs():
         incident_time=data.get("incidentTime"),
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
+        media_downloadable=downloadable(data),
     )
     db.session.add(pqrs)
     db.session.flush()
@@ -482,6 +484,7 @@ def create_pqrs():
         message=data["message"].strip(),
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
+        media_downloadable=downloadable(data),
     ))
     if g.current_user.role == "ADMIN":
         notify_user(
@@ -526,6 +529,7 @@ def respond_pqrs(pqrs_id):
         message=response_text.strip(),
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
+        media_downloadable=downloadable(data),
     ))
     add_audit_log(
         "PQRS",
@@ -581,6 +585,7 @@ def add_pqrs_message(pqrs_id):
         message=message.strip() if message and message.strip() else None,
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
+        media_downloadable=downloadable(data),
     ))
     add_audit_log("PQRS", pqrs.id, "responded")
     if was_resolved:
@@ -693,6 +698,7 @@ def respond_pqrs_batch():
             message=message.strip(),
             media_url=data.get("mediaUrl"),
             media_type=data.get("mediaType"),
+            media_downloadable=downloadable(data),
         ))
         add_audit_log("PQRS", pqrs.id, "responded", {"status": status})
         if previous_status != status:
@@ -1025,6 +1031,7 @@ def create_reservation():
             message=message.strip() if message and message.strip() else None,
             media_url=data.get("mediaUrl"),
             media_type=data.get("mediaType"),
+            media_downloadable=downloadable(data),
         ))
     if g.current_user.role == "ADMIN":
         notify_user(
@@ -1137,6 +1144,7 @@ def add_reservation_message(res_id):
         message=message.strip() if message and message.strip() else None,
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
+        media_downloadable=downloadable(data),
     ))
     add_audit_log("RESERVATION", reservation.id, "responded")
     if g.current_user.role == "ADMIN":

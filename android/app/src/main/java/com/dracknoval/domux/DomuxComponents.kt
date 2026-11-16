@@ -93,8 +93,13 @@ import com.dracknoval.domux.ui.theme.DomuxColor
  * video para reproducir y el audio con su reproductor (ver MediaViewer.kt).
  */
 @Composable
-fun MediaAttachmentChip(mediaUrl: String?, mediaType: String?, description: String = "Foto adjunta") {
-    MediaAttachment(mediaUrl, mediaType, description)
+fun MediaAttachmentChip(
+    mediaUrl: String?,
+    mediaType: String?,
+    description: String = "Foto adjunta",
+    canSave: Boolean = false
+) {
+    MediaAttachment(mediaUrl, mediaType, description, canSave)
 }
 
 @Composable

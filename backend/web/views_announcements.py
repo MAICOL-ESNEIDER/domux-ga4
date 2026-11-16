@@ -20,7 +20,7 @@ from web.api import Api
 from web.forms import compact, number, text
 from web.security import login_required, safe_next
 from web.support import file_response
-from web.uploads import DOCUMENT_ACCEPT, DOCUMENT_FORMATS_TEXT, MAX_MEDIA_BYTES, UploadError, read_media
+from web.uploads import DOCUMENT_ACCEPT, DOCUMENT_FORMATS_TEXT, MAX_MEDIA_BYTES, UploadError, download_allowed, read_media
 
 #: Filas de la lista por página.
 PAGE_SIZE = 15
@@ -185,6 +185,8 @@ def announcement_new():
     })
     if media is not None:
         body["mediaUrl"], body["mediaType"] = media
+        if download_allowed():
+            body["mediaDownloadable"] = True
     result = api.post("/api/announcements", body)
     if result.ok:
         flash("Comunicado publicado. Los residentes lo ven en la app.", "success")

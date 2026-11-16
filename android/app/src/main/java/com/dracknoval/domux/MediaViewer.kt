@@ -107,7 +107,7 @@ fun decodeDataUrl(dataUrl: String?): DecodedMedia? {
 }
 
 /** La extensión del archivo temporal según su tipo; el reproductor la usa para reconocerlo. */
-private fun extensionFor(mimeType: String): String = when (mimeType) {
+internal fun extensionFor(mimeType: String): String = when (mimeType) {
     "image/jpeg", "image/jpg" -> "jpg"
     "image/png" -> "png"
     "image/webp" -> "webp"
@@ -161,14 +161,24 @@ private sealed interface Prepared<out T> {
  * es lo que oye quien usa el lector de pantalla (por ejemplo «Foto del paquete»).
  */
 @Composable
-fun MediaAttachment(mediaUrl: String?, mediaType: String?, description: String = "Foto adjunta") {
+fun MediaAttachment(
+    mediaUrl: String?,
+    mediaType: String?,
+    description: String = "Foto adjunta",
+    // true si quien lo subió permitió descargarlo (o es de quien lo está viendo): sale «Guardar».
+    canSave: Boolean = false
+) {
     if (mediaUrl.isNullOrBlank()) return
-    when (mediaType?.lowercase()) {
-        "image" -> ImageAttachment(mediaUrl, description)
-        "video" -> VideoAttachment(mediaUrl)
-        "audio" -> AudioAttachment(mediaUrl)
-        "document" -> DocumentAttachment(mediaUrl)
-        else -> AttachmentNotice("Este adjunto no se puede mostrar en la app.")
+    val kind = mediaType?.lowercase()
+    Column {
+        when (kind) {
+            "image" -> ImageAttachment(mediaUrl, description)
+            "video" -> VideoAttachment(mediaUrl)
+            "audio" -> AudioAttachment(mediaUrl)
+            "document" -> DocumentAttachment(mediaUrl)
+            else -> AttachmentNotice("Este adjunto no se puede mostrar en la app.")
+        }
+        if (canSave && kind in setOf("image", "video", "audio", "document")) SaveAttachmentButton(mediaUrl)
     }
 }
 

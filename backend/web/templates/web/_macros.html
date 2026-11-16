@@ -53,6 +53,15 @@
 </nav>
 {%- endmacro %}
 
+{# Secciones de «Descargas»; «active» es «descargas», «archivo» o «respaldo». #}
+{% macro download_tabs(active) -%}
+<nav class="tabs" aria-label="Descargas">
+  <a href="{{ url_for('web.downloads_page') }}"{% if active == "descargas" %} aria-current="page"{% endif %}>Descargar información</a>
+  <a href="{{ url_for('web.archive_page') }}"{% if active == "archivo" %} aria-current="page"{% endif %}>Archivo histórico y copia</a>
+  <a href="{{ url_for('web.backup_page') }}"{% if active == "respaldo" %} aria-current="page"{% endif %}>Respaldo legal</a>
+</nav>
+{%- endmacro %}
+
 {# Secciones de «Paquetería y visitas»; «active» es «paquetes», «visitas» o «vehiculos». #}
 {% macro registry_tabs(active) -%}
 <nav class="tabs" aria-label="Secciones de paquetería y visitas">
@@ -76,23 +85,29 @@
 {%- endmacro %}
 
 {# Un adjunto (foto, video, audio o PDF) que se pide aparte a la web: «url» es la ruta que lo entrega y «kind», su tipo. El PDF no se abre en la página: se descarga. #}
-{% macro attachment(url, kind, alt="Foto adjunta") -%}
+{% macro attachment(url, kind, alt="Foto adjunta", download=None) -%}
+{# «download»: True si quien lo subió permitió descargarlo, False si no; None donde no aplica (portería). #}
 {% if kind == "document" %}
 <p class="attachment attachment-document">
-  <a href="{{ url }}" download>Descargar el documento PDF</a>
-  <span class="small">Se guarda en tu equipo; ábrelo con tu lector de PDF.</span>
+  <a href="{{ url }}" download>{{ "Abrir" if download is false else "Descargar" }} el documento PDF</a>
+  <span class="small">Se guarda en tu equipo; ábrelo con tu lector de PDF.{% if download is false %} Quien lo subió no permitió compartirlo: úsalo solo para atender el caso.{% endif %}</span>
 </p>
 {% else %}
 <figure class="attachment">
   {% if kind == "video" %}
-  <video controls preload="metadata" src="{{ url }}">Este navegador no puede reproducir el video.</video>
+  <video controls preload="metadata" src="{{ url }}"{% if download is false %} controlsList="nodownload"{% endif %}>Este navegador no puede reproducir el video.</video>
   {% elif kind == "audio" %}
-  <audio controls preload="none" src="{{ url }}">Este navegador no puede reproducir el audio.</audio>
+  <audio controls preload="none" src="{{ url }}"{% if download is false %} controlsList="nodownload"{% endif %}>Este navegador no puede reproducir el audio.</audio>
   {% else %}
   <img src="{{ url }}" alt="{{ alt }}" loading="lazy">
   {% endif %}
   <figcaption class="small">
     <a href="{{ url }}" target="_blank" rel="noopener">Abrir {{ {"video": "el video", "audio": "el audio"}.get(kind, "la foto") }} en otra pestaña</a>
+    {% if download %}
+    · <a href="{{ url }}?descargar=1" download>Descargar</a>
+    {% elif download is false %}
+    · <span>Solo para ver: quien lo subió no permitió descargarlo.</span>
+    {% endif %}
   </figcaption>
 </figure>
 {% endif %}

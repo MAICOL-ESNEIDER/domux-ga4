@@ -8,6 +8,8 @@ La revisión de los bytes es la misma que hace la API con lo que manda la app (`
 
 import base64
 
+from flask import request
+
 from services.media import MAX_MEDIA_BYTES, PDF_MIME, is_pdf, sniff_media
 
 __all__ = (
@@ -42,7 +44,14 @@ def attach_media(body, upload):
         return str(problem)
     if media is not None:
         body["mediaUrl"], body["mediaType"] = media
+        if download_allowed():
+            body["mediaDownloadable"] = True
     return None
+
+
+def download_allowed(field="media"):
+    """Dice si quien adjunta marcó la casilla para que los demás puedan descargar el archivo."""
+    return request.form.get(f"{field}_downloadable") == "1"
 
 
 def read_media(upload, allow_document=False):

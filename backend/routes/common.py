@@ -103,3 +103,11 @@ def save_changes(duplicate_message="Ese dato ya está registrado."):
     except IntegrityError as error:
         db.session.rollback()
         raise ApiError(duplicate_message, 409) from error
+
+
+def downloadable(data):
+    """Dice si quien sube el archivo permitió descargarlo (``mediaDownloadable: true``).
+
+    Solo vale con un archivo adjunto y con un ``true`` de verdad: sin marcarlo, el archivo solo se ve.
+    """
+    return bool(data.get("mediaUrl")) and data.get("mediaDownloadable") is True

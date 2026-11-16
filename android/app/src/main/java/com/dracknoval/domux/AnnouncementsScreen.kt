@@ -272,7 +272,11 @@ private fun AnnouncementCard(
             if (announcement.eventDate != null || announcement.eventTime != null) {
                 Text("Evento: ${announcement.eventDate.orEmpty()} ${announcement.eventTime.orEmpty()}".trim())
             }
-            MediaAttachmentChip(announcement.mediaUrl, announcement.mediaType, "Foto del comunicado")
+            MediaAttachmentChip(
+                announcement.mediaUrl, announcement.mediaType, "Foto del comunicado",
+                // La administración publica el comunicado y decide si los residentes lo pueden guardar.
+                canSave = announcement.mediaDownloadable || Session.isAdmin
+            )
             Text(
                 "Por ${announcement.authorName ?: "Administración"} · ${announcement.createdAt.orEmpty()}",
                 style = MaterialTheme.typography.bodySmall
@@ -454,6 +458,7 @@ private fun AnnouncementForm(
                     },
                     { onNotice(it) },
                     kinds = AttachmentKinds.MEDIA_AND_PDF,
+                    askDownloadPermission = true,
                     onClear = { mediaUrl = null; mediaType = null; mediaName = null }
                 )
                 Button(
@@ -474,7 +479,8 @@ private fun AnnouncementForm(
                                     eventDate = eventDate.ifBlank { null },
                                     eventTime = eventTime.ifBlank { null },
                                     mediaUrl = mediaUrl,
-                                    mediaType = mediaType
+                                    mediaType = mediaType,
+                                    mediaDownloadable = DownloadPermissions.take(mediaUrl)
                                 )
                             )
                         }

@@ -348,7 +348,8 @@ class ReservationsViewModel : DomuxViewModel() {
                             message = note,
                             mediaUrl = mediaUrl,
                             mediaType = mediaType,
-                            attendees = attendees
+                            attendees = attendees,
+                            mediaDownloadable = DownloadPermissions.take(mediaUrl)
                         )
                     )
                 }
@@ -406,7 +407,7 @@ class ReservationsViewModel : DomuxViewModel() {
                     api.addReservationMessage(
                         auth(),
                         reservation.id,
-                        AddReservationMessageRequest(text, mediaUrl, mediaType)
+                        AddReservationMessageRequest(text, mediaUrl, mediaType, mediaDownloadable = DownloadPermissions.take(mediaUrl))
                     )
                 }
             } ?: return@launch

@@ -97,6 +97,7 @@
     <article class="card" aria-labelledby="detail-title">
       <a class="back-link" href="{{ url_for('web.reservations_list', **list_args) }}">‹ Volver a la lista</a>
       <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.commonAreaName or "Zona común" }}</h2>
+      <p><a class="btn btn-quiet btn-small" href="{{ url_for('web.reservation_download', res_id=selected.id) }}">Descargar esta reserva</a></p>
       <p>
         {{ status_badge("reservation", selected.status) }}
         {% if selected.isArchived %}{{ badge("Archivada", "neutral") }}{% endif %}
@@ -159,7 +160,7 @@
             · {{ role_labels.get(entry.authorRole, "") }} · {{ entry.createdAt|date_es }}
           </p>
           {% if entry.message %}<p class="prewrap mb-0">{{ entry.message }}</p>{% endif %}
-          {% if entry.hasMedia %}{{ attachment(url_for('web.reservation_attachment', res_id=selected.id, message_id=entry.id), entry.mediaType) }}{% endif %}
+          {% if entry.hasMedia %}{{ attachment(url_for('web.reservation_attachment', res_id=selected.id, message_id=entry.id), entry.mediaType, download=entry.mediaDownloadable or entry.authorRole == 'ADMIN') }}{% endif %}
         </li>
         {% endfor %}
       </ol>

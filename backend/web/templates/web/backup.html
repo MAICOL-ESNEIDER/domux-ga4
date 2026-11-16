@@ -1,5 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_forms.html" import checkbox %}
+{% from "web/_macros.html" import download_tabs %}
 {% set page_title = "Respaldo legal" %}
 
 {% block content %}
@@ -9,6 +10,8 @@
     <p>El expediente de la unidad en Excel. Se descarga solo aquí, en el computador; cada descarga queda registrada.</p>
   </div>
 </div>
+
+{{ download_tabs("respaldo") }}
 
 <section class="card form-narrow" aria-labelledby="backup-download">
   <h2 id="backup-download">Descargar el respaldo completo</h2>

@@ -1,6 +1,6 @@
 {% extends "web/base.html" %}
 {% from "web/_forms.html" import checkbox %}
-{% from "web/_macros.html" import badge %}
+{% from "web/_macros.html" import badge, download_tabs %}
 {% set page_title = "Archivo histórico" %}
 
 {% block content %}
@@ -10,6 +10,8 @@
     <p>Nada se borra: los registros que cumplen su plazo pasan a un archivo comprimido por tipo y por mes, y se pueden volver a cargar.</p>
   </div>
 </div>
+
+{{ download_tabs("archivo") }}
 
 <section class="card" aria-labelledby="archive-pending">
   <h2 id="archive-pending">Registros que ya cumplieron su plazo</h2>

@@ -217,7 +217,9 @@ def password_confirmation_required(back_endpoint):
         def wrapper(*args, **kwargs):
             if not password_confirmed():
                 flash("Por seguridad, escribe tu contraseña para descargar.", "info")
-                return redirect(url_for("web.password_confirm", next=url_for(back_endpoint)))
+                # Se vuelve a la página con lo que la persona había elegido (tipos, fechas…).
+                back = url_for(back_endpoint, **request.args.to_dict(flat=False))
+                return redirect(url_for("web.password_confirm", next=back))
             return view(*args, **kwargs)
 
         return wrapper

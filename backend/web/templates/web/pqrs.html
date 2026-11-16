@@ -123,6 +123,7 @@
     <article class="card" aria-labelledby="detail-title">
       <a class="back-link" href="{{ url_for('web.pqrs_list', **list_args) }}">‹ Volver a la bandeja</a>
       <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.subject }}</h2>
+      <p><a class="btn btn-quiet btn-small" href="{{ url_for('web.pqrs_download', pqrs_id=selected.id) }}">Descargar esta PQRS</a></p>
       <p>
         {{ status_badge("pqrs", selected.status) }}
         {% if selected.semaphore %}{{ status_badge("semaphore", selected.semaphore) }}{% endif %}
@@ -152,7 +153,7 @@
 
       <h3>Solicitud</h3>
       <p class="prewrap">{{ selected.message }}</p>
-      {% if selected.hasMedia %}{{ attachment(url_for('web.pqrs_attachment', pqrs_id=selected.id), selected.mediaType) }}{% endif %}
+      {% if selected.hasMedia %}{{ attachment(url_for('web.pqrs_attachment', pqrs_id=selected.id), selected.mediaType, download=selected.mediaDownloadable) }}{% endif %}
 
       <h3>Conversación</h3>
       {% if thread %}
@@ -164,7 +165,7 @@
             · {{ role_labels.get(entry.authorRole, "") }} · {{ entry.createdAt|date_es }}
           </p>
           {% if entry.message %}<p class="prewrap mb-0">{{ entry.message }}</p>{% endif %}
-          {% if entry.hasMedia %}{{ attachment(url_for('web.pqrs_message_attachment', pqrs_id=selected.id, message_id=entry.id), entry.mediaType) }}{% endif %}
+          {% if entry.hasMedia %}{{ attachment(url_for('web.pqrs_message_attachment', pqrs_id=selected.id, message_id=entry.id), entry.mediaType, download=entry.mediaDownloadable or entry.authorRole == 'ADMIN') }}{% endif %}
         </li>
         {% endfor %}
       </ol>
