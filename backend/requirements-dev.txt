@@ -3,3 +3,4 @@
 coverage==7.10.7
 ruff==0.14.5
 pip-audit==2.9.0
+PyYAML==6.0.3  # lee el contrato de la API (docs/api/openapi.yaml) en tests/test_api_contract.py
