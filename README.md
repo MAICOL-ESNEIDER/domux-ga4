@@ -304,5 +304,7 @@ Las librerías de terceros conservan sus propias licencias; están listadas en [
 
 - **Documentación formal del proyecto** (formulación, requisitos, diseño, calidad, manuales y cierre): carpeta [`Documentacion_Proyecto_ADSO/`](Documentacion_Proyecto_ADSO/).
 - **Contrato de la API:** [`docs/api/`](docs/api/).
+- **Registro de decisiones del proyecto:** [`docs/adr/registro-decisiones.md`](docs/adr/registro-decisiones.md).
+- **Reporte del ciclo de pruebas CIC-01:** [`docs/testing/cic-01.md`](docs/testing/cic-01.md).
 - **Cambios de cada versión:** [`CHANGELOG.md`](CHANGELOG.md).
 - **Relación con las guías GA1–GA3.** DOMUX parte de la estructura de esas guías y la lleva más lejos: `data/Models.kt`, `data/ApiService.kt`, `data/RetrofitClient.kt` y `data/Session.kt` ahora cubren todos los módulos, los tres roles y la sesión cifrada; `MainActivity.kt` usa `DomuxScreenScaffold` y el menú lateral; y el backend de Flask pasó a capas (`routes/`, `services/`, `models.py`, `validators.py`).
