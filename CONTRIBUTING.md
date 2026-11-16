@@ -21,7 +21,8 @@ Palabras que se usan:
 | `backend/services/` | Las reglas de negocio (PQRS, reservas, visitas, paquetes...) | Código de pantallas |
 | `backend/web/` | La página de administración (`templates/` con Jinja2, `static/` con estilos, scripts y logo) | Librerías externas copiadas |
 | `backend/migrations/` | Los cambios de la base de datos (Alembic), uno por archivo: `NNNN_descripcion_en_español.py` | SQL manual sin control |
-| `backend/scripts/` | Programas de operación: copia de seguridad y restauración (ver su `LEEME.md`) | Programas que borran datos sin avisar |
+| `backend/legal/` | Los textos de los documentos legales, uno por archivo (ver su `LEEME.md`) | Textos que no revisó una persona, marcados como vigentes |
+| `backend/scripts/` | Programas de operación: copia de seguridad y restauración (ver su `LEEME.md`) y revisión de los documentos legales | Programas que borran datos sin avisar |
 | `backend/tests/` | Pruebas automáticas, un archivo `test_<tema>.py` por tema | Evidencia manual sin contexto |
 | `android/` | La app Android (Kotlin, Jetpack Compose, MVVM) | `local.properties` ni `google-services.json` |
 | `android/app/src/main/java/com/dracknoval/domux/` | Pantallas (`XxxScreen.kt`), su estado (`XxxViewModel.kt`), `data/` (llamadas a la API) y `ui/` (tema) | Lógica del servidor |
@@ -110,8 +111,11 @@ Es la "definición de listo" del equipo. Todo lo que aplique debe estar marcado:
 - [ ] No hay secretos ni datos personales en el cambio (ver la sección 6).
 - [ ] Si el cambio tocó la base de datos, hay una migración nueva y se probó en SQLite y en PostgreSQL.
 - [ ] Si hay una variable de entorno nueva, está en `backend/.env.example` con una explicación.
-- [ ] Si hay una ruta de la API nueva, está documentada y registrada en las pruebas de permisos
-  (`tests/test_route_guards.py`).
+- [ ] Si hay una ruta de la API nueva, está registrada en las pruebas de permisos
+  (`tests/test_route_guards.py`) y descrita en el contrato (`docs/api/openapi.yaml`); la prueba
+  `tests/test_api_contract.py` avisa si algo no coincide.
+- [ ] Si se cambió un texto legal (`backend/legal/`), lo revisó una persona y
+  `python -m scripts.verificar_legal` pasa.
 - [ ] Si el cambio se ve en la app, se probó en un celular con el APK que arma el pipeline.
 - [ ] El `CHANGELOG.md` y la documentación afectada están al día.
 - [ ] Las limitaciones o la deuda que quedan están anotadas.

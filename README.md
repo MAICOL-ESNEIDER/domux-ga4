@@ -84,7 +84,7 @@ Páginas: usuarios, estructura de la unidad, datos de la unidad, zonas comunes, 
 
 ### Contrato de la API
 
-El servidor tiene 109 operaciones en 17 módulos (salud, sesión, usuarios, residentes, administración, hogares, unidad, estructura, comunicados, PQRS, zonas comunes, reservas, notificaciones, paquetes, visitas, códigos QR y vehículos). Todas están descritas en [`docs/api/openapi.yaml`](docs/api/openapi.yaml), el contrato en formato OpenAPI 3.0 (cómo se ve y cómo se mantiene: [`docs/api/README.md`](docs/api/README.md)). Una prueba automática lo compara con el servidor real en cada cambio, así que no puede quedar desactualizado.
+El servidor tiene 111 operaciones en 18 módulos (salud, sesión, usuarios, residentes, administración, hogares, unidad, estructura, comunicados, PQRS, zonas comunes, reservas, notificaciones, paquetes, visitas, códigos QR, vehículos y documentos legales). Todas están descritas en [`docs/api/openapi.yaml`](docs/api/openapi.yaml), el contrato en formato OpenAPI 3.0 (cómo se ve y cómo se mantiene: [`docs/api/README.md`](docs/api/README.md)). Una prueba automática lo compara con el servidor real en cada cambio, así que no puede quedar desactualizado.
 
 ## 4. Tecnologías
 
@@ -213,7 +213,7 @@ El APK queda en `android/app/build/outputs/apk/`.
 python -m unittest discover -s tests
 ```
 
-Son más de 1.200 pruebas automáticas: cada ruta con sus roles, las reglas de negocio, la web de administración, las copias de seguridad y el contrato de la API. Por defecto usan una base SQLite en memoria, así que no tocan tu base.
+Son más de 1.200 pruebas automáticas: cada ruta con sus roles, las reglas de negocio, la web de administración, las copias de seguridad, los documentos legales y el contrato de la API. Por defecto usan una base SQLite en memoria, así que no tocan tu base.
 
 **En PostgreSQL.** Crea una base **vacía, solo para pruebas**, y dile a las pruebas cuál es:
 
@@ -232,7 +232,7 @@ coverage report                                      # falla si la cobertura baj
 ruff check . --select F,E9 --exclude migrations
 ```
 
-**Pipeline.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre con cada subida a las ramas principales y en cada pull request: Ruff, las pruebas con cobertura en SQLite y en PostgreSQL, `pip-audit` (librerías con fallas conocidas) y el armado del APK.
+**Pipeline.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre con cada subida a las ramas principales y en cada pull request: Ruff, las pruebas con cobertura en SQLite y en PostgreSQL, `pip-audit` (librerías con fallas conocidas) y el armado del APK. También corre al subir una etiqueta de versión (`v1.0.0-rc.1`, `v1.0.0`); con la versión final (`v1.0.0`, sin guion) además exige que los ocho documentos legales estén vigentes (ver [`backend/legal/LEEME.md`](backend/legal/LEEME.md)).
 
 **App Android.** Todavía no tiene pruebas automáticas propias: el pipeline comprueba que compila y arma el APK, y las funciones se prueban a mano.
 
@@ -244,6 +244,8 @@ Hay dos formas de correr DOMUX:
 2. **Servidor de pruebas en Render.** [`render.yaml`](render.yaml) describe el servicio web `domux-ga4` (rama `release/v1.0-reducida`, Python 3.11.9, `gunicorn app:app`, revisión de salud en `/api/health`) y una base PostgreSQL 18. En el panel de Render se crea con **New + › Blueprint**. Sus secretos (`JWT_SECRET`, las contraseñas de las cuentas de prueba y `FIREBASE_SERVICE_ACCOUNT_JSON`) se escriben en el panel, nunca en el repositorio. Con cada subida, el pipeline arma el APK `prodDebug` que apunta a ese servidor; se baja desde la pestaña **Actions** de GitHub y dura 14 días.
 
 Las copias de seguridad de la base (diarias y automáticas, con su restauración) están explicadas en [`backend/scripts/LEEME.md`](backend/scripts/LEEME.md).
+
+Los documentos legales (política de datos, términos, cookies y los demás) se leen sin iniciar sesión: en la web en `/web/legal`, en la app desde el inicio de sesión y desde «Más» o «Mi hogar», y en la API en `/api/legal`. Hoy los ocho están «en preparación»; cómo se escribe y se publica cada uno está en [`backend/legal/LEEME.md`](backend/legal/LEEME.md).
 
 ## 12. Estructura del repositorio
 
@@ -264,7 +266,8 @@ Las copias de seguridad de la base (diarias y automáticas, con su restauración
 │   ├── services/                   → Las reglas de negocio
 │   ├── web/                        → Web de administración: vistas, plantillas HTML y estilos
 │   ├── migrations/                 → Los cambios de la base de datos, en orden (Alembic)
-│   ├── scripts/                    → Copia de seguridad y restauración de la base
+│   ├── legal/                      → Los textos de los documentos legales (uno por archivo)
+│   ├── scripts/                    → Copia de seguridad y restauración de la base, y revisión de los documentos legales
 │   ├── tests/                      → Pruebas automáticas
 │   ├── app.py                      → Arranque del servidor y migraciones
 │   ├── models.py                   → Las tablas de la base de datos

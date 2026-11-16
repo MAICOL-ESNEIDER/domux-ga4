@@ -65,6 +65,18 @@ administración.
   huella SHA-256, y solo después de comprobar que se guardó bien se retira de las listas del día a
   día (ADR-013, DEC-090 y DEC-103). Se puede consultar, restaurar y descargar.
 - Copia de respaldo descargable, sin contraseñas ni claves.
+- Copia de seguridad diaria de la base de datos: deja las últimas 7 copias, cada una con su huella
+  SHA-256, y un programa las restaura en otra base para comprobarlas (TT-009).
+
+**Documentos legales**
+- Espacio para los ocho documentos que pide la ley de protección de datos personales: política de
+  tratamiento, aviso de privacidad, autorización, términos y condiciones, consultas y reclamos,
+  cookies, responsable y encargado, y licencias de terceros. Cada uno es un archivo de
+  `backend/legal/`; se lee sin iniciar sesión en la web (`/web/legal`), en la API (`/api/legal`) y
+  en la app («Legal y privacidad» en «Más» o «Mi hogar», y un enlace en el inicio de sesión). Los
+  formularios que piden la autorización de datos enlazan a su texto.
+- Hoy los ocho están «en preparación». Un programa revisa que cada texto esté bien armado y, para la
+  versión final, exige que todos estén vigentes (`python -m scripts.verificar_legal`).
 
 **App Android**
 - Menú y pantalla de inicio por rol, íconos, colores con nombre y avisos explícitos de éxito y error
@@ -79,6 +91,13 @@ administración.
   (TT-021, TT-023).
 - Pruebas automáticas que vigilan los permisos de todas las rutas (nadie queda sin sesión ni sin
   rol) y que ninguna lista haga una consulta más por cada fila.
+- Contrato de la API en OpenAPI 3.0 (`docs/api/openapi.yaml`), con una prueba que lo compara con el
+  servidor real en cada cambio (TT-022).
+- Documentación para entregar: README con las secciones de la guía (TT-016), guía para colaborar y
+  plantilla de pull request (TT-015), y licencia de todos los derechos reservados con los avisos de
+  las librerías de terceros (TT-019).
+- El pipeline también corre al subir una etiqueta de versión; con la versión final exige los
+  documentos legales vigentes.
 
 ### Cambiado
 - El Excel se maneja solo en la web de administración; la app no guarda archivos en el celular.
@@ -110,6 +129,10 @@ administración.
   prueba nacen solo si se configuran por variables de entorno (TT-010).
 - Servidor cerrado por defecto (CORS) y el token del QR oculto en los registros (SEC-012).
 - Librerías sin fallas conocidas y con versiones fijas (TT-023).
+
+### Pendiente antes de entregar la versión reducida
+- Escribir y revisar los ocho textos legales (hoy están «en preparación»): una persona debe
+  revisarlos antes de marcarlos como vigentes.
 
 ### Pendiente para la versión completa
 - Cifrar con una clave los archivos que se exportan.

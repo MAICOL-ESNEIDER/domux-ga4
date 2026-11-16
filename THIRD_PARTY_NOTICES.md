@@ -135,7 +135,8 @@ fuente, hay que agregarlo en este archivo.
 
 ## Herramientas de desarrollo y pruebas (no forman parte del producto)
 
-`coverage` (Apache-2.0), `ruff` (MIT) y `pip-audit` (Apache-2.0), declaradas en `backend/requirements-dev.txt`.
+`coverage` (Apache-2.0), `ruff` (MIT), `pip-audit` (Apache-2.0) y `PyYAML` (MIT), declaradas en `backend/requirements-dev.txt`.
+`PyYAML` solo lo usa la prueba que lee el contrato de la API (`docs/api/openapi.yaml`).
 
 ## Servicios externos (no son librerías)
 
