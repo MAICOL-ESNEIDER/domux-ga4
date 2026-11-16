@@ -1,11 +1,14 @@
 # Pipeline de integración continua de DOMUX (TT-021).
 # Con cada cambio que se sube: prueba el servidor en SQLite y en PostgreSQL,
 # mide la cobertura, revisa las librerías y arma el APK de la app para probarlo.
+# Al subir una etiqueta de versión (v1.0.0-rc.1, v1.0.0...) corre lo mismo y, solo si es la versión final
+# (una etiqueta sin guion), además exige que los ocho documentos legales estén escritos y vigentes.
 name: Pruebas y APK
 
 on:
   push:
     branches: [release/v1.0-reducida, develop, main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -60,6 +63,9 @@ jobs:
       - name: Librerías con fallas conocidas
         if: matrix.base == 'sqlite'
         run: pip-audit -r requirements.txt
+      - name: Documentos legales listos para entregar (solo en la versión final)
+        if: matrix.base == 'sqlite' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+        run: python -m scripts.verificar_legal --exigir-vigentes
       - name: Reporte de estilo (informativo)
         if: matrix.base == 'sqlite'
         run: ruff check . --exit-zero --statistics --exclude migrations
