@@ -14,7 +14,8 @@ info:
 
     Se llama a `POST /api/auth/login` con el correo y la contraseña. La respuesta trae un `token` (un JWT, una
     «llave» firmada que dura 7 días). Todas las demás rutas piden ese token en el encabezado
-    `Authorization: Bearer <token>`.
+    `Authorization: Bearer <token>`, salvo las públicas: `GET /api/health` y los documentos legales (`GET /api/legal` y
+    `GET /api/legal/{slug}`), que se pueden leer antes de iniciar sesión.
 
     - Sin token, o con un token vencido o inválido, la respuesta es **401**.
     - Si la cuenta se desactivó o se cambió su contraseña, los tokens anteriores dejan de servir (401).
@@ -124,6 +125,8 @@ tags:
   description: Códigos QR de acceso para los visitantes
 - name: Vehículos
   description: Vehículos de visitantes y de residentes
+- name: Legal
+  description: Documentos legales (política de datos, términos, cookies y más); públicos
 security:
 - bearerAuth: []
 paths:
@@ -3200,6 +3203,69 @@ paths:
                     example: ok
                     enum:
                     - ok
+  /api/legal:
+    get:
+      tags:
+      - Legal
+      summary: Listar los documentos legales
+      description: |-
+        **Quién puede usarla:** Pública: no pide sesión.
+
+        Los documentos que la ley pide (política de datos, términos y condiciones, cookies...), en el orden en que se muestran y sin su texto. Es pública porque la persona debe poder leerlos antes de iniciar sesión: la pantalla de inicio de sesión de la app y de la web enlazan aquí. `status` dice si el texto ya está publicado (`vigente`) o todavía está en preparación (`pendiente`).
+      operationId: legalListDocuments
+      x-endpoint: legal.list_documents
+      security: []
+      responses:
+        '200':
+          description: Los documentos, en el orden en que se muestran
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - documents
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LegalDocumentSummary'
+  /api/legal/{slug}:
+    get:
+      tags:
+      - Legal
+      summary: Leer un documento legal
+      description: |-
+        **Quién puede usarla:** Pública: no pide sesión.
+
+        El documento completo. El texto viene en `blocks`: títulos, párrafos y listas, para dibujarlos sin tener que entender Markdown. Es pública, igual que la lista.
+      operationId: legalGetDocument
+      x-endpoint: legal.get_document
+      security: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        description: Nombre del documento, uno de los que devuelve la lista
+        schema:
+          type: string
+          enum:
+          - politica-datos
+          - aviso-privacidad
+          - autorizacion-datos
+          - terminos
+          - consultas-reclamos
+          - cookies
+          - responsable
+          - licencias-terceros
+      responses:
+        '200':
+          description: El documento con su texto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalDocument'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/notifications:
     get:
       tags:
@@ -7285,6 +7351,138 @@ components:
         message:
           type: string
           description: Mensaje para mostrarle a la persona, en español
+    LegalDocumentSummary:
+      type: object
+      description: Un documento legal en la lista, sin su texto.
+      required:
+      - slug
+      - title
+      - summary
+      - status
+      - version
+      - effectiveFrom
+      properties:
+        slug:
+          type: string
+          description: Nombre del documento; es el que va en la dirección
+          example: politica-datos
+          enum:
+          - politica-datos
+          - aviso-privacidad
+          - autorizacion-datos
+          - terminos
+          - consultas-reclamos
+          - cookies
+          - responsable
+          - licencias-terceros
+        title:
+          type: string
+          description: Título del documento
+          example: Política de tratamiento de datos personales
+        summary:
+          type: string
+          description: Una frase que dice de qué trata
+        status:
+          type: string
+          description: '«pendiente»: todavía no tiene su texto final ni validez; «vigente»: ya está publicado'
+          enum:
+          - pendiente
+          - vigente
+        version:
+          type: string
+          description: Versión del texto publicado; nulo mientras está pendiente
+          nullable: true
+          example: '1.0'
+        effectiveFrom:
+          type: string
+          description: Día desde el que rige el texto, AAAA-MM-DD; nulo mientras está pendiente
+          nullable: true
+          example: '2026-12-01'
+          format: date
+    LegalBlock:
+      type: object
+      description: 'Un trozo del texto: un título, un párrafo o una lista. Cada bloque trae solo los datos de su
+        clase.'
+      required:
+      - type
+      properties:
+        type:
+          type: string
+          description: Qué clase de bloque es
+          enum:
+          - heading
+          - paragraph
+          - list
+        level:
+          type: integer
+          description: 'Solo en `heading`: el nivel del título, de 1 a 3'
+          minimum: 1
+          maximum: 3
+        text:
+          type: string
+          description: 'Solo en `heading` y `paragraph`: el texto'
+        ordered:
+          type: boolean
+          description: 'Solo en `list`: verdadero si es numerada (los números los pone quien la dibuja)'
+        items:
+          type: array
+          items:
+            type: string
+          description: 'Solo en `list`: los elementos, en orden'
+    LegalDocument:
+      type: object
+      description: Un documento legal completo.
+      required:
+      - slug
+      - title
+      - summary
+      - status
+      - version
+      - effectiveFrom
+      - blocks
+      properties:
+        slug:
+          type: string
+          description: Nombre del documento; es el que va en la dirección
+          example: politica-datos
+          enum:
+          - politica-datos
+          - aviso-privacidad
+          - autorizacion-datos
+          - terminos
+          - consultas-reclamos
+          - cookies
+          - responsable
+          - licencias-terceros
+        title:
+          type: string
+          description: Título del documento
+          example: Política de tratamiento de datos personales
+        summary:
+          type: string
+          description: Una frase que dice de qué trata
+        status:
+          type: string
+          description: '«pendiente»: todavía no tiene su texto final ni validez; «vigente»: ya está publicado'
+          enum:
+          - pendiente
+          - vigente
+        version:
+          type: string
+          description: Versión del texto publicado; nulo mientras está pendiente
+          nullable: true
+          example: '1.0'
+        effectiveFrom:
+          type: string
+          description: Día desde el que rige el texto, AAAA-MM-DD; nulo mientras está pendiente
+          nullable: true
+          example: '2026-12-01'
+          format: date
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalBlock'
+          description: El texto, en el orden en que se lee
     User:
       type: object
       description: Una cuenta de la aplicación.

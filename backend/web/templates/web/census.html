@@ -35,6 +35,7 @@
   </div>
   {{ checkbox("consent", "Confirmo que la unidad tiene la autorización de tratamiento de datos de cada residente del archivo.",
               help="Es la autorización de la Ley 1581 de 2012. Sin ella no se pueden cargar sus datos.") }}
+  <p class="help"><a href="{{ url_for('web.legal_document', slug='autorizacion-datos') }}" target="_blank" rel="noopener">Ver el texto de la autorización</a> (se abre en otra pestaña).</p>
   <div class="form-actions">
     <button type="submit" class="btn">Importar el censo</button>
   </div>

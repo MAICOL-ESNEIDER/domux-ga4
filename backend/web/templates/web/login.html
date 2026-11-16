@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% from "web/_macros.html" import brand_parts %}
+{% from "web/_macros.html" import brand_parts, legal_links %}
 {% set page_title = "Iniciar sesión" %}
 
 {% block content %}
@@ -29,4 +29,6 @@
 <p class="small muted mt-1">
   ¿Eres residente o guardia? Usa la app DOMUX en tu celular o en la tablet de portería.
 </p>
+
+{{ legal_links() }}
 {% endblock %}

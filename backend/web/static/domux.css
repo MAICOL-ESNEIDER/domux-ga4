@@ -405,6 +405,23 @@ progress.reading { display: block; width: 100%; height: 12px; margin-top: .5rem;
 .error-page { text-align: center; padding: 3rem 1rem; }
 .error-page .code { font-size: 4rem; font-weight: 700; color: var(--primary); line-height: 1; }
 
+/* --- Documentos legales: lista, texto y enlaces al pie ------------------------------------------- */
+
+.auth-card.auth-card-wide { width: min(100%, 760px); }
+.auth-card-wide h1, .auth-card-wide .lead { text-align: left; }
+.legal-list { list-style: none; margin: 0; padding: 0; }
+.legal-list .card { margin-bottom: 1rem; }
+.legal-list .card h2 { font-size: 1.1rem; margin: 0 0 .35rem; }
+.legal-list .card p { margin: 0 0 .5rem; }
+.legal-text { max-width: 70ch; }
+.legal-text h2 { font-size: 1.15rem; margin: 1.5rem 0 .5rem; }
+.legal-text h3 { font-size: 1rem; margin: 1.25rem 0 .4rem; }
+.legal-text p, .legal-text li { line-height: 1.6; }
+.legal-text ul, .legal-text ol { padding-left: 1.4rem; }
+.legal-links { display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: center; margin-top: 1rem; font-size: .875rem; }
+.site-footer { margin-top: auto; padding: 1rem 1.5rem 1.5rem; }
+.site-footer .legal-links { margin-top: 0; justify-content: flex-start; }
+
 /* --- Celular y pantallas angostas: la barra lateral pasa a ser el menú ☰ (WF-004) -------------------- */
 
 @media (max-width: 980px) {

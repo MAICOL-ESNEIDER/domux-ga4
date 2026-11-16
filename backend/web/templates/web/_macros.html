@@ -119,3 +119,22 @@
 <img src="{{ unit.logo_url or url_for('web.static', filename='img/domux-logo.svg') }}" alt="" width="40" height="40">
 <span class="brand-text"><strong{% if unit.name %} class="unit-name"{% endif %}>{{ unit.name or "DOMUX" }}</strong><small>{% if unit.name %}DOMUX · {% endif %}Administración</small></span>
 {%- endmacro %}
+
+{# Si un documento legal ya está publicado (con su versión y fecha) o todavía está en preparación. #}
+{% macro legal_status(document) -%}
+{% if document.status == "vigente" -%}
+{{ badge("Vigente", "success") }}{% if document.version %} Versión {{ document.version }}{% endif %}{% if document.effectiveFrom %}, desde el {{ document.effectiveFrom|date_es }}{% endif %}
+{%- else -%}
+{{ badge("En preparación", "progress") }}
+{%- endif %}
+{%- endmacro %}
+
+{# Los enlaces a los documentos legales: van bajo el inicio de sesión y al pie de cada página con menú. #}
+{% macro legal_links() -%}
+<nav class="legal-links" aria-label="Información legal">
+  <a href="{{ url_for('web.legal_document', slug='politica-datos') }}">Política de datos</a>
+  <a href="{{ url_for('web.legal_document', slug='terminos') }}">Términos y condiciones</a>
+  <a href="{{ url_for('web.legal_document', slug='cookies') }}">Cookies</a>
+  <a href="{{ url_for('web.legal_index') }}">Todos los documentos</a>
+</nav>
+{%- endmacro %}

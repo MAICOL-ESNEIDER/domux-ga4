@@ -15,8 +15,11 @@ Si agregas o cambias una ruta, actualiza ``docs/api/openapi.yaml`` y esta prueba
 
 import logging
 import secrets
+import tempfile
 import unittest
 from datetime import timedelta
+from pathlib import Path
+from unittest import mock
 
 import env_setup  # noqa: F401  (va antes de importar la app)
 
@@ -27,7 +30,9 @@ from auth import generate_token
 from contract_checker import METHODS, Contract, load_spec, openapi_path
 from extensions import db
 from models import CommonArea, User
+from services import legal_service
 from structure_fixtures import apartment_for
+from test_legal import PUBLISHED_BODY, document_text, write_documents
 from test_route_guards import ANY_ROLE_ENDPOINTS, PUBLIC_ENDPOINTS, _declared_roles
 from time_utils import colombia_today
 from unit_fixtures import PNG, data_url
@@ -103,6 +108,15 @@ class ContractShapeTests(unittest.TestCase):
             if rule.endpoint not in PASSWORD_CHANGE_EXEMPT:
                 self.assertIn("403", codes, f"{method} {rule} no documenta el 403")
             self.assertTrue(codes & {"200", "201"}, f"{method} {rule} no documenta un éxito")
+
+    def test_the_contract_lists_the_same_legal_documents_as_the_server(self):
+        expected = list(legal_service.DOCUMENT_SLUGS)
+        operation = self.contract.operation("get", "/api/legal/{slug}")
+        slug = next(item for item in operation["parameters"] if item["name"] == "slug")
+        self.assertEqual(slug["schema"]["enum"], expected)
+        schemas = self.spec["components"]["schemas"]
+        self.assertEqual(schemas["LegalDocument"]["properties"]["slug"]["enum"], expected)
+        self.assertEqual(schemas["LegalDocumentSummary"]["properties"]["slug"]["enum"], expected)
 
     def test_every_reference_points_to_something_that_exists(self):
         broken = []
@@ -332,6 +346,7 @@ class ContractContentTests(unittest.TestCase):
 
     def test_a_full_walkthrough_follows_the_contract(self):
         self.walk_session()
+        self.walk_legal()
         self.walk_structure()
         self.walk_users()
         self.walk_unit()
@@ -346,6 +361,22 @@ class ContractContentTests(unittest.TestCase):
             f"{method} {path}" for method, path, _ in self.contract.operations() if (method, path) not in self.used
         )
         self.assertEqual(missing, [], "Operaciones del contrato que el recorrido no probó")
+
+    def walk_legal(self):
+        """Los documentos legales: públicos; primero en preparación y luego uno publicado con todas las clases de bloque."""
+        listed = self.data(None, "GET", "/api/legal")["documents"]
+        self.assertEqual([item["slug"] for item in listed], list(legal_service.DOCUMENT_SLUGS))
+        for item in listed:
+            self.assertEqual(self.data(None, "GET", f"/api/legal/{item['slug']}")["slug"], item["slug"])
+        self.call(None, "GET", "/api/legal/no-existe", expect=404)
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(legal_service, "LEGAL_DIR", Path(folder)):
+            write_documents(folder, terminos=document_text(
+                status="vigente", version="1.0", since="2026-12-01", body=PUBLISHED_BODY,
+            ))
+            published = self.data(None, "GET", "/api/legal/terminos")
+            self.assertEqual(published["version"], "1.0")
+            self.assertEqual([block["type"] for block in published["blocks"]], ["heading", "paragraph", "heading", "list", "list"])
+            self.assertEqual(self.data(None, "GET", "/api/legal")["documents"][3]["status"], "vigente")
 
     def walk_session(self):
         self.call(None, "GET", "/api/health")
