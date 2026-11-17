@@ -458,6 +458,15 @@ interface ApiService {
     @GET("api/legal/{slug}")
     suspend fun getLegalDocument(@Path("slug") slug: String): Response<LegalDocument>
 
+    // El buscador general con «Buscar en» (HU-089), para la administración y la portería. El
+    // parámetro del servidor se llama «in», que en Kotlin es una palabra reservada.
+    @GET("api/search")
+    suspend fun search(
+        @Header("Authorization") auth: String,
+        @Query("q") text: String,
+        @Query("in") place: String? = null
+    ): Response<SearchResponse>
+
     @GET("api/notifications")
     suspend fun getNotifications(@Header("Authorization") auth: String): Response<NotificationsListResponse>
 

@@ -361,7 +361,7 @@ private fun ChosenAccountCard(account: RecentAccount, onChange: () -> Unit) {
 
 /** Círculo con las iniciales; el lector de pantalla lo salta porque el nombre ya se lee al lado. */
 @Composable
-private fun AccountAvatar(account: RecentAccount, size: Dp = 40.dp) {
+internal fun AccountAvatar(account: RecentAccount, size: Dp = 40.dp) {
     Box(
         modifier = Modifier
             .size(size)
@@ -374,7 +374,7 @@ private fun AccountAvatar(account: RecentAccount, size: Dp = 40.dp) {
 }
 
 @Composable
-private fun AccountNameAndEmail(account: RecentAccount, modifier: Modifier = Modifier) {
+internal fun AccountNameAndEmail(account: RecentAccount, modifier: Modifier = Modifier) {
     Column(modifier) {
         Text(account.displayName, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(

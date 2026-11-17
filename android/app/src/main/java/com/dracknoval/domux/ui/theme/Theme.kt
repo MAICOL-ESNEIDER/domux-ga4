@@ -3,6 +3,10 @@ package com.dracknoval.domux.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.dracknoval.domux.data.AppPreferences
 
 /**
  * El tema oscuro de DOMUX, armado con los colores con nombre de [DomuxColor]. El borde de los
@@ -27,12 +31,20 @@ private val DomuxColors = darkColorScheme(
     onErrorContainer = DomuxColor.Bad
 )
 
+/**
+ * El tema de toda la app. El tamaño del texto que la persona eligió en Preferencias se multiplica
+ * por el que ya tenga el celular en sus ajustes: al cambiarlo, todo el texto se vuelve a dibujar.
+ */
 @Composable
 fun DomuxAppTheme(
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = DomuxColors,
-        content = content
-    )
+    val density = LocalDensity.current
+    val scaled = Density(density.density, density.fontScale * AppPreferences.textSize.factor)
+    CompositionLocalProvider(LocalDensity provides scaled) {
+        MaterialTheme(
+            colorScheme = DomuxColors,
+            content = content
+        )
+    }
 }

@@ -97,6 +97,18 @@ administración.
 - Menú y pantalla de inicio por rol, íconos, colores con nombre y avisos explícitos de éxito y error
   (HU-086, HU-002).
 - Buscador con botón «Filtros» en las listas.
+- **Buscador general y botón «+ Nuevo»** (HU-089), solo para la administración y la portería: la caja
+  del inicio y la lupa de la barra de arriba abren el buscador, con el filtro «Buscar en» (todo,
+  personas, apartamentos, vehículos, PQRS, paquetes o visitas) y los resultados agrupados por tipo. Es
+  el mismo del servidor que usa la web (`GET /api/search`); la portería no busca en PQRS. Al tocar un
+  resultado se abre la pantalla donde se ve, ya con la búsqueda puesta. El botón **«+ Nuevo»** de la
+  barra de arriba crea de una vez: en administración un comunicado, un usuario, una torre, un
+  apartamento o una PQRS a nombre de un residente; en portería una visita, un paquete o la entrada de
+  un vehículo.
+- **Preferencias**, en el menú de todos los roles: el tamaño del texto (normal, grande o muy grande),
+  que se aplica al instante a toda la app y se suma al que ya tenga el celular, y las cuentas
+  recordadas en ese celular, que se quitan de una en una o todas juntas. Se guardan solo en el
+  celular; el servidor no guarda nada de esto.
 - «Recordar mi correo en este celular» en el inicio de sesión (HU-001): la casilla empieza apagada
   y solo guarda el correo y el nombre, cifrados en el celular, nunca la contraseña. Salen como
   «Cuentas recientes en este celular» (hasta 5): se toca la cuenta y se escribe solo la contraseña.
@@ -160,6 +172,7 @@ administración.
   revisarlos antes de marcarlos como vigentes.
 
 ### Pendiente para la versión completa
+- Cambiar los colores de la app (Mixto u Oscuro) desde Preferencias, como ya se puede en la web.
 - Cifrar con una clave los archivos que se exportan.
 - Recuperar la cuenta por correo (hoy la restablece la administración).
 - Guardar los archivos adjuntos aparte de la base de datos y pedirlos solo cuando se abren.

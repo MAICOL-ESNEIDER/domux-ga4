@@ -59,10 +59,17 @@ private const val TAB_PUBLISH = "Publicar"
  * torre y vencimiento. La pantalla solo dibuja lo que le da [AnnouncementsViewModel].
  */
 @Composable
-fun AnnouncementsScreen(navController: NavController, viewModel: AnnouncementsViewModel = viewModel()) {
+fun AnnouncementsScreen(
+    navController: NavController,
+    initialTab: String = "",
+    viewModel: AnnouncementsViewModel = viewModel()
+) {
     val state by viewModel.state.collectAsState()
     val tabs = if (Session.isAdmin) listOf(TAB_CURRENT, TAB_ARCHIVED, TAB_PUBLISH) else listOf(TAB_CURRENT, TAB_ARCHIVED)
-    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    // «+ Nuevo → Comunicado» abre directo la pestaña de publicar.
+    var selectedTab by rememberSaveable {
+        mutableStateOf(if (initialTab == "publicar") tabs.indexOf(TAB_PUBLISH).coerceAtLeast(0) else 0)
+    }
     val tab = selectedTab.coerceIn(tabs.indices)
     var retiring by remember { mutableStateOf<Announcement?>(null) }
 

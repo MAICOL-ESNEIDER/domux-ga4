@@ -39,8 +39,22 @@ private const val PASSWORD_RULE = "Mínimo 8 caracteres, con mayúscula, minúsc
  * editar, la contraseña y el PIN están en [UsersViewModel].
  */
 @Composable
-fun CreateUserScreen(navController: NavController, viewModel: UsersViewModel = viewModel()) {
+fun CreateUserScreen(
+    navController: NavController,
+    // Lo que piden los atajos: «crear» abre la pestaña de crear usuario; un texto deja la lista ya buscada.
+    initialTab: String = "",
+    initialSearch: String = "",
+    viewModel: UsersViewModel = viewModel()
+) {
     val state by viewModel.state.collectAsState()
+
+    LaunchedEffect(initialTab, initialSearch) {
+        if (initialTab == "crear") {
+            viewModel.selectTab(1)
+        } else if (initialSearch.isNotBlank()) {
+            viewModel.updateFilters { it.copy(search = initialSearch) }
+        }
+    }
 
     DomuxScreenScaffold(title = "Gestión de usuarios", navController = navController) { padding ->
         Column(
