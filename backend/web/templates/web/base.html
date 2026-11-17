@@ -8,6 +8,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('web.static', filename='img/domux-logo.svg') }}">
   <link rel="stylesheet" href="{{ url_for('web.static', filename='domux.css') }}">
   <noscript><link rel="stylesheet" href="{{ url_for('web.static', filename='nojs.css') }}"></noscript>
+  {# Pone la apariencia y el tamaño del texto que esta persona eligió, antes de dibujar la página (sin parpadeo). #}
+  <script src="{{ url_for('web.static', filename='preferencias-inicio.js') }}"></script>
   <script src="{{ url_for('web.static', filename='domux.js') }}" defer></script>
 </head>
 <body>
@@ -30,6 +32,21 @@
         {% endfor %}
       </ul>
     {% endfor %}
+    {# Quién entró, abajo del menú (como en el diseño aprobado). #}
+    <div class="sidebar-user">
+      <div class="user-card">
+        <span class="avatar" aria-hidden="true">{{ initials(web_user.full_name) }}</span>
+        <span><strong>{{ web_user.full_name }}</strong><small>{{ role_labels.get(web_user.role, web_user.role) }}</small></span>
+      </div>
+      <div class="user-links">
+        {% if page_exists("web.preferences") %}<a href="{{ url_for('web.preferences') }}">{{ icon("settings") }} Preferencias</a>{% endif %}
+        <a href="{{ url_for('web.password_change') }}">Cambiar contraseña</a>
+        <form method="post" action="{{ url_for('web.logout') }}">
+          {{ csrf_input() }}
+          <button type="submit">{{ icon("logout") }} Cerrar sesión</button>
+        </form>
+      </div>
+    </div>
   </nav>
 
   <div class="main">
@@ -38,12 +55,9 @@
               aria-expanded="false" aria-controls="menu">
         {{ icon("menu") }}<span class="sr-only">Abrir o cerrar el menú</span>
       </button>
-      <nav class="crumbs" aria-label="Ruta">
-        <a href="{{ url_for('web.panel') }}">Inicio</a>
-        {% if page_title and request.endpoint != 'web.panel' %} › <span aria-current="page">{{ page_title }}</span>{% endif %}
-      </nav>
       {% set find = search_form() %}
       <form class="search" role="search" method="get" action="{{ url_for('web.search_page') }}">
+        {{ icon("search") }}
         <label class="sr-only" for="buscar-texto">Buscar</label>
         <input type="search" id="buscar-texto" name="q" value="{{ find.text }}" maxlength="100"
                placeholder="Buscar personas, apartamentos, placas…" autocomplete="off">
@@ -51,16 +65,17 @@
         <select id="buscar-en" name="en">
           {% for option in find.places %}<option value="{{ option.value }}"{% if option.value == find.place %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
         </select>
-        <button type="submit" class="btn btn-small">{{ icon("search") }}<span class="sr-only">Buscar</span></button>
+        <button type="submit" class="btn btn-small">Buscar</button>
       </form>
-      <div class="who">
-        <span class="who-name">{{ web_user.full_name }} · {{ role_labels.get(web_user.role, web_user.role) }}</span>
-        <a class="btn btn-quiet btn-small" href="{{ url_for('web.password_change') }}">Cambiar contraseña</a>
-        <form method="post" action="{{ url_for('web.logout') }}">
-          {{ csrf_input() }}
-          <button type="submit" class="btn btn-quiet btn-small">{{ icon("logout") }} Cerrar sesión</button>
-        </form>
-      </div>
+      {% set creatable = new_items() %}
+      {% if creatable %}
+      <details class="new-menu" data-new-menu>
+        <summary class="btn">{{ icon("plus") }} Nuevo</summary>
+        <div class="new-menu-list">
+          {% for item in creatable %}<a href="{{ item.url }}">{{ icon(item.icon) }} {{ item.label }}</a>{% endfor %}
+        </div>
+      </details>
+      {% endif %}
     </header>
     <main id="contenido" tabindex="-1">
     {# Solo tras entrar con «Recordar mi correo»: domux.js guarda el correo y el nombre en este navegador. #}

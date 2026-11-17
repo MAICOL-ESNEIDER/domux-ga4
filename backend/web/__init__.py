@@ -39,6 +39,7 @@ def init_web(app):
         views_legal,
         views_notifications,
         views_panel,
+        views_preferences,
         views_pqrs,
         views_registry,
         views_reservations,

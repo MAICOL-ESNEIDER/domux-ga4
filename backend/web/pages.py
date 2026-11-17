@@ -61,6 +61,8 @@ ICONS = {
                '<path d="M10 12h4"/>',
     "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
     "search": '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+    "plus": '<path d="M12 5v14M5 12h14"/>',
+    "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
     "filter": '<path d="M4 7h16M7 12h10M10 17h4"/>',
     "close": '<path d="M6 6l12 12M18 6L6 18"/>',
     # Los mismos tres íconos de estado de la app: acierto, en curso y alerta (HU-086).
@@ -73,6 +75,16 @@ ICONS = {
 }
 
 ROLE_LABELS = {"ADMIN": "Administración", "GUARD": "Portería", "RESIDENT": "Residente"}
+
+#: Lo que se puede crear desde el botón «+ Nuevo» de la barra de arriba: (texto, página, ícono).
+#: Una página que todavía no existe no se muestra.
+NEW_ITEMS = (
+    ("Comunicado", "web.announcement_new", "megaphone"),
+    ("Usuario", "web.user_new", "users"),
+    ("Torre", "web.tower_new", "building"),
+    ("Apartamento", "web.apartment_new", "building"),
+    ("PQRS a nombre de un residente", "web.pqrs_new", "chat"),
+)
 
 
 def icon(name):
@@ -132,6 +144,22 @@ def unread_notifications():
     if "unread_count" not in g:
         g.unread_count = Notification.query.filter_by(user_id=user.id, is_read=False).count()
     return g.unread_count
+
+
+def new_items():
+    """Las opciones del menú «+ Nuevo» que ya tienen página, con su dirección."""
+    return [
+        {"label": label, "url": url_for(endpoint), "icon": icon_name}
+        for label, endpoint, icon_name in NEW_ITEMS
+        if page_exists(endpoint)
+    ]
+
+
+def initials(name):
+    """Las iniciales para el círculo de quien entró: «Lucía Vargas» → «LV»; con una sola palabra, sus dos primeras letras."""
+    words = (name or "").split()
+    letters = words[0][0] + words[1][0] if len(words) > 1 else (words[0][:2] if words else "?")
+    return letters.upper()
 
 
 def unit_brand():
@@ -199,6 +227,8 @@ for _name, _function in (
     ("filter_chips", filter_chips),
     ("upload_help", upload_help),
     ("menu_groups", menu_groups),
+    ("new_items", new_items),
+    ("initials", initials),
     ("page_exists", page_exists),
     ("page_url", page_url),
     ("unit_brand", unit_brand),
