@@ -536,6 +536,13 @@ object DatosDeMentira {
             id = 3, name = "Zona BBQ", openTime = "10:00", closeTime = "22:00", slotMinutes = 240,
             slots = listOf("10:00-14:00", "14:00-18:00", "18:00-22:00"), capacity = 15, minAdvanceDays = 2,
             maxAdvanceDays = 45, cancelDeadlineDays = 2, weeklyLimit = 1
+        ),
+        // La administración la cerró y escribió el motivo: se ve «Cerrada» y no deja reservar.
+        CommonArea(
+            id = 4, name = "Cancha múltiple", openTime = "08:00", closeTime = "20:00", slotMinutes = 120,
+            slots = listOf("08:00-10:00", "10:00-12:00", "14:00-16:00", "16:00-18:00"), capacity = 20,
+            minAdvanceDays = 1, maxAdvanceDays = 30, cancelDeadlineDays = 1, weeklyLimit = 2,
+            isOpen = false, closedReason = "Cambio del piso: la cancha reabre el 3 de diciembre."
         )
     )
 

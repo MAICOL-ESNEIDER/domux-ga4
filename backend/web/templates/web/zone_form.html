@@ -1,18 +1,24 @@
 {% extends "web/base.html" %}
 {% from "web/_forms.html" import checkbox, field, select %}
-{% set page_title = "Reglas de " ~ area.name %}
+{% set page_title = ("Reglas de " ~ area.name) if area else "Nueva zona" %}
 
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Reglas de {{ area.name }}</h1>
-    <p>Las reservas nuevas usan estas reglas desde que guardas. Las reservas que ya existen no cambian.</p>
+    <h1>{% if area %}Reglas de {{ area.name }}{% else %}Nueva zona{% endif %}</h1>
+    <p>{% if area %}Las reservas nuevas usan estas reglas desde que guardas. Las reservas que ya existen no cambian.{% else %}Escribe el nombre de la zona y ajusta sus reglas. Ya vienen con valores comunes: cámbialos solo si tu unidad usa otros. Cuando la guardes, los residentes ya pueden reservarla.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ url_for('web.zones_list') }}">Volver</a>
   </div>
 </div>
 
-<form method="post" action="{{ url_for('web.zone_edit', area_id=area.id) }}" class="card form-narrow"
-      aria-label="Reglas de {{ area.name }}">
+<form method="post" action="{{ url_for('web.zone_edit', area_id=area.id) if area else url_for('web.zone_new') }}"
+      class="card form-narrow" aria-label="{{ 'Reglas de ' ~ area.name if area else 'Nueva zona' }}">
   {{ csrf_input() }}
+
+  {{ field("name", "Nombre de la zona", values.name, required=True, maxlength=max_name,
+           help="Por ejemplo: Piscina, Salón social, Cancha múltiple. No puede repetirse con otra zona de la unidad.") }}
 
   <h2>Horario</h2>
   <div class="form-row">
@@ -50,8 +56,24 @@
             help="Ese día de la semana la zona no se puede reservar. Si ese día es festivo, el cierre pasa al día siguiente.") }}
 
   <div class="form-actions">
-    <button type="submit" class="btn">Guardar las reglas</button>
+    <button type="submit" class="btn">{% if area %}Guardar las reglas{% else %}Crear la zona{% endif %}</button>
     <a class="btn btn-quiet" href="{{ url_for('web.zones_list') }}">Cancelar</a>
   </div>
 </form>
+
+{% if area %}
+<section class="card form-narrow" aria-labelledby="retire-title">
+  <h2 id="retire-title">Retirar la zona</h2>
+  <p>Úsalo cuando la zona ya no existe en la unidad. Deja de ofrecerse para reservar, pero no se borra: sus reservas anteriores siguen mostrando su nombre. Si solo está dañada por un tiempo, mejor ciérrala con un motivo.</p>
+  {% if upcoming %}
+  <p class="notice notice-info">Ahora tiene {{ plural(upcoming, "reserva próxima", "reservas próximas") }}. Cancélalas primero desde <a href="{{ url_for('web.reservations_list') }}">Reservas</a> o cierra la zona mientras tanto; después podrás retirarla.</p>
+  <button type="button" class="btn btn-danger" disabled>Retirar la zona</button>
+  {% else %}
+  <form method="post" action="{{ url_for('web.zone_retire', area_id=area.id) }}">
+    {{ csrf_input() }}
+    <button type="submit" class="btn btn-danger" data-confirm="¿Retirar {{ area.name }}? Dejará de ofrecerse para reservar. Su historial se conserva." data-confirm-label="Retirar">Retirar la zona</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}

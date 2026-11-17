@@ -602,6 +602,17 @@ class ContractContentTests(unittest.TestCase):
         self.call(admin, "PUT", f"/api/reservations/{reservation['id']}/status", json={"status": "aprobada"})
         self.call(resident, "PUT", f"/api/reservations/{by_admin['id']}/cancel")
 
+        # La administración agrega una zona, la cierra con un motivo (nadie reserva mientras tanto), la abre y la retira.
+        pool = self.data(admin, "POST", "/api/common-areas", expect=201, json={"name": "Piscina", "capacity": 12})["area"]
+        self.call(admin, "GET", "/api/common-areas", query={"includeRetired": "true"})
+        self.call(admin, "POST", f"/api/common-areas/{pool['id']}/close", json={"reason": "Falla en la bomba de agua."})
+        self.call(resident, "GET", "/api/reservations/availability", query={"commonAreaId": pool["id"], "date": day.isoformat()})
+        self.call(resident, "POST", "/api/reservations", expect=409, json={
+            "commonAreaId": pool["id"], "date": day.isoformat(), "timeSlot": "08:00-10:00",
+        })
+        self.call(admin, "POST", f"/api/common-areas/{pool['id']}/open")
+        self.call(admin, "DELETE", f"/api/common-areas/{pool['id']}")
+
     def walk_notifications(self):
         resident = self.resident
         notifications = self.data(resident, "GET", "/api/notifications")["notifications"]

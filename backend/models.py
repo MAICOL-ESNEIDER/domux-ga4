@@ -987,7 +987,7 @@ class DevicePushToken(db.Model):
     user = db.relationship("User")
 
 
-class CommonArea(db.Model):
+class CommonArea(RetirableMixin, db.Model):
     """Zona común que los residentes pueden reservar, con sus propias reglas.
 
     El horario, el aforo, la anticipación y los plazos (HU-055, RN-020 a RN-022) se
@@ -1005,6 +1005,11 @@ class CommonArea(db.Model):
       mantenimiento; si es festivo, pasa al día siguiente (RN-021).
     * max_consecutive_slots: cuántas franjas seguidas se pueden reservar de una vez.
     * allow_full_day: si se puede reservar el día completo (por ejemplo el salón social).
+    * closed_at, closed_reason y closed_by_id: cierre temporal que escribe la administración
+      (por una falla, por ejemplo). Mientras esté cerrada no recibe reservas nuevas y a quien
+      la consulta se le muestra el motivo; las reservas que ya estaban aprobadas se mantienen.
+    * retired_at y retired_by_id (RetirableMixin): la zona ya no existe en la unidad. Nunca se
+      borra, porque sus reservas viejas siguen apuntando a ella (ADR-013).
     """
 
     __tablename__ = "common_areas"
@@ -1046,6 +1051,16 @@ class CommonArea(db.Model):
     allow_full_day = db.Column(
         db.Boolean, nullable=False, default=DEFAULT_ALLOW_FULL_DAY, server_default=db.false(),
     )
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_reason = db.Column(db.String(300), nullable=True)
+    closed_by_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", name="fk_common_areas_closed_by_id_users"), nullable=True
+    )
+
+    @property
+    def is_closed(self):
+        """True si la administración cerró la zona (no recibe reservas nuevas)."""
+        return self.closed_at is not None
 
     @property
     def slots(self):
@@ -1078,6 +1093,10 @@ class CommonArea(db.Model):
             "maxConsecutiveSlots": self.max_consecutive_slots,
             "allowFullDay": bool(self.allow_full_day),
             "fullDaySlot": self.full_day_slot,
+            "isOpen": not self.is_closed,
+            "closedReason": self.closed_reason if self.is_closed else None,
+            "closedAt": _fmt(self.closed_at),
+            "retiredAt": _fmt(self.retired_at),
         }
 
 

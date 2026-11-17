@@ -33,7 +33,7 @@ from services.announcement_service import (
     visible_announcements,
 )
 from services.audit_service import add_audit_log
-from services import announcement_view, pqrs_service, reservation_view
+from services import announcement_view, pqrs_service, reservation_view, zone_service
 from services.list_view import parse_view
 from services.notification_service import notify_residents, notify_user
 from services.excel_service import (
@@ -52,10 +52,10 @@ from services.reservation_service import (
     weekly_reservation_count,
 )
 from services.zone_rules import (
+    as_sentence,
     days_text,
     human_date,
     is_maintenance_day,
-    parse_zone_rules,
     WEEKDAY_NAMES,
 )
 from validators import (
@@ -740,37 +740,99 @@ def respond_pqrs_batch():
     })
 
 
+def _zone(area_id):
+    """La zona común con ese id (vigente o retirada); si no existe, error 404."""
+    area = db.session.get(CommonArea, area_id)
+    if area is None:
+        raise ApiError("Zona común no encontrada", 404)
+    return area
+
+
 @bp.get("/common-areas")
 @token_required
 @role_required("ADMIN", "GUARD", "RESIDENT")
 def get_common_areas():
-    """Las zonas comunes con sus reglas de reserva (horario, franjas, aforo, plazos...)."""
-    areas = CommonArea.query.order_by(CommonArea.name).all()
-    return jsonify({"areas": [area.to_dict() for area in areas]})
+    """Las zonas comunes con sus reglas de reserva (horario, franjas, aforo, plazos...) y si están abiertas.
+
+    Las retiradas no se ofrecen; la administración puede pedirlas con ``includeRetired=true`` y, en ese
+    caso, ve además cuántas reservas próximas tiene cada zona.
+    """
+    is_admin = g.current_user.role == "ADMIN"
+    include_retired = bool_arg("includeRetired") is True and is_admin
+    items = [area.to_dict() for area in zone_service.active_zones(include_retired=include_retired)]
+    if is_admin:
+        counts = zone_service.upcoming_counts()
+        for item in items:
+            item["upcomingReservations"] = counts.get(item["id"], 0)
+    return jsonify({"areas": items})
+
+
+@bp.post("/common-areas")
+@token_required
+@role_required("ADMIN")
+def create_common_area():
+    """Agrega una zona común a la unidad (DEC-032). Solo la administración.
+
+    Lleva el nombre y, si se quiere, las reglas de reserva; las que no se envíen quedan por defecto.
+    """
+    area = zone_service.create_zone(json_object(required=True), g.current_user)
+    save_changes("Ya existe una zona común con ese nombre.")
+    return jsonify({"message": "Zona común creada", "area": area.to_dict()}), 201
 
 
 @bp.put("/common-areas/<int:area_id>/rules")
 @token_required
 @role_required("ADMIN")
 def update_common_area_rules(area_id):
-    """Cambia las reglas de una zona común (HU-055, RN-022). Solo la administración.
+    """Cambia el nombre y las reglas de una zona común (HU-055, RN-022). Solo la administración.
 
     Solo se cambian los datos que vienen en la solicitud. Las reservas nuevas usan
     las reglas desde ese momento; las que ya existen no se tocan.
     """
-    data = json_object(required=True)
-    area = db.session.get(CommonArea, area_id)
-    if area is None:
-        raise ApiError("Zona común no encontrada", 404)
-    changes = parse_zone_rules(data, area)
-    before = {column: getattr(area, column) for column in changes}
-    for column, value in changes.items():
-        setattr(area, column, value)
-    add_audit_log(
-        "common_area", area.id, "rules_changed", {"before": before, "after": changes}
-    )
-    save_changes()
+    area = zone_service.update_zone(_zone(area_id), json_object(required=True), g.current_user)
+    save_changes("Ya existe una zona común con ese nombre.")
     return jsonify({"message": "Reglas de la zona actualizadas", "area": area.to_dict()})
+
+
+@bp.post("/common-areas/<int:area_id>/close")
+@token_required
+@role_required("ADMIN")
+def close_common_area(area_id):
+    """Cierra una zona con el motivo que verán quienes la consulten (por ejemplo, una falla).
+
+    Mientras esté cerrada no recibe reservas nuevas. Las que ya tenía se mantienen y la administración
+    recibe un aviso con cuántas son. Si la zona ya estaba cerrada, solo cambia el motivo.
+    """
+    area, pending = zone_service.close_zone(_zone(area_id), json_object(), g.current_user)
+    save_changes()
+    return jsonify({
+        "message": "Zona común cerrada",
+        "area": area.to_dict(),
+        "upcomingReservations": pending,
+    })
+
+
+@bp.post("/common-areas/<int:area_id>/open")
+@token_required
+@role_required("ADMIN")
+def open_common_area(area_id):
+    """Vuelve a abrir una zona cerrada: otra vez recibe reservas nuevas."""
+    area = zone_service.open_zone(_zone(area_id), g.current_user)
+    save_changes()
+    return jsonify({"message": "Zona común abierta", "area": area.to_dict()})
+
+
+@bp.delete("/common-areas/<int:area_id>")
+@token_required
+@role_required("ADMIN")
+def retire_common_area(area_id):
+    """Retira una zona que ya no existe en la unidad. No se borra: deja de ofrecerse (ADR-013).
+
+    Con reservas próximas no se puede (409): primero se cancelan desde Reservas.
+    """
+    area = zone_service.retire_zone(_zone(area_id), g.current_user)
+    save_changes()
+    return jsonify({"message": "Zona común retirada", "area": area.to_dict()})
 
 
 @bp.get("/reservations")
@@ -858,7 +920,7 @@ def get_reservation_availability():
     if error := validate_future_or_today_date(day):
         return error_response(400, error)
     area = db.session.get(CommonArea, common_area_id)
-    if area is None:
+    if area is None or area.is_retired:
         return error_response(404, "Zona común no encontrada")
 
     return jsonify({
@@ -885,7 +947,7 @@ def get_reservation_calendar():
     if not 1 <= month <= 12 or not 2000 <= year <= 2100:
         return error_response(400, "El mes o año del calendario no es válido.")
     area = db.session.get(CommonArea, common_area_id)
-    if area is None:
+    if area is None or area.is_retired:
         return error_response(404, "Zona común no encontrada.")
     full_days, closed_days = month_calendar(area, year, month)
     return jsonify({
@@ -895,6 +957,14 @@ def get_reservation_calendar():
         "blockedDates": full_days,
         "closedDates": closed_days,
     })
+
+
+def _closed_zone_message(area, then):
+    """Por qué no se puede reservar: la administración cerró la zona y escribió el motivo.
+
+    ``then`` es lo que sigue al motivo, según quien lo lea (reservar o aprobar).
+    """
+    return f"{area.name} está cerrada por la administración: {as_sentence(area.closed_reason)} {then}"
 
 
 def _zone_request_error(area, data):
@@ -999,8 +1069,10 @@ def create_reservation():
     if not isinstance(area_id, int) or isinstance(area_id, bool):
         return error_response(400, "Selecciona una zona común válida")
     area = db.session.get(CommonArea, area_id)
-    if area is None:
+    if area is None or area.is_retired:
         return error_response(400, "Selecciona una zona común válida")
+    if area.is_closed:
+        return error_response(409, _closed_zone_message(area, "Cuando la reabra, podrás reservar de nuevo."))
     if error := validate_future_or_today_date(data["date"]):
         return error_response(400, error)
     if error := _zone_request_error(area, data):
@@ -1089,6 +1161,11 @@ def update_reservation_status(res_id):
         return error_response(404, "Reserva no encontrada")
     if reservation.status not in PENDING_RESERVATION_STATUSES:
         return error_response(400, "Solo puedes aprobar o rechazar reservas pendientes.")
+    zone = reservation.common_area
+    if status in ACTIVE_RESERVATION_STATUSES and zone is not None and zone.is_closed:
+        return error_response(
+            409, _closed_zone_message(zone, "Reabre la zona para aprobar esta reserva, o recházala.")
+        )
     if status in ACTIVE_RESERVATION_STATUSES and reservation_conflicts(
         reservation.common_area_id,
         reservation.date,

@@ -2,6 +2,7 @@
 reglas en palabras, el formulario de cada zona, guardar solo lo que cambió y los mensajes de la API."""
 
 import unittest
+from datetime import timedelta
 
 from extensions import db
 from models import ANNOUNCEMENT_CATEGORIES, AuditLog, CommonArea, Reservation
@@ -295,6 +296,281 @@ class WebZoneSaveTests(WebZoneCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.reload(self.hall).capacity, 40)
+
+
+class WebZoneManagementTests(WebZoneCase):
+    """Agregar, cerrar con motivo, abrir y retirar zonas desde la web (DEC-032)."""
+
+    REASON = "Falla en la bomba de agua; el técnico viene el jueves."
+
+    def new_zone_form(self, **changes):
+        form = {
+            "name": "Terraza", "openTime": "08:00", "closeTime": "22:00", "slotMinutes": "120",
+            "maxConsecutiveSlots": "1", "capacity": "", "minAdvanceDays": "0", "maxAdvanceDays": "60",
+            "weeklyLimit": "2", "cancelDeadlineDays": "3", "maintenanceWeekday": "",
+        }
+        form.update({key: str(value) for key, value in changes.items()})
+        return form
+
+    def booking(self, area, days_ahead=3, status="aprobada"):
+        reservation = Reservation(
+            resident_id=self.resident.id, common_area_id=area.id,
+            date=(colombia_today() + timedelta(days=days_ahead)).isoformat(), time_slot="10:00-12:00",
+            status=status,
+        )
+        db.session.add(reservation)
+        db.session.commit()
+        return reservation
+
+    def close(self, area, reason=None):
+        return self.post(f"/web/zonas/{area.id}/cerrar", {"reason": self.REASON if reason is None else reason})
+
+    # --- La lista --------------------------------------------------------------------------------
+
+    def test_every_zone_says_if_it_is_open_and_there_is_a_button_to_add_one(self):
+        body = self.page("/web/zonas")
+
+        self.assertEqual(body.count(">Abierta<"), 2)
+        self.assertNotIn(">Cerrada<", body)
+        self.assertIn('href="/web/zonas/nueva">Nueva zona</a>', body)
+        self.assertIn(f'href="/web/zonas/{self.hall.id}/cerrar">Cerrar la zona', body)
+
+    def test_the_list_counts_the_upcoming_reservations_of_each_zone(self):
+        self.booking(self.hall)
+        self.booking(self.hall, 4, "pendiente")
+
+        body = self.page("/web/zonas")
+
+        self.assertIn("2 reservas próximas", body)
+
+    # --- Zona nueva ------------------------------------------------------------------------------
+
+    def test_the_new_zone_form_comes_with_the_usual_rules(self):
+        body = self.page("/web/zonas/nueva")
+
+        self.assertIn("<h1>Nueva zona</h1>", body)
+        self.assertRegex(body, r'name="name" type="text" value="" required')
+        self.assertRegex(body, r'name="openTime" type="time" value="08:00" required')
+        self.assertRegex(body, r'name="closeTime" type="time" value="22:00" required')
+        self.assertRegex(body, r'<option value="120" selected>2 horas</option>')
+        self.assertRegex(body, r'name="weeklyLimit" type="number" value="2" required')
+        self.assertIn("Crear la zona", body)
+        self.assertNotIn("Retirar la zona", body)
+
+    def test_a_new_zone_is_created_with_what_was_written(self):
+        response = self.post("/web/zonas/nueva", self.new_zone_form(
+            name="Salón de juegos", openTime="10:00", closeTime="20:00", slotMinutes=60, capacity=15,
+        ))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/web/zonas")
+        zone = CommonArea.query.filter_by(name="Salón de juegos").one()
+        self.assertEqual((zone.open_time, zone.close_time, zone.slot_minutes, zone.capacity), ("10:00", "20:00", 60, 15))
+        page = self.page("/web/zonas")
+        self.assertIn("Zona Salón de juegos creada.", page)
+        self.assertIn("De 10:00 a 20:00", page)
+        self.assertEqual(AuditLog.query.filter_by(entity_type="common_area", action="created").count(), 1)
+
+    def test_a_new_zone_with_only_the_name_gets_the_usual_rules(self):
+        self.post("/web/zonas/nueva", {"name": "Biblioteca"})
+
+        zone = CommonArea.query.filter_by(name="Biblioteca").one()
+        self.assertEqual((zone.open_time, zone.close_time, zone.slot_minutes, zone.weekly_limit), ("08:00", "22:00", 120, 2))
+        self.assertIsNone(zone.capacity)
+
+    def test_a_new_zone_needs_a_name_and_keeps_what_was_written(self):
+        response = self.post("/web/zonas/nueva", self.new_zone_form(name="", capacity=12))
+
+        body = self.text(response)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("El nombre de la zona es obligatorio.", body)
+        self.assertRegex(body, r'name="capacity" type="number" value="12"')
+        self.assertEqual(CommonArea.query.count(), 2)
+
+    def test_the_name_of_another_zone_is_refused_with_the_message_of_the_api(self):
+        response = self.post("/web/zonas/nueva", self.new_zone_form(name="piscina"))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Ya existe una zona común llamada «piscina».", self.text(response))
+        self.assertEqual(CommonArea.query.count(), 2)
+
+    def test_rules_that_make_no_sense_create_nothing(self):
+        response = self.post("/web/zonas/nueva", self.new_zone_form(openTime="20:00", closeTime="08:00"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("La hora de cierre debe ser después de la hora de apertura.", self.text(response))
+        self.assertEqual(CommonArea.query.count(), 2)
+
+    # --- Cambiar el nombre -----------------------------------------------------------------------
+
+    def test_the_edit_form_has_the_name_and_it_can_be_changed(self):
+        self.assertRegex(self.page(f"/web/zonas/{self.hall.id}"), r'name="name" type="text" value="Salón social" required')
+
+        response = self.post(f"/web/zonas/{self.hall.id}", {**self.rules(self.hall), "name": "Salón comunal"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.reload(self.hall).name, "Salón comunal")
+        self.assertIn("Reglas de Salón comunal guardadas.", self.page("/web/zonas"))
+
+    def test_changing_the_name_to_the_one_of_another_zone_shows_the_message(self):
+        response = self.post(f"/web/zonas/{self.hall.id}", {**self.rules(self.hall), "name": "Piscina"})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Ya existe una zona común llamada «Piscina».", self.text(response))
+        self.assertEqual(self.reload(self.hall).name, "Salón social")
+
+    # --- Cerrar y abrir --------------------------------------------------------------------------
+
+    def test_the_close_page_asks_for_the_reason(self):
+        body = self.page(f"/web/zonas/{self.hall.id}/cerrar")
+
+        self.assertIn("Cerrar Salón social", body)
+        self.assertRegex(body, r'<textarea id="reason" name="reason"[^>]*required')
+        self.assertIn('name="csrf_token"', body)
+        self.assertIn("los residentes verán el motivo", body)
+
+    def test_closing_a_zone_shows_it_closed_with_its_reason(self):
+        response = self.close(self.hall)
+
+        self.assertEqual(response.status_code, 302)
+        saved = self.reload(self.hall)
+        self.assertIsNotNone(saved.closed_at)
+        self.assertEqual(saved.closed_reason, self.REASON)
+        page = self.page("/web/zonas")
+        self.assertIn("Salón social quedó cerrada.", page)
+        self.assertEqual(page.count(">Cerrada<"), 1)
+        self.assertEqual(page.count(">Abierta<"), 1)
+        self.assertIn("Motivo del cierre:", page)
+        self.assertIn("bomba de agua", page)
+        self.assertIn(f'action="/web/zonas/{self.hall.id}/abrir"', page)
+        self.assertIn("Cambiar el motivo", page)
+
+    def test_closing_with_upcoming_reservations_says_they_are_kept(self):
+        self.booking(self.hall)
+
+        self.close(self.hall)
+
+        page = self.page("/web/zonas")
+        self.assertIn("Tiene 1 reserva próxima que se mantiene: revísalas en Reservas.", page)
+
+    def test_the_close_page_warns_about_the_upcoming_reservations(self):
+        self.booking(self.hall)
+        self.booking(self.hall, 5, "pendiente")
+
+        body = self.page(f"/web/zonas/{self.hall.id}/cerrar")
+
+        self.assertIn("2 reservas próximas", body)
+        self.assertIn("Se mantienen", body)
+
+    def test_closing_without_a_reason_shows_the_message_and_closes_nothing(self):
+        response = self.close(self.hall, reason="   ")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Escribe el motivo del cierre", self.text(response))
+        self.assertIsNone(self.reload(self.hall).closed_at)
+
+    def test_a_reason_that_is_too_short_keeps_what_was_written(self):
+        response = self.close(self.hall, reason="Mal")
+
+        body = self.text(response)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("El motivo del cierre debe tener al menos 5 caracteres.", body)
+        self.assertIn(">Mal</textarea>", body)
+
+    def test_the_reason_of_a_closed_zone_can_be_changed(self):
+        self.close(self.hall)
+
+        page = self.page(f"/web/zonas/{self.hall.id}/cerrar")
+        self.assertIn("Cambiar el motivo del cierre de Salón social", page)
+        self.assertIn("bomba de agua", page)
+
+        self.close(self.hall, reason="Reabre el lunes, ya llegó el repuesto.")
+
+        self.assertEqual(self.reload(self.hall).closed_reason, "Reabre el lunes, ya llegó el repuesto.")
+
+    def test_opening_a_zone_makes_it_open_again(self):
+        self.close(self.hall)
+
+        response = self.post(f"/web/zonas/{self.hall.id}/abrir")
+
+        self.assertEqual(response.status_code, 302)
+        saved = self.reload(self.hall)
+        self.assertIsNone(saved.closed_at)
+        self.assertIsNone(saved.closed_reason)
+        page = self.page("/web/zonas")
+        self.assertIn("Zona común abierta", page)
+        self.assertEqual(page.count(">Abierta<"), 2)
+
+    def test_opening_a_zone_that_is_already_open_shows_the_message(self):
+        self.post(f"/web/zonas/{self.hall.id}/abrir")
+
+        self.assertIn("Esa zona común ya está abierta.", self.page("/web/zonas"))
+
+    def test_the_reservations_page_warns_about_the_closed_zones(self):
+        self.assertNotIn("Hay una zona cerrada", self.page("/web/reservas"))
+        self.close(self.hall)
+
+        body = self.page("/web/reservas")
+
+        self.assertIn("Hay una zona cerrada: Salón social.", body)
+        self.assertIn('href="/web/zonas"', body)
+
+    # --- Retirar ---------------------------------------------------------------------------------
+
+    def test_the_edit_page_has_a_button_to_retire_the_zone(self):
+        body = self.page(f"/web/zonas/{self.hall.id}")
+
+        self.assertIn("Retirar la zona", body)
+        self.assertIn(f'action="/web/zonas/{self.hall.id}/retirar"', body)
+        self.assertIn("¿Retirar Salón social?", body)
+
+    def test_retiring_a_zone_takes_it_off_the_list_and_keeps_it_apart(self):
+        response = self.post(f"/web/zonas/{self.hall.id}/retirar")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNotNone(self.reload(self.hall).retired_at)
+        page = self.page("/web/zonas")
+        self.assertIn("Zona común retirada", page)
+        self.assertNotIn("De 08:00 a 22:00", page)
+        self.assertIn("Zonas retiradas (1)", page)
+        self.assertIn("retirada el", page)
+        self.assertEqual(self.client.get(f"/web/zonas/{self.hall.id}").status_code, 404)
+        self.assertEqual(self.client.get(f"/web/zonas/{self.hall.id}/cerrar").status_code, 404)
+
+    def test_a_zone_with_upcoming_reservations_cannot_be_retired_from_the_page(self):
+        self.booking(self.hall)
+
+        body = self.page(f"/web/zonas/{self.hall.id}")
+        self.assertIn("Ahora tiene 1 reserva próxima", body)
+        self.assertRegex(body, r'<button type="button" class="btn btn-danger" disabled>Retirar la zona</button>')
+        self.assertNotIn(f'action="/web/zonas/{self.hall.id}/retirar"', body)
+
+        # Aunque alguien mande el formulario a mano, la API lo rechaza.
+        response = self.post(f"/web/zonas/{self.hall.id}/retirar")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("tiene 1 reserva próxima: cancélalas primero en Reservas", self.page("/web/zonas"))
+        self.assertIsNone(self.reload(self.hall).retired_at)
+
+    def test_the_forms_that_change_zones_need_the_security_code(self):
+        for path in (
+            f"/web/zonas/{self.hall.id}/cerrar", f"/web/zonas/{self.hall.id}/abrir",
+            f"/web/zonas/{self.hall.id}/retirar", "/web/zonas/nueva",
+        ):
+            with self.subTest(path=path):
+                response = self.client.post(path, data={"reason": self.REASON, "name": "Otra"})
+                self.assertEqual(response.status_code, 400)
+        saved = self.reload(self.hall)
+        self.assertIsNone(saved.closed_at)
+        self.assertIsNone(saved.retired_at)
+        self.assertEqual(CommonArea.query.count(), 2)
+
+    def test_the_new_pages_ask_for_login(self):
+        anonymous = self.app.test_client()
+        for path in ("/web/zonas/nueva", f"/web/zonas/{self.hall.id}/cerrar"):
+            with self.subTest(path=path):
+                response = anonymous.get(path)
+                self.assertEqual(response.status_code, 302)
+                self.assertIn("/web/login", response.headers["Location"])
 
 
 class WebTextsTests(unittest.TestCase):

@@ -3032,7 +3032,10 @@ paths:
       tags:
       - Zonas comunes
       summary: Listar las zonas comunes con sus reglas
-      description: '**Quién puede usarla:** Solo administración, portería, residentes.'
+      description: |-
+        **Quién puede usarla:** Solo administración, portería, residentes.
+
+        Cada zona dice si está abierta (`isOpen`) y, si la administración la cerró, el motivo (`closedReason`). Las zonas retiradas no se ofrecen. La administración puede pedirlas con `includeRetired=true` y además ve cuántas reservas próximas tiene cada zona (`upcomingReservations`).
       operationId: communityGetCommonAreas
       x-endpoint: community.get_common_areas
       x-roles:
@@ -3041,6 +3044,13 @@ paths:
       - RESIDENT
       security:
       - bearerAuth: []
+      parameters:
+      - name: includeRetired
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Incluir también las zonas retiradas. Solo lo respeta la administración.
       responses:
         '200':
           description: Las zonas comunes
@@ -3055,19 +3065,65 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/CommonArea'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+      - Zonas comunes
+      summary: Agregar una zona común
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Lleva el nombre y, si se quiere, las mismas reglas que acepta el cambio de reglas; las que no se envíen quedan por defecto (08:00 a 22:00, franjas de 2 horas, sin aforo). Dos zonas vigentes no pueden llamarse igual, sin importar mayúsculas.
+      operationId: communityCreateCommonArea
+      x-endpoint: community.create_common_area
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommonAreaInput'
+      responses:
+        '201':
+          description: Zona creada
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - area
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  area:
+                    $ref: '#/components/schemas/CommonArea'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/common-areas/{area_id}/rules:
     put:
       tags:
       - Zonas comunes
-      summary: Cambiar las reglas de una zona común
+      summary: Cambiar el nombre y las reglas de una zona común
       description: |-
         **Quién puede usarla:** Solo administración.
 
-        Solo se cambia lo que se envía (al menos una regla). Las reservas nuevas usan las reglas desde ese momento; las que ya existen no se tocan. Con `null` vuelven al valor por defecto: capacity, cancelDeadlineDays, weeklyLimit, maintenanceWeekday, maxConsecutiveSlots y allowFullDay. Se revisa que la zona abra antes de cerrar, que quepa al menos una franja y que la anticipación máxima no sea menor que la mínima.
+        Solo se cambia lo que se envía (al menos el nombre o una regla). Las reservas nuevas usan las reglas desde ese momento; las que ya existen no se tocan. Con `null` vuelven al valor por defecto: capacity, cancelDeadlineDays, weeklyLimit, maintenanceWeekday, maxConsecutiveSlots y allowFullDay. Se revisa que la zona abra antes de cerrar, que quepa al menos una franja y que la anticipación máxima no sea menor que la mínima. Responde 409 si otra zona vigente ya tiene ese nombre o si la zona está retirada.
       operationId: communityUpdateCommonAreaRules
       x-endpoint: community.update_common_area_rules
       x-roles:
@@ -3087,73 +3143,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                openTime:
-                  type: string
-                  description: Apertura, HH:MM
-                  example: 08:00
-                  pattern: ^\d{2}:\d{2}$
-                closeTime:
-                  type: string
-                  description: Cierre, HH:MM
-                  example: 08:00
-                  pattern: ^\d{2}:\d{2}$
-                slotMinutes:
-                  type: integer
-                  description: Duración de cada franja, en minutos
-                  enum:
-                  - 30
-                  - 60
-                  - 90
-                  - 120
-                  - 180
-                  - 240
-                capacity:
-                  type: integer
-                  description: Aforo (1 a 2000); nulo lo deja sin definir
-                  nullable: true
-                  minimum: 1
-                  maximum: 2000
-                minAdvanceDays:
-                  type: integer
-                  description: Anticipación mínima en días (0 a 30)
-                  minimum: 0
-                  maximum: 30
-                maxAdvanceDays:
-                  type: integer
-                  description: Anticipación máxima en días (1 a 365)
-                  minimum: 1
-                  maximum: 365
-                cancelDeadlineDays:
-                  type: integer
-                  description: Días antes de la fecha hasta los que se puede cancelar (1 a 3; por defecto 3)
-                  nullable: true
-                  minimum: 1
-                  maximum: 3
-                weeklyLimit:
-                  type: integer
-                  description: Reservas por semana para cada residente (1 a 14; por defecto 2)
-                  nullable: true
-                  minimum: 1
-                  maximum: 14
-                maintenanceWeekday:
-                  type: integer
-                  description: 'Día de mantenimiento: 0 lunes … 6 domingo'
-                  nullable: true
-                  minimum: 0
-                  maximum: 6
-                maxConsecutiveSlots:
-                  type: integer
-                  description: Franjas seguidas que se pueden reservar (1 a 48; por defecto 1)
-                  nullable: true
-                  minimum: 1
-                  maximum: 48
-                allowFullDay:
-                  type: boolean
-                  description: Si se puede reservar el día completo (por defecto, no)
-                  nullable: true
-              additionalProperties: false
+              $ref: '#/components/schemas/CommonAreaInput'
       responses:
         '200':
           description: Reglas actualizadas
@@ -3178,6 +3168,171 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/common-areas/{area_id}:
+    delete:
+      tags:
+      - Zonas comunes
+      summary: Retirar una zona común
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        La zona no se borra: deja de ofrecerse y sus reservas viejas siguen mostrando su nombre. Si tiene reservas próximas (pendientes o aprobadas) responde 409: primero se cancelan desde Reservas, o se cierra la zona mientras tanto.
+      operationId: communityRetireCommonArea
+      x-endpoint: community.retire_common_area
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: area_id
+        in: path
+        required: true
+        description: Id de la zona común
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Zona retirada
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - area
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  area:
+                    $ref: '#/components/schemas/CommonArea'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/common-areas/{area_id}/close:
+    post:
+      tags:
+      - Zonas comunes
+      summary: Cerrar una zona común con un motivo
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Mientras esté cerrada no recibe reservas nuevas y a quien la consulta se le muestra el motivo. Las reservas que ya tenía se mantienen: la administración recibe un aviso con cuántas son y `upcomingReservations` las cuenta. Si la zona ya estaba cerrada, solo cambia el motivo. El motivo lleva de 5 a 300 caracteres.
+      operationId: communityCloseCommonArea
+      x-endpoint: community.close_common_area
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: area_id
+        in: path
+        required: true
+        description: Id de la zona común
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - reason
+              properties:
+                reason:
+                  type: string
+                  description: Por qué se cierra; lo ven quienes consultan la zona (5 a 300 caracteres)
+                  minLength: 5
+                  maxLength: 300
+                  example: Falla en la bomba de la piscina; el técnico viene el jueves.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Zona cerrada
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - area
+                - upcomingReservations
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  area:
+                    $ref: '#/components/schemas/CommonArea'
+                  upcomingReservations:
+                    type: integer
+                    description: Reservas próximas que la zona tenía y se mantienen
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/common-areas/{area_id}/open:
+    post:
+      tags:
+      - Zonas comunes
+      summary: Volver a abrir una zona común
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Quita el cierre: la zona vuelve a recibir reservas nuevas. Responde 409 si ya estaba abierta o si está retirada.
+      operationId: communityOpenCommonArea
+      x-endpoint: community.open_common_area
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: area_id
+        in: path
+        required: true
+        description: Id de la zona común
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Zona abierta
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - area
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  area:
+                    $ref: '#/components/schemas/CommonArea'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/health:
     get:
       tags:
@@ -5064,6 +5219,7 @@ paths:
                 - availableSlots
                 - occupiedSlots
                 - closed
+                - zoneClosedReason
                 properties:
                   commonAreaId:
                     type: integer
@@ -5095,7 +5251,11 @@ paths:
                     description: Franjas ocupadas
                   closed:
                     type: boolean
-                    description: Verdadero si la zona está cerrada por mantenimiento ese día
+                    description: Verdadero si la zona está cerrada ese día (por mantenimiento) o la administración la cerró
+                  zoneClosedReason:
+                    type: string
+                    description: El motivo con que la administración cerró la zona; nulo si no está cerrada por ella
+                    nullable: true
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -8579,6 +8739,10 @@ components:
       - maxConsecutiveSlots
       - allowFullDay
       - fullDaySlot
+      - isOpen
+      - closedReason
+      - closedAt
+      - retiredAt
       properties:
         id:
           type: integer
@@ -8643,6 +8807,101 @@ components:
           type: string
           description: Franja del día completo
           nullable: true
+        isOpen:
+          type: boolean
+          description: Falso si la administración cerró la zona; no recibe reservas nuevas
+        closedReason:
+          type: string
+          description: Por qué la cerró la administración; nulo si la zona está abierta
+          nullable: true
+        closedAt:
+          type: string
+          description: Cuándo se cerró, en hora de Colombia (AAAA-MM-DD HH:MM); nulo si está abierta
+          example: 2026-11-17 09:30
+          nullable: true
+        retiredAt:
+          type: string
+          description: Cuándo se retiró, en hora de Colombia; nulo si la zona sigue vigente
+          example: 2026-11-17 09:30
+          nullable: true
+        upcomingReservations:
+          type: integer
+          description: Reservas próximas (pendientes o aprobadas). Solo la ven los administradores.
+    CommonAreaInput:
+      type: object
+      description: El nombre y las reglas de una zona. Para crear, el nombre es obligatorio; para cambiar, al menos un dato.
+      properties:
+        name:
+          type: string
+          description: Nombre de la zona (2 a 100 caracteres); no se repite entre las zonas vigentes
+          minLength: 2
+          maxLength: 100
+          example: Piscina
+        openTime:
+          type: string
+          description: Apertura, HH:MM
+          example: 08:00
+          pattern: ^\d{2}:\d{2}$
+        closeTime:
+          type: string
+          description: Cierre, HH:MM
+          example: 08:00
+          pattern: ^\d{2}:\d{2}$
+        slotMinutes:
+          type: integer
+          description: Duración de cada franja, en minutos
+          enum:
+          - 30
+          - 60
+          - 90
+          - 120
+          - 180
+          - 240
+        capacity:
+          type: integer
+          description: Aforo (1 a 2000); nulo lo deja sin definir
+          nullable: true
+          minimum: 1
+          maximum: 2000
+        minAdvanceDays:
+          type: integer
+          description: Anticipación mínima en días (0 a 30)
+          minimum: 0
+          maximum: 30
+        maxAdvanceDays:
+          type: integer
+          description: Anticipación máxima en días (1 a 365)
+          minimum: 1
+          maximum: 365
+        cancelDeadlineDays:
+          type: integer
+          description: Días antes de la fecha hasta los que se puede cancelar (1 a 3; por defecto 3)
+          nullable: true
+          minimum: 1
+          maximum: 3
+        weeklyLimit:
+          type: integer
+          description: Reservas por semana para cada residente (1 a 14; por defecto 2)
+          nullable: true
+          minimum: 1
+          maximum: 14
+        maintenanceWeekday:
+          type: integer
+          description: 'Día de mantenimiento: 0 lunes … 6 domingo'
+          nullable: true
+          minimum: 0
+          maximum: 6
+        maxConsecutiveSlots:
+          type: integer
+          description: Franjas seguidas que se pueden reservar (1 a 48; por defecto 1)
+          nullable: true
+          minimum: 1
+          maximum: 48
+        allowFullDay:
+          type: boolean
+          description: Si se puede reservar el día completo (por defecto, no)
+          nullable: true
+      additionalProperties: false
     ReservationMessage:
       type: object
       required:

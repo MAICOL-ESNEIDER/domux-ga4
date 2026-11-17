@@ -156,6 +156,7 @@ def _page(selected_id=None, reply=None, status=200):
         excel_url=url_for("web.reservations_excel", **_args(filters)),
         empty_text=EMPTY_TEXTS[filters["estado"]],
         zone_options=[(str(area["id"]), area["name"]) for area in areas.get("areas", [])],
+        closed_zones=[area["name"] for area in areas.get("areas", []) if not area["isOpen"]],
         selected=selected, reply=reply or {"message": ""},
         can_decide=current in PENDING_RESERVATION_STATUSES,
         can_cancel=current == "aprobada",  # una reserva pendiente se rechaza, no se cancela

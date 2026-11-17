@@ -40,6 +40,12 @@ administración.
 **Comunidad**
 - Reservas con reglas por zona común, de varias franjas seguidas o del día completo
   (HU-050 a HU-055).
+- **Zonas comunes completas** (DEC-032): la administración agrega las zonas que tiene su unidad, les
+  cambia el nombre, las **cierra con un motivo** cuando fallan (los residentes ven «Cerrada» y el
+  motivo, y no pueden pedir reservas nuevas), las vuelve a abrir y retira las que ya no existen.
+  Al cerrar una zona, las reservas que ya tenía se mantienen y la administración recibe un aviso con
+  cuántas son; no se puede aprobar una solicitud pendiente de una zona cerrada ni retirar una zona con
+  reservas próximas. Nada se borra: una zona retirada conserva sus reservas viejas con su nombre.
 - Comunicados por categoría y por torre, con vencimiento, lectura y «Archivados»
   (HU-058 a HU-062).
 - PQRS con radicado, semáforo de plazos, conversación y respuestas por lotes (HU-072 y HU-073).

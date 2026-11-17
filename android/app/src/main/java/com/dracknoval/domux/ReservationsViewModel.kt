@@ -355,8 +355,10 @@ class ReservationsViewModel : DomuxViewModel() {
                 }
             }
             if (response == null) {
-                // Lo más común: la franja se ocupó mientras se llenaba el formulario.
+                // Lo más común: la franja se ocupó mientras se llenaba el formulario, o la administración
+                // cerró la zona: se vuelven a pedir las franjas y las zonas para que el formulario lo muestre.
                 reloadAvailability()
+                loadAreas()
                 return@launch
             }
             _state.update { it.copy(created = it.created + 1, date = "", slot = "", availability = null) }
