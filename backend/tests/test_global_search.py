@@ -166,6 +166,17 @@ class EverywhereTests(GlobalSearchTestCase):
         item = self.search(self.admin, "Rappi", "visitas")["groups"][0]["items"][0]
         diana = User.query.filter_by(email="diana@domux.com").one()
         self.assertEqual(item["apartmentId"], diana.apartment_id)
+        self.assertEqual(item["apartmentLabel"], diana.apartment)
+
+    def test_el_nombre_del_apartamento_sirve_para_abrirlo_en_la_lista(self):
+        # Cada resultado trae el apartamento escrito como «Torre 1 · Apto 101» (o vacío si no tiene).
+        for group in self.search(self.admin, "Torre", "todo")["groups"]:
+            for item in group["items"]:
+                self.assertIn("apartmentLabel", item)
+                if item["apartmentId"] is None:
+                    self.assertIsNone(item["apartmentLabel"])
+        apartment = self.search(self.admin, "Torre", "apartamentos")["groups"][0]["items"][0]
+        self.assertEqual(apartment["apartmentLabel"], apartment["title"])
 
 
 if __name__ == "__main__":

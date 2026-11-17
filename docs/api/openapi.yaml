@@ -9577,6 +9577,7 @@ components:
       - title
       - subtitle
       - apartmentId
+      - apartmentLabel
       - kind
       properties:
         type:
@@ -9599,6 +9600,10 @@ components:
           type: integer
           nullable: true
           description: El apartamento relacionado, si hay uno
+        apartmentLabel:
+          type: string
+          nullable: true
+          description: El mismo apartamento escrito como «Torre 1 · Apto 101», para abrirlo en la lista de apartamentos
         kind:
           type: string
           nullable: true

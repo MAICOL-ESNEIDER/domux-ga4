@@ -68,13 +68,14 @@ def _join(*parts):
     return " · ".join(part for part in parts if part)
 
 
-def _item(kind, record_id, title, subtitle, apartment_id=None, variant=None):
+def _item(kind, record_id, title, subtitle, apartment_id=None, variant=None, apartment_label=None):
     return {
         "type": kind,
         "id": record_id,
         "title": title,
         "subtitle": subtitle,
         "apartmentId": apartment_id,
+        "apartmentLabel": apartment_label,
         "kind": variant,
     }
 
@@ -108,7 +109,8 @@ def _people(text, user, limit):
                 role or ROLE_LABELS.get(person.role, person.role), person.apartment,
                 None if person.is_active else "Cuenta desactivada",
             )
-        items.append(_item("personas", person.id, person.full_name, subtitle, person.apartment_id))
+        items.append(_item("personas", person.id, person.full_name, subtitle, person.apartment_id,
+                           apartment_label=person.apartment))
     return items, more
 
 
@@ -127,7 +129,8 @@ def _apartments(text, user, limit):
     for apartment in rows:
         count = len(apartment.active_residents)
         subtitle = "Sin residentes" if count == 0 else f"{count} residente{'s' if count != 1 else ''}"
-        items.append(_item("apartamentos", apartment.id, apartment.label, subtitle, apartment.id))
+        items.append(_item("apartamentos", apartment.id, apartment.label, subtitle, apartment.id,
+                           apartment_label=apartment.label))
     return items, more
 
 
@@ -153,14 +156,16 @@ def _vehicles(text, user, limit):
             apartment.label if apartment is not None else None,
         )
         items.append(_item("vehiculos", vehicle.id, vehicle.plate, subtitle,
-                           apartment.id if apartment is not None else None, "residente"))
+                           apartment.id if apartment is not None else None, "residente",
+                           apartment.label if apartment is not None else None))
     for entry in visitors:
         apartment = entry.apartment
         subtitle = _join(
             "Visitante adentro", apartment.label if apartment is not None else None,
             f"Parqueadero {entry.spot.code}" if entry.spot is not None else None,
         )
-        items.append(_item("vehiculos", entry.id, entry.plate, subtitle, entry.apartment_id, "visitante"))
+        items.append(_item("vehiculos", entry.id, entry.plate, subtitle, entry.apartment_id, "visitante",
+                           apartment.label if apartment is not None else None))
     return items[:limit], len(residents) > limit or len(visitors) > limit or len(items) > limit
 
 
@@ -180,7 +185,8 @@ def _pqrs(text, user, limit):
             resident.full_name if resident is not None else None,
         )
         title = _join(pqrs.radicado, pqrs.subject)
-        items.append(_item("pqrs", pqrs.id, title, subtitle, resident.apartment_id if resident is not None else None))
+        items.append(_item("pqrs", pqrs.id, title, subtitle, resident.apartment_id if resident is not None else None,
+                           apartment_label=resident.apartment if resident is not None else None))
     return items, more
 
 
@@ -206,7 +212,8 @@ def _packages(text, user, limit):
             resident.apartment if resident is not None else None,
         )
         items.append(_item("paquetes", package.id, package.description, subtitle,
-                           resident.apartment_id if resident is not None else None))
+                           resident.apartment_id if resident is not None else None,
+                           apartment_label=resident.apartment if resident is not None else None))
     return items, more
 
 
@@ -236,7 +243,8 @@ def _visits(text, user, limit):
             resident.apartment if resident is not None else None,
         )
         items.append(_item("visitas", visit.id, visit.visitor_name, subtitle,
-                           resident.apartment_id if resident is not None else None))
+                           resident.apartment_id if resident is not None else None,
+                           apartment_label=resident.apartment if resident is not None else None))
     return items, more
 
 
