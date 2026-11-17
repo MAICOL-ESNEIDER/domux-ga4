@@ -400,8 +400,8 @@ class Reservation(db.Model):
             "date",
             "time_slot",
             unique=True,
-            sqlite_where=text("status IN ('activa', 'aprobada')"),
-            postgresql_where=text("status IN ('activa', 'aprobada')"),
+            sqlite_where=text("status IN ('activa', 'aprobada') AND is_archived = false"),
+            postgresql_where=text("status IN ('activa', 'aprobada') AND is_archived = false"),
         ),
     )
 
@@ -534,6 +534,7 @@ class Visit(db.Model):
     visitor_photo_url = db.Column(db.Text, nullable=True)
     visitor_photo_type = db.Column(db.String(20), nullable=True)
     media_consent = db.Column(db.Boolean, default=False, nullable=False)
+    document_refused = db.Column(db.Boolean, default=False, nullable=False)
     type = db.Column(db.String(20), nullable=False)
     description = db.Column(db.String(250), nullable=True)
     approval_status = db.Column(db.String(20), default="pendiente", nullable=False)
@@ -563,6 +564,7 @@ class Visit(db.Model):
             "visitorPhotoUrl": self.visitor_photo_url,
             "visitorPhotoType": self.visitor_photo_type,
             "mediaConsent": self.media_consent,
+            "documentRefused": bool(self.document_refused),
             "type": self.type or "",
             "description": self.description,
             "approvalStatus": self.approval_status,

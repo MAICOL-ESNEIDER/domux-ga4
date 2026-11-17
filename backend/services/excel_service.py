@@ -26,7 +26,11 @@ from models import (
     User,
     Vehicle,
 )
-from validators import apartment_number_from_label, validate_colombian_plate
+from validators import (
+    apartment_number_from_label,
+    validate_colombian_phone,
+    validate_colombian_plate,
+)
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 CENSUS_HEADERS = (
@@ -237,7 +241,8 @@ def _upsert_census_row(row):
         user.last_name = row["last_name"].strip()
     user.email = email or user.email
     if "phone" in row:
-        user.phone = row["phone"].strip() or None
+        phone = validate_colombian_phone(row["phone"], allow_empty=True)
+        user.phone = phone or None
     if document_id:
         user.document_id = document_id
     user.role = "RESIDENT"

@@ -276,7 +276,12 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                             )
                         }
                     }
-                    DatePickerField("Fecha del incidente", incidentDate, { incidentDate = it })
+                    DatePickerField(
+                        "Fecha del incidente",
+                        incidentDate,
+                        { incidentDate = it },
+                        allowPastDates = true
+                    )
                     TimePickerField("Hora del incidente", incidentTime, { incidentTime = it })
                     MediaAttachmentPicker(mediaName, { url, type, name ->
                         mediaUrl = url

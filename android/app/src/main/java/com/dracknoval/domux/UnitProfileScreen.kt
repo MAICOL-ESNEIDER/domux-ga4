@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -142,7 +144,18 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             OutlinedTextField(memberLastName, { memberLastName = it }, label = { Text("Apellido") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberDocument, { memberDocument = it }, label = { Text("Documento") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberBirthDate, { memberBirthDate = it }, label = { Text("Nacimiento AAAA-MM-DD") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(memberPhone, { memberPhone = it }, label = { Text("Teléfono opcional") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = memberPhone,
+                onValueChange = { input ->
+                    memberPhone = input.filter { ch -> ch.isDigit() }.take(10)
+                },
+                label = { Text("Teléfono opcional") },
+                isError = memberPhone.isNotEmpty() && memberPhone.length != 10,
+                supportingText = { Text("10 dígitos (ej. 3001234567)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             TextButton(onClick = { relationshipMenu = true }) { Text("Parentesco: $memberRelationship") }
             DropdownMenu(relationshipMenu, { relationshipMenu = false }) {
                 householdRelationships.forEach { relationship ->
@@ -156,7 +169,9 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 OutlinedTextField(otherRelationship, { otherRelationship = it }, label = { Text("Especifica parentesco") }, modifier = Modifier.fillMaxWidth())
             }
             Button(onClick = {
-                if (memberName.isBlank() || memberDocument.isBlank() ||
+                if (memberPhone.isNotEmpty() && memberPhone.length != 10) {
+                    message = "El teléfono debe tener exactamente 10 dígitos o estar vacío."
+                } else if (memberName.isBlank() || memberDocument.isBlank() ||
                     !memberBirthDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) ||
                     (memberRelationship == "otro" && otherRelationship.isBlank())
                 ) {
@@ -245,6 +260,13 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             Button(
                 enabled = !busy && !loading && unit != null,
                 onClick = {
+                    if (members.any { member ->
+                            !member.phone.isNullOrEmpty() && member.phone.length != 10
+                        }
+                    ) {
+                        message = "Cada teléfono de integrante debe tener 10 dígitos o estar vacío."
+                        return@Button
+                    }
                     busy = true
                     message = ""
                     scope.launch {

@@ -85,7 +85,7 @@ private suspend fun runRegistryAction(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegistryScreen(navController: NavController) {
+fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     val canRegister = Session.isGuard || Session.isAdmin
     val scope = rememberCoroutineScope()
     var packages by remember { mutableStateOf<List<PackageItem>>(emptyList()) }
@@ -94,7 +94,7 @@ fun RegistryScreen(navController: NavController) {
     var message by remember { mutableStateOf("") }
     var search by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf<String?>(null) }
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember(initialTab) { mutableStateOf(initialTab) }
 
     var selectedPackageResident by remember { mutableStateOf<ResidentSummary?>(null) }
     var packageDescription by remember { mutableStateOf("") }
@@ -110,7 +110,7 @@ fun RegistryScreen(navController: NavController) {
     var visitorName by remember { mutableStateOf("") }
     var visitorDocument by remember { mutableStateOf("") }
     var visitorType by remember { mutableStateOf("visitante") }
-    var visitorConsent by remember { mutableStateOf(false) }
+    var documentRefused by remember { mutableStateOf(false) }
     var visitorPhotoUrl by remember { mutableStateOf<String?>(null) }
     var visitorPhotoType by remember { mutableStateOf<String?>(null) }
     var visitorPhotoName by remember { mutableStateOf<String?>(null) }
@@ -239,7 +239,7 @@ fun RegistryScreen(navController: NavController) {
         add("En portería" to "pendiente")
         add("Por llegar" to "por_llegar")
         add("Entregados" to "entregado")
-        if (canRegister) add("Papelera" to "papelera")
+        if (canRegister) add("Archivados" to "papelera")
     }
     val tabs = if (Session.isResident) {
         listOf("Mis paquetes", "Mis visitas", "Código QR")
@@ -302,14 +302,14 @@ fun RegistryScreen(navController: NavController) {
                             }
                         },
                         onMoveToTrash = { item ->
-                            confirmation = "¿Mover este paquete a la papelera?" to {
+                            confirmation = "¿Archivar este paquete?" to {
                                 scope.launch {
                                     runRegistryAction({ message = "No se pudo mover el paquete: $it" }) {
                                         val response = RetrofitClient.api.deletePackage(
                                             Session.bearer(), item.id, force = false
                                         )
                                         message = if (response.isSuccessful) {
-                                            response.body()?.message ?: "Paquete movido a la papelera."
+                                            "Paquete archivado."
                                         } else mensajeDeError(response.code(), response.errorBody()?.string())
                                         if (response.isSuccessful) load()
                                     }
@@ -468,14 +468,11 @@ fun RegistryScreen(navController: NavController) {
                         onVisitorDocumentChange = { visitorDocument = it },
                         visitorType = visitorType,
                         onVisitorTypeChange = { visitorType = it },
-                        visitorConsent = visitorConsent,
-                        onVisitorConsentChange = { consent ->
-                            visitorConsent = consent
-                            if (!consent) {
+                        documentRefused = documentRefused,
+                        onDocumentRefusedChange = { refused ->
+                            documentRefused = refused
+                            if (refused) {
                                 visitorDocument = ""
-                                visitorPhotoUrl = null
-                                visitorPhotoType = null
-                                visitorPhotoName = null
                             }
                         },
                         visitorPhotoName = visitorPhotoName,
@@ -492,6 +489,8 @@ fun RegistryScreen(navController: NavController) {
                             attemptedVisit = true
                             if (selectedVisitResident == null || visitorName.isBlank()) {
                                 message = "Selecciona residente y escribe el nombre del visitante."
+                            } else if (!documentRefused && visitorDocument.isBlank()) {
+                                message = "El documento de identidad del visitante es obligatorio, o debes marcar que se negó a suministrarlo."
                             } else {
                                 scope.launch {
                                     runRegistryAction({ message = "No se pudo registrar la visita: $it" }) {
@@ -502,9 +501,11 @@ fun RegistryScreen(navController: NavController) {
                                                 visitorName = visitorName.trim(),
                                                 type = visitorType,
                                                 visitorDocument = visitorDocument.trim().ifEmpty { null },
-                                                mediaConsent = visitorConsent,
-                                                mediaUrl = if (visitorConsent) visitorPhotoUrl else null,
-                                                mediaType = if (visitorConsent) visitorPhotoType else null,
+                                                documentRefused = documentRefused,
+                                                mediaConsent = visitorDocument.isNotBlank() ||
+                                                    !visitorPhotoUrl.isNullOrBlank(),
+                                                mediaUrl = visitorPhotoUrl,
+                                                mediaType = visitorPhotoType,
                                                 description = visitDescription.trim().ifEmpty { null }
                                             )
                                         )
@@ -512,7 +513,7 @@ fun RegistryScreen(navController: NavController) {
                                             message = "Registro enviado. El residente recibirá una solicitud para autorizar el ingreso."
                                             visitorName = ""
                                             visitorDocument = ""
-                                            visitorConsent = false
+                                            documentRefused = false
                                             visitorPhotoUrl = null
                                             visitorPhotoType = null
                                             visitorPhotoName = null
@@ -877,7 +878,7 @@ private fun PackageListSection(
                             Text(
                                 when {
                                     statusFilter == "papelera" ->
-                                        "La papelera está vacía. Los paquetes entregados pasan aquí después de 7 días y se eliminan automáticamente a los 30 días."
+                                        "No hay paquetes archivados. Los paquetes entregados pasan aquí después de 7 días y se eliminan automáticamente a los 30 días."
                                     statusFilter != null || search.isNotBlank() ->
                                         "No hay paquetes que coincidan con el filtro o búsqueda actual."
                                     else -> "Aún no hay paquetes registrados en el sistema."
@@ -937,7 +938,7 @@ private fun PackageRegistryCard(
             ) {
                 Text(item.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
                 if (item.isDeleted) {
-                    DomuxStatusBadge("En papelera", DomuxBadgeTone.ALERT)
+                    DomuxStatusBadge("Archivado", DomuxBadgeTone.ALERT)
                 } else {
                     DomuxStatusBadge(
                         statusLabel,
@@ -968,7 +969,7 @@ private fun PackageRegistryCard(
                     if (item.status != "entregado") {
                         TextButton(onClick = onDeliver) { Text("Marcar entregado") }
                     }
-                    TextButton(onClick = onMoveToTrash) { Text("Enviar a papelera") }
+                    TextButton(onClick = onMoveToTrash) { Text("Archivar") }
                 }
             }
         }
@@ -1032,7 +1033,9 @@ private fun VisitRegistryCard(
             Text(visit.visitorName, style = MaterialTheme.typography.titleMedium)
             Text("${visit.type} · ${visit.createdAt.orEmpty()} · ${visit.approvalStatus}")
             Text("Para: ${visit.residentName.orEmpty()} · ${visit.apartment.orEmpty()}")
-            if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
+            if (visit.documentRefused || visit.visitorDocument == "NO SUMINISTRADO") {
+                DomuxStatusBadge("Sin documento (Se negó)", DomuxBadgeTone.ALERT)
+            } else if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
                 Text("Documento: ${visit.visitorDocument}")
             }
             MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType)
@@ -1129,7 +1132,12 @@ private fun PackageRegistrationSection(
                         label = { Text("Por llegar") }
                     )
                 }
-                DatePickerField("Fecha del paquete", date, onDateChange)
+                DatePickerField(
+                    "Fecha del paquete",
+                    date,
+                    onDateChange,
+                    allowPastDates = false
+                )
                 TimePickerField("Hora del paquete", time, onTimeChange)
                 MediaAttachmentPicker(
                     mediaName,
@@ -1156,8 +1164,8 @@ private fun RegistrationAndQrSection(
     onVisitorDocumentChange: (String) -> Unit,
     visitorType: String,
     onVisitorTypeChange: (String) -> Unit,
-    visitorConsent: Boolean,
-    onVisitorConsentChange: (Boolean) -> Unit,
+    documentRefused: Boolean,
+    onDocumentRefusedChange: (Boolean) -> Unit,
     visitorPhotoName: String?,
     onVisitorPhoto: (String, String, String) -> Unit,
     visitDescription: String,
@@ -1214,25 +1222,33 @@ private fun RegistrationAndQrSection(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                OutlinedTextField(
+                    value = visitorDocument,
+                    onValueChange = onVisitorDocumentChange,
+                    label = { Text("Documento de identidad del visitante *") },
+                    enabled = !documentRefused,
+                    isError = attemptedVisit && !documentRefused && visitorDocument.isBlank(),
+                    supportingText = {
+                        if (attemptedVisit && !documentRefused && visitorDocument.isBlank()) {
+                            Text("El documento es obligatorio, salvo que se marque la excepción.")
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = visitorConsent, onCheckedChange = onVisitorConsentChange)
-                    Text("El visitante autoriza guardar su documento o foto (opcional)")
-                }
-                if (visitorConsent) {
-                    OutlinedTextField(
-                        value = visitorDocument,
-                        onValueChange = onVisitorDocumentChange,
-                        label = { Text("Documento (opcional)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                    Checkbox(
+                        checked = documentRefused,
+                        onCheckedChange = onDocumentRefusedChange
                     )
-                    MediaAttachmentPicker(
-                        visitorPhotoName,
-                        { url, type, name -> onVisitorPhoto(url, type, name) },
-                        "image/*",
-                        onMessage
-                    )
+                    Text("El visitante se negó a entregar documento de identidad (Excepción)")
                 }
+                MediaAttachmentPicker(
+                    visitorPhotoName,
+                    { url, type, name -> onVisitorPhoto(url, type, name) },
+                    "image/*",
+                    onMessage
+                )
                 Button(onClick = onRegisterVisit, modifier = Modifier.fillMaxWidth()) {
                     Text("Registrar visita")
                 }
@@ -1336,12 +1352,11 @@ private fun ResidentQrPassSection(
             ) {
                 Text("Código QR para visitas", style = MaterialTheme.typography.titleMedium)
                 Text("Duración máxima: 30 días. Cada persona distinta consume un cupo.")
-                OutlinedTextField(
-                    value = startDate,
-                    onValueChange = onStartDateChange,
-                    label = { Text("Válido desde (AAAA-MM-DD)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                DatePickerField(
+                    "Válido desde",
+                    startDate,
+                    onStartDateChange,
+                    allowPastDates = false
                 )
                 OutlinedTextField(
                     value = endDate,
