@@ -82,6 +82,10 @@ administración.
 - Menú y pantalla de inicio por rol, íconos, colores con nombre y avisos explícitos de éxito y error
   (HU-086, HU-002).
 - Buscador con botón «Filtros» en las listas.
+- «Recordar mi correo en este celular» en el inicio de sesión (HU-001): la casilla empieza apagada
+  y solo guarda el correo y el nombre, cifrados en el celular, nunca la contraseña. Salen como
+  «Cuentas recientes en este celular» (hasta 5): se toca la cuenta y se escribe solo la contraseña.
+  Cada una se quita con su X (con «Deshacer»); cerrar sesión no las borra y no se copian a la nube.
 - Ícono de la app con el logo de DOMUX (adaptable, para Android 7 y con versión monocromática).
 
 **Calidad e infraestructura**

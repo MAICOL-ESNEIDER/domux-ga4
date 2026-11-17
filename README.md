@@ -68,6 +68,8 @@ Las tres cuentas entran por el mismo inicio de sesión y cada una ve solo lo suy
 
 Todas las cuentas reciben notificaciones dentro de la app y, si el servidor tiene Firebase configurado, avisos al celular.
 
+En el inicio de sesión, la casilla «Recordar mi correo en este celular» (apagada al comienzo) guarda en el celular, cifrados, el correo y el nombre, nunca la contraseña. La próxima vez basta con tocar la cuenta y escribir la contraseña; cada cuenta se quita con su X.
+
 ### Web de administración
 
 Funciona en el navegador del computador y es solo para la administración. Tiene el resumen de lo pendiente del día y las mismas funciones de la app, más las que pesan demasiado para el celular: importar el censo de residentes desde Excel, sacar información en Excel (PQRS, reservas, visitas, paquetes, vehículos, comunicados y usuarios, por fechas y por apartamento), el archivo histórico y las copias de respaldo.

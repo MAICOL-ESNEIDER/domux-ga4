@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   DOMUX no copia sus datos a la nube de Google ni a otro celular (Android 12 o más nuevo):
-  la sesión y lo temporal se quedan solo en este celular y se borran al cerrar sesión.
+  la sesión, lo temporal y las cuentas recordadas en el inicio de sesión se quedan solo en este
+  celular. La sesión y lo temporal se borran al cerrar sesión; cada cuenta recordada se quita con
+  su X en el inicio de sesión.
 -->
 <data-extraction-rules>
     <cloud-backup>
