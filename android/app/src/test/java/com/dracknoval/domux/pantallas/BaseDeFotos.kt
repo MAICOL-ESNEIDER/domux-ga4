@@ -6,10 +6,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onRoot
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -121,20 +120,22 @@ abstract class BaseDeFotos {
 
     /** Dibuja la pantalla de esa ruta (la misma que abre la app) y le saca la foto. */
     protected fun foto(nombre: String, ruta: String) {
-        compose.setContent { Marco { navegacion -> GrafoDeLaApp(navegacion, ruta) } }
+        abrir(ruta)
         sacarFoto(nombre)
     }
 
-    /**
-     * Para las pantallas que abren una ventana encima (un diálogo): el reloj de la prueba se avanza a
-     * mano y la foto es de la ventana de encima.
-     */
-    protected fun fotoDeVentana(nombre: String, ruta: String) {
-        compose.mainClock.autoAdvance = false
+    /** Solo dibuja la pantalla de esa ruta; sirve para tocar cosas antes de sacar la foto. */
+    protected fun abrir(ruta: String) {
         compose.setContent { Marco { navegacion -> GrafoDeLaApp(navegacion, ruta) } }
-        compose.mainClock.advanceTimeBy(1500)
-        compose.onAllNodes(isRoot()).onLast().captureRoboImage("$CARPETA_DE_FOTOS/$nombre.png")
+        compose.waitForIdle()
     }
+
+    /** La ruta en la que está la pantalla ahora (por ejemplo, después de tocar un resultado del buscador). */
+    protected fun rutaActual(): String? = navegacionActual?.currentBackStackEntry?.destination?.route
+
+    /** Un valor de la ruta actual, como «tab» o «search». */
+    protected fun argumentoActual(nombre: String): String? =
+        navegacionActual?.currentBackStackEntry?.arguments?.getString(nombre)
 
     /** Para las pantallas que necesitan algo especial (por ejemplo, el buscador ya con un texto escrito). */
     protected fun fotoConContenido(nombre: String, ruta: String, pantalla: @Composable (NavHostController) -> Unit) {
@@ -148,16 +149,20 @@ abstract class BaseDeFotos {
         sacarFoto(nombre)
     }
 
+    private var navegacionActual: NavHostController? = null
+
     @Composable
     private fun Marco(contenido: @Composable (NavHostController) -> Unit) {
         DomuxAppTheme {
             Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                contenido(rememberNavController())
+                val navegacion = rememberNavController()
+                SideEffect { navegacionActual = navegacion }
+                contenido(navegacion)
             }
         }
     }
 
-    private fun sacarFoto(nombre: String) {
+    protected fun sacarFoto(nombre: String) {
         compose.waitForIdle()
         // Deja terminar la animación de entrada de la pantalla antes de la foto.
         compose.mainClock.advanceTimeBy(500)
