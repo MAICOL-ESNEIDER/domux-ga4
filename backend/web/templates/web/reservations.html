@@ -19,6 +19,10 @@
   {% endif %}
 </div>
 
+{% if closed_zones %}
+<p class="notice notice-warn">{{ "Hay una zona cerrada" if closed_zones|length == 1 else "Hay zonas cerradas" }}: {{ closed_zones|join(", ") }}. Sus reservas próximas se mantienen: revisa las que haga falta cancelar. Para volver a abrirlas, ve a <a href="{{ url_for('web.zones_list') }}">Zonas comunes</a>.</p>
+{% endif %}
+
 <nav class="tabs" aria-label="Estado de las reservas">
   {% for tab in tabs %}
   <a href="{{ tab.url }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }} ({{ tab.count }})</a>

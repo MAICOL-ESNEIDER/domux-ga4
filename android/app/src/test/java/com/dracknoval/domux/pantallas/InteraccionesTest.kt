@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -100,6 +101,24 @@ class InteraccionesTest : BaseDeFotos() {
         compose.onNodeWithContentDescription("Buscar").performClick()
         compose.waitForIdle()
         assertEquals("search", rutaActual())
+    }
+
+    @Test
+    fun una_zona_cerrada_muestra_el_motivo_y_no_deja_reservar() {
+        entrarComo(Roles.RESIDENTE)
+        abrir("reservations")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        compose.onAllNodesWithText("Nueva reserva").onFirst().performClick()
+        compose.waitForIdle()
+        // Con una zona abierta el formulario ofrece reservar; la zona cerrada lo dice en su botón.
+        compose.onNodeWithText("Reservar").assertExists()
+        compose.onNodeWithText("Cancha múltiple · Cerrada").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Cancha múltiple está cerrada por la administración", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Motivo: Cambio del piso", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Reservar").assertDoesNotExist()
+        sacarFoto("interaccion-07-zona-cerrada")
     }
 
     @Test

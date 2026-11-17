@@ -36,6 +36,12 @@ ALLOWED_SLOT_MINUTES = (30, 60, 90, 120, 180, 240)
 
 WEEKDAY_NAMES = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 
+#: Largo del nombre de una zona (lo que cabe en la base) y del motivo con que se cierra.
+MIN_ZONE_NAME = 2
+MAX_ZONE_NAME = 100
+MIN_CLOSED_REASON = 5
+MAX_CLOSED_REASON = 300
+
 
 def _to_minutes(hour_text):
     hours, minutes = hour_text.split(":")
@@ -132,6 +138,11 @@ def days_text(days):
     return f"{days} día" if days == 1 else f"{days} días"
 
 
+def as_sentence(text):
+    """El texto con punto final, salvo que ya termine en uno (. ! ?): para unirlo con lo que sigue."""
+    return text if text[-1] in ".!?" else text + "."
+
+
 def human_date(day):
     """La fecha como la escribe un colombiano: 13/11/2026."""
     return f"{day.day:02d}/{day.month:02d}/{day.year}"
@@ -150,16 +161,62 @@ def _whole_rule(value, label, low, high):
     return value
 
 
-def parse_zone_rules(data, area):
-    """Revisa los cambios de reglas que pide la administración y devuelve {columna: valor}.
+def default_zone_values():
+    """Las reglas de una zona nueva que no trae ninguna: {columna: valor por defecto}."""
+    return {
+        "open_time": DEFAULT_OPEN_TIME,
+        "close_time": DEFAULT_CLOSE_TIME,
+        "slot_minutes": DEFAULT_SLOT_MINUTES,
+        "capacity": None,
+        "min_advance_days": DEFAULT_MIN_ADVANCE_DAYS,
+        "max_advance_days": DEFAULT_MAX_ADVANCE_DAYS,
+        "cancel_deadline_days": DEFAULT_CANCEL_DEADLINE_DAYS,
+        "weekly_limit": DEFAULT_WEEKLY_LIMIT,
+        "maintenance_weekday": None,
+        "max_consecutive_slots": DEFAULT_MAX_CONSECUTIVE_SLOTS,
+        "allow_full_day": DEFAULT_ALLOW_FULL_DAY,
+    }
 
-    Solo se cambian los datos que vienen en la solicitud. Los que llegan en
-    ``null`` vuelven al valor por defecto (el aforo y el día de mantenimiento
-    vuelven a «sin definir»). Después de revisar cada dato se comprueba que
-    todos juntos tengan sentido: la zona tiene que abrir antes de cerrar, caber
-    al menos una franja y el máximo de anticipación no puede ser menor que el mínimo.
+
+def parse_zone_name(value):
+    """El nombre de una zona: sin espacios de más, de 2 a 100 caracteres."""
+    if not isinstance(value, str) or not value.strip():
+        raise ApiError("El nombre de la zona es obligatorio.")
+    name = " ".join(value.split())
+    if len(name) < MIN_ZONE_NAME:
+        raise ApiError(f"El nombre de la zona debe tener al menos {MIN_ZONE_NAME} caracteres.")
+    if len(name) > MAX_ZONE_NAME:
+        raise ApiError(f"El nombre de la zona no puede tener más de {MAX_ZONE_NAME} caracteres.")
+    return name
+
+
+def parse_closed_reason(value):
+    """El motivo con que se cierra una zona: lo lee quien la consulta, así que no puede quedar vacío."""
+    if not isinstance(value, str) or not value.strip():
+        raise ApiError("Escribe el motivo del cierre: lo verán quienes consulten la zona.")
+    reason = " ".join(value.split())
+    if len(reason) < MIN_CLOSED_REASON:
+        raise ApiError(f"El motivo del cierre debe tener al menos {MIN_CLOSED_REASON} caracteres.")
+    if len(reason) > MAX_CLOSED_REASON:
+        raise ApiError(f"El motivo del cierre no puede tener más de {MAX_CLOSED_REASON} caracteres.")
+    return reason
+
+
+def parse_zone_rules(data, area, require_changes=True):
+    """Revisa los cambios que pide la administración en una zona y devuelve {columna: valor}.
+
+    Además de las reglas puede traer el nombre de la zona. Solo se cambian los datos que vienen
+    en la solicitud. Los que llegan en ``null`` vuelven al valor por defecto (el aforo y el día
+    de mantenimiento vuelven a «sin definir»). Después de revisar cada dato se comprueba que
+    todos juntos tengan sentido: la zona tiene que abrir antes de cerrar, caber al menos una
+    franja y el máximo de anticipación no puede ser menor que el mínimo.
+
+    ``area`` es la zona que se cambia, o cualquier objeto con las reglas por defecto cuando se
+    crea una nueva. Al crear no hace falta traer ningún cambio (``require_changes=False``).
     """
     changes = {}
+    if "name" in data:
+        changes["name"] = parse_zone_name(data["name"])
     if "openTime" in data:
         changes["open_time"] = _time_rule(data["openTime"], "La hora de apertura")
     if "closeTime" in data:
@@ -213,8 +270,8 @@ def parse_zone_rules(data, area):
             changes["allow_full_day"] = value
         else:
             raise ApiError("«Se puede reservar el día completo» debe ser sí o no.")
-    if not changes:
-        raise ApiError("Indica al menos una regla de la zona para cambiar.")
+    if not changes and require_changes:
+        raise ApiError("Indica al menos un dato de la zona para cambiar (el nombre o una regla).")
 
     def final(column):
         return changes[column] if column in changes else getattr(area, column)

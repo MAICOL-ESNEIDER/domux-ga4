@@ -1,0 +1,30 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import textarea %}
+{% set page_title = ("Cambiar el cierre de " if not area.isOpen else "Cerrar ") ~ area.name %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if area.isOpen %}Cerrar {{ area.name }}{% else %}Cambiar el motivo del cierre de {{ area.name }}{% endif %}</h1>
+    <p>Mientras la zona esté cerrada, nadie podrá pedir reservas nuevas y los residentes verán el motivo que escribas aquí. Cuando la reabras, vuelve a recibir reservas.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-quiet" href="{{ url_for('web.zones_list') }}">Volver</a>
+  </div>
+</div>
+
+{% if upcoming %}
+<p class="notice notice-info">{{ area.name }} tiene {{ plural(upcoming, "reserva próxima", "reservas próximas") }} (pendientes o aprobadas). {{ "Se mantiene" if upcoming == 1 else "Se mantienen" }}: no se cancelan solas. Si el problema te impide atenderlas, cancélalas desde <a href="{{ url_for('web.reservations_list') }}">Reservas</a>.</p>
+{% endif %}
+
+<form method="post" action="{{ url_for('web.zone_close', area_id=area.id) }}" class="card form-narrow"
+      aria-label="Motivo del cierre de {{ area.name }}">
+  {{ csrf_input() }}
+  {{ textarea("reason", "Motivo del cierre", reason, required=True, rows=4, maxlength=max_reason,
+              help="Lo leen los residentes: cuenta qué pasó y, si lo sabes, hasta cuándo. Por ejemplo: «Falla en la bomba de agua; el técnico viene el jueves». Entre 5 y " ~ max_reason ~ " caracteres.") }}
+  <div class="form-actions">
+    <button type="submit" class="btn">{% if area.isOpen %}Cerrar la zona{% else %}Guardar el motivo{% endif %}</button>
+    <a class="btn btn-quiet" href="{{ url_for('web.zones_list') }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

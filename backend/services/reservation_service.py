@@ -57,16 +57,22 @@ def _taken_slots(common_area_id, day):
 def reservation_availability(area, day):
     """Franjas libres y ocupadas de la zona ese día (ISO AAAA-MM-DD).
 
-    Si la zona está cerrada por mantenimiento (RN-021), no ofrece ninguna franja.
+    Si la zona está cerrada por mantenimiento (RN-021) o la administración la cerró, no ofrece ninguna
+    franja. En el segundo caso ``zoneClosedReason`` trae el motivo que escribió la administración.
     """
+    if area.is_closed:
+        return {
+            "availableSlots": [], "occupiedSlots": [], "closed": True, "zoneClosedReason": area.closed_reason,
+        }
     if is_maintenance_day(area.maintenance_weekday, date.fromisoformat(day)):
-        return {"availableSlots": [], "occupiedSlots": [], "closed": True}
+        return {"availableSlots": [], "occupiedSlots": [], "closed": True, "zoneClosedReason": None}
     taken = _taken_slots(area.id, day)
     occupied = [slot for slot in area.slots if any(slots_overlap(slot, other) for other in taken)]
     return {
         "availableSlots": [slot for slot in area.slots if slot not in occupied],
         "occupiedSlots": occupied,
         "closed": False,
+        "zoneClosedReason": None,
     }
 
 

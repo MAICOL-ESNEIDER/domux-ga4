@@ -1,11 +1,15 @@
 {% extends "web/base.html" %}
+{% from "web/_macros.html" import badge %}
 {% set page_title = "Zonas comunes y reglas" %}
 
 {% block content %}
 <div class="page-head">
   <div>
     <h1>Zonas comunes y reglas</h1>
-    <p>Las reglas con las que los residentes reservan cada zona. Si cambias una, las reservas nuevas la usan desde ese momento; las que ya existen no cambian.</p>
+    <p>Las zonas que tiene tu unidad y las reglas con las que los residentes las reservan. Agrega las que falten, cierra una cuando falle (los residentes verán el motivo que escribas) y retira las que ya no existan. Si cambias una regla, las reservas nuevas la usan desde ese momento; las que ya existen no cambian.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('web.zone_new') }}">Nueva zona</a>
   </div>
 </div>
 
@@ -14,6 +18,13 @@
   {% for zone in zones %}
   <article class="card" aria-labelledby="zone-{{ zone.id }}">
     <h2 id="zone-{{ zone.id }}">{{ zone.name }}</h2>
+    <p>
+      {% if zone.isOpen %}{{ badge("Abierta", "success") }}{% else %}{{ badge("Cerrada", "alert") }}{% endif %}
+      {% if zone.upcoming %}<span class="help">{{ zone.upcoming }}</span>{% endif %}
+    </p>
+    {% if not zone.isOpen %}
+    <p class="notice notice-warn"><strong>Motivo del cierre:</strong> {{ zone.closedReason }}{% if zone.closedSince %} <span class="help">(cerrada desde el {{ zone.closedSince }})</span>{% endif %}</p>
+    {% endif %}
     <dl class="facts">
       <dt>Horario</dt><dd>{{ zone.schedule }}</dd>
       <dt>Franjas</dt><dd>{{ zone.slots }}</dd>
@@ -25,13 +36,38 @@
       <dt>Límite</dt><dd>{{ zone.weekly }}</dd>
       <dt>Mantenimiento</dt><dd>{{ zone.maintenance }}</dd>
     </dl>
-    <a class="btn" href="{{ url_for('web.zone_edit', area_id=zone.id) }}">Editar las reglas<span class="sr-only"> de {{ zone.name }}</span></a>
+    <div class="actions">
+      <a class="btn" href="{{ url_for('web.zone_edit', area_id=zone.id) }}">Editar las reglas<span class="sr-only"> de {{ zone.name }}</span></a>
+      {% if zone.isOpen %}
+      <a class="btn btn-quiet" href="{{ url_for('web.zone_close', area_id=zone.id) }}">Cerrar la zona<span class="sr-only"> {{ zone.name }}</span></a>
+      {% else %}
+      <a class="btn btn-quiet" href="{{ url_for('web.zone_close', area_id=zone.id) }}">Cambiar el motivo<span class="sr-only"> del cierre de {{ zone.name }}</span></a>
+      <form method="post" action="{{ url_for('web.zone_open', area_id=zone.id) }}" class="inline-form">
+        {{ csrf_input() }}
+        <button type="submit" class="btn" data-confirm="¿Abrir {{ zone.name }}? Volverá a recibir reservas nuevas." data-confirm-label="Abrir">Abrir la zona<span class="sr-only"> {{ zone.name }}</span></button>
+      </form>
+      {% endif %}
+    </div>
   </article>
   {% endfor %}
 </div>
 {% else %}
 <section class="card" aria-label="Zonas comunes">
-  <p class="empty">Todavía no hay zonas comunes.</p>
+  <p class="empty">Todavía no hay zonas comunes. Agrega la primera con «Nueva zona».</p>
+</section>
+{% endif %}
+
+{% if retired %}
+<section class="card" aria-labelledby="retired-title">
+  <details>
+    <summary id="retired-title">Zonas retiradas ({{ retired|length }})</summary>
+    <p class="help">Ya no se ofrecen para reservar, pero sus reservas anteriores siguen mostrando su nombre.</p>
+    <ul>
+      {% for zone in retired %}
+      <li>{{ zone.name }}{% if zone.since %} <span class="help">· retirada el {{ zone.since }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </details>
 </section>
 {% endif %}
 {% endblock %}

@@ -353,8 +353,17 @@ data class CommonArea(
     val maxConsecutiveSlots: Int = 1,
     val allowFullDay: Boolean = false,
     // El rango del día completo, como «08:00-22:00».
-    val fullDaySlot: String? = null
-)
+    val fullDaySlot: String? = null,
+    // false si la administración cerró la zona (por una falla, por ejemplo): no recibe reservas nuevas.
+    // Si el servidor no lo manda, se entiende que está abierta.
+    val isOpen: Boolean? = null,
+    // Por qué la cerró la administración; lo escribe ella y lo leen los residentes.
+    val closedReason: String? = null
+) {
+    /** true si la administración cerró la zona. */
+    val isClosed: Boolean
+        get() = isOpen == false
+}
 data class CommonAreasListResponse(val areas: List<CommonArea>?)
 data class Reservation(
     val id: Int,
@@ -426,8 +435,10 @@ data class ReservationAvailabilityResponse(
     val date: String,
     val availableSlots: List<String>?,
     val occupiedSlots: List<String>?,
-    // La zona está cerrada ese día por mantenimiento.
+    // La zona está cerrada ese día (por mantenimiento) o la administración la cerró.
     val closed: Boolean = false,
+    // El motivo con que la administración cerró la zona; nulo si el cierre es solo por mantenimiento.
+    val zoneClosedReason: String? = null,
     // Las reglas para elegir varias franjas seguidas o el día completo.
     val slotMinutes: Int = 0,
     val maxConsecutiveSlots: Int = 1,

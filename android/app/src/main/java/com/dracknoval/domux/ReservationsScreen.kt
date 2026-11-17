@@ -433,146 +433,165 @@ private fun ReservationForm(
                             FilterChip(
                                 selected = state.areaId == option.id,
                                 onClick = { onArea(option.id) },
-                                label = { Text(option.name) }
+                                label = { Text(if (option.isClosed) "${option.name} · Cerrada" else option.name) }
                             )
                         }
                     }
                 }
                 if (area != null) ZoneRules(area, admin)
-                if (admin) {
-                    DomuxResidentSearchField(
-                        selectedResident = state.resident,
-                        onSelectResident = onResident
-                    )
-                    if (attempted && state.resident == null) {
-                        Text("Selecciona el residente.", color = MaterialTheme.colorScheme.error)
-                    }
-                }
-                ReservationDatePicker(
-                    value = state.date,
-                    firstDate = firstDate,
-                    lastDate = lastDate,
-                    unavailable = state.fullDates + state.closedDates,
-                    onMonthChanged = onMonth,
-                    onValueChange = onDate
-                )
-                Text(
-                    if (lastDate != null) {
-                        "Puedes reservar del ${humanDate(firstDate)} al ${humanDate(lastDate)}. Los días sin horarios libres o cerrados por mantenimiento aparecen bloqueados."
-                    } else {
-                        "Los días sin horarios libres o cerrados por mantenimiento aparecen bloqueados."
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (attempted && state.date.isBlank()) {
-                    Text("La fecha es obligatoria.", color = MaterialTheme.colorScheme.error)
-                }
-                if (state.date.isNotBlank()) {
-                    Text("Horarios", style = MaterialTheme.typography.titleSmall)
-                    when {
-                        state.availabilityLoading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        state.availability?.closed == true -> Text(
-                            "${area?.name ?: "La zona"} está cerrada ese día por mantenimiento. Elige otra fecha.",
-                            color = MaterialTheme.colorScheme.error
+                if (area != null && area.isClosed) {
+                    ClosedZoneNotice(area)
+                } else {
+                    if (admin) {
+                        DomuxResidentSearchField(
+                            selectedResident = state.resident,
+                            onSelectResident = onResident
                         )
-                        else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            if (state.maxConsecutive > 1) {
-                                Text(
-                                    "Toca la franja de al lado para reservar hasta ${state.maxConsecutive} seguidas.",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                state.fullDaySlot?.let { whole ->
-                                    FilterChip(
-                                        selected = state.slot == whole,
-                                        enabled = state.fullDayFree,
-                                        onClick = onFullDay,
-                                        label = {
-                                            Text(if (state.fullDayFree) "Día completo ($whole)" else "Día completo · Ocupado")
-                                        }
+                        if (attempted && state.resident == null) {
+                            Text("Selecciona el residente.", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    ReservationDatePicker(
+                        value = state.date,
+                        firstDate = firstDate,
+                        lastDate = lastDate,
+                        unavailable = state.fullDates + state.closedDates,
+                        onMonthChanged = onMonth,
+                        onValueChange = onDate
+                    )
+                    Text(
+                        if (lastDate != null) {
+                            "Puedes reservar del ${humanDate(firstDate)} al ${humanDate(lastDate)}. Los días sin horarios libres o cerrados por mantenimiento aparecen bloqueados."
+                        } else {
+                            "Los días sin horarios libres o cerrados por mantenimiento aparecen bloqueados."
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (attempted && state.date.isBlank()) {
+                        Text("La fecha es obligatoria.", color = MaterialTheme.colorScheme.error)
+                    }
+                    if (state.date.isNotBlank()) {
+                        Text("Horarios", style = MaterialTheme.typography.titleSmall)
+                        when {
+                            state.availabilityLoading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            state.availability?.closed == true -> Text(
+                                "${area?.name ?: "La zona"} está cerrada ese día por mantenimiento. Elige otra fecha.",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (state.maxConsecutive > 1) {
+                                    Text(
+                                        "Toca la franja de al lado para reservar hasta ${state.maxConsecutive} seguidas.",
+                                        style = MaterialTheme.typography.bodySmall
                                     )
                                 }
-                                state.slots.forEach { time ->
-                                    val available = state.availability?.availableSlots?.contains(time) ?: false
-                                    FilterChip(
-                                        selected = state.isChosen(time),
-                                        enabled = available,
-                                        onClick = { onSlot(time) },
-                                        label = { Text(if (available) time else "$time · Ocupado") }
-                                    )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    state.fullDaySlot?.let { whole ->
+                                        FilterChip(
+                                            selected = state.slot == whole,
+                                            enabled = state.fullDayFree,
+                                            onClick = onFullDay,
+                                            label = {
+                                                Text(if (state.fullDayFree) "Día completo ($whole)" else "Día completo · Ocupado")
+                                            }
+                                        )
+                                    }
+                                    state.slots.forEach { time ->
+                                        val available = state.availability?.availableSlots?.contains(time) ?: false
+                                        FilterChip(
+                                            selected = state.isChosen(time),
+                                            enabled = available,
+                                            onClick = { onSlot(time) },
+                                            label = { Text(if (available) time else "$time · Ocupado") }
+                                        )
+                                    }
                                 }
-                            }
-                            chosenText(state)?.let { chosen ->
-                                Text(chosen, style = MaterialTheme.typography.bodyMedium, color = DomuxColor.Primary)
+                                chosenText(state)?.let { chosen ->
+                                    Text(chosen, style = MaterialTheme.typography.bodyMedium, color = DomuxColor.Primary)
+                                }
                             }
                         }
                     }
-                }
-                if (attempted && state.slot.isBlank()) {
-                    Text("Selecciona una franja horaria disponible.", color = MaterialTheme.colorScheme.error)
-                }
-                if (capacity != null) {
+                    if (attempted && state.slot.isBlank()) {
+                        Text("Selecciona una franja horaria disponible.", color = MaterialTheme.colorScheme.error)
+                    }
+                    if (capacity != null) {
+                        OutlinedTextField(
+                            value = attendeesText,
+                            onValueChange = { attendeesText = it.filter(Char::isDigit).take(4) },
+                            label = { Text("¿Cuántas personas asistirán? * (máximo $capacity)") },
+                            isError = attempted && peopleError,
+                            supportingText = {
+                                if (attempted && peopleError) Text("Escribe un número entre 1 y $capacity")
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     OutlinedTextField(
-                        value = attendeesText,
-                        onValueChange = { attendeesText = it.filter(Char::isDigit).take(4) },
-                        label = { Text("¿Cuántas personas asistirán? * (máximo $capacity)") },
-                        isError = attempted && peopleError,
-                        supportingText = {
-                            if (attempted && peopleError) Text("Escribe un número entre 1 y $capacity")
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                        value = note,
+                        onValueChange = { note = it },
+                        label = { Text("Mensaje opcional para administración") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    MediaAttachmentPicker(
+                        mediaName,
+                        { url, type, name ->
+                            mediaUrl = url
+                            mediaType = type
+                            mediaName = name
+                        },
+                        { onNotice(it) },
+                        kinds = AttachmentKinds.MEDIA_AND_PDF,
+                        askDownloadPermission = true,
+                        onClear = { mediaUrl = null; mediaType = null; mediaName = null }
+                    )
+                    Button(
+                        enabled = !state.busy && !minorBlocked && area != null,
+                        onClick = {
+                            attempted = true
+                            val chosen = area
+                            val incomplete = state.date.isBlank() || state.slot.isBlank() ||
+                                (admin && state.resident == null) || peopleError
+                            if (chosen == null || incomplete) {
+                                onNotice("Revisa los datos marcados en rojo.")
+                            } else {
+                                val resident = state.resident
+                                val onBehalf = if (admin && resident != null) " a nombre de ${resident.name}" else ""
+                                onSubmit(
+                                    "¿Crear la reserva de ${chosen.name} para el ${humanDate(state.date)}, ${scheduleText(state)}$onBehalf?",
+                                    if (capacity != null) people else null,
+                                    note.trim().ifEmpty { null },
+                                    mediaUrl,
+                                    mediaType
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (state.busy) "Guardando..." else "Reservar") }
                 }
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("Mensaje opcional para administración") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                MediaAttachmentPicker(
-                    mediaName,
-                    { url, type, name ->
-                        mediaUrl = url
-                        mediaType = type
-                        mediaName = name
-                    },
-                    { onNotice(it) },
-                    kinds = AttachmentKinds.MEDIA_AND_PDF,
-                    askDownloadPermission = true,
-                    onClear = { mediaUrl = null; mediaType = null; mediaName = null }
-                )
-                Button(
-                    enabled = !state.busy && !minorBlocked && area != null,
-                    onClick = {
-                        attempted = true
-                        val chosen = area
-                        val incomplete = state.date.isBlank() || state.slot.isBlank() ||
-                            (admin && state.resident == null) || peopleError
-                        if (chosen == null || incomplete) {
-                            onNotice("Revisa los datos marcados en rojo.")
-                        } else {
-                            val resident = state.resident
-                            val onBehalf = if (admin && resident != null) " a nombre de ${resident.name}" else ""
-                            onSubmit(
-                                "¿Crear la reserva de ${chosen.name} para el ${humanDate(state.date)}, ${scheduleText(state)}$onBehalf?",
-                                if (capacity != null) people else null,
-                                note.trim().ifEmpty { null },
-                                mediaUrl,
-                                mediaType
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(if (state.busy) "Guardando..." else "Reservar") }
             }
         }
     }
+}
+
+/**
+ * La administración cerró la zona (por una falla, por ejemplo): no se puede reservar y se explica por
+ * qué con el motivo que ella escribió. Las reservas que ya tenía se mantienen.
+ */
+@Composable
+private fun ClosedZoneNotice(area: CommonArea) {
+    val reason = area.closedReason?.trim().orEmpty()
+    val why = if (reason.isNotEmpty()) " Motivo: ${reason.trimEnd('.', '!', '?')}." else ""
+    DomuxMessageBanner(
+        message = "${area.name} está cerrada por la administración y por ahora no recibe reservas nuevas.$why " +
+            "Cuando la reabran podrás reservar de nuevo.",
+        isError = true
+    )
 }
 
 /** Lo elegido en palabras: «el día completo», «de 10:00 a 14:00 (2 franjas)» o «en la franja 10:00-12:00». */
