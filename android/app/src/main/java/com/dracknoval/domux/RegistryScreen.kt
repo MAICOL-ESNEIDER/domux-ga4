@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,7 +48,6 @@ import com.dracknoval.domux.data.RegisterVisitRequest
 import com.dracknoval.domux.data.ResidentSummary
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
-import com.dracknoval.domux.data.UpdatePackageStatusRequest
 import com.dracknoval.domux.data.Visit
 import com.dracknoval.domux.data.VisitDecisionRequest
 import com.dracknoval.domux.data.VisitExitRequest
@@ -98,7 +98,6 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
 
     var selectedPackageResident by remember { mutableStateOf<ResidentSummary?>(null) }
     var packageDescription by remember { mutableStateOf("") }
-    var packageStatus by remember { mutableStateOf("pendiente") }
     var packageDate by remember { mutableStateOf("") }
     var packageTime by remember { mutableStateOf("") }
     var mediaUrl by remember { mutableStateOf<String?>(null) }
@@ -234,10 +233,95 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
         }
     }
 
+    val launchQrScanner = {
+        scanner.launch(
+            ScanOptions()
+                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                .setPrompt("Escanea el QR de visitas")
+        )
+    }
+
+    fun enterQrVisitor(name: String) {
+        val token = scannedQrToken ?: return
+        scope.launch {
+            runRegistryAction({ message = "No se pudo registrar el ingreso QR: $it" }) {
+                val response = RetrofitClient.api.enterVisitQr(
+                    Session.bearer(),
+                    token,
+                    QrVisitorEntryRequest(visitorName = name.trim())
+                )
+                message = if (response.isSuccessful) "Entrada por QR registrada."
+                else mensajeDeError(response.code(), response.errorBody()?.string())
+                if (response.isSuccessful) {
+                    qrVisitorName = ""
+                    refreshQrInspection(token) { qrInspection = it }
+                    load()
+                }
+            }
+        }
+    }
+
+    fun linkVisitToQr(visit: Visit) {
+        val token = scannedQrToken ?: return
+        scope.launch {
+            runRegistryAction({ message = "No se pudo vincular al QR: $it" }) {
+                val response = RetrofitClient.api.enterVisitQr(
+                    Session.bearer(),
+                    token,
+                    QrVisitorEntryRequest(visitId = visit.id)
+                )
+                message = if (response.isSuccessful) {
+                    "${visit.visitorName} vinculado al QR."
+                } else mensajeDeError(response.code(), response.errorBody()?.string())
+                if (response.isSuccessful) {
+                    refreshQrInspection(token) { qrInspection = it }
+                    load()
+                }
+            }
+        }
+    }
+
+    fun reenterVisitByQr(visit: Visit) {
+        val token = scannedQrToken ?: return
+        scope.launch {
+            runRegistryAction({ message = "No se pudo registrar el reingreso: $it" }) {
+                val response = RetrofitClient.api.enterVisitQr(
+                    Session.bearer(),
+                    token,
+                    QrVisitorEntryRequest(visitId = visit.id)
+                )
+                message = if (response.isSuccessful) {
+                    "Reingreso de ${visit.visitorName} registrado."
+                } else mensajeDeError(response.code(), response.errorBody()?.string())
+                if (response.isSuccessful) {
+                    refreshQrInspection(token) { qrInspection = it }
+                    load()
+                }
+            }
+        }
+    }
+
+    fun authorizeAndEnterByCall(visit: Visit) {
+        scope.launch {
+            runRegistryAction({ message = "No se pudo autorizar el ingreso: $it" }) {
+                val authorization = RetrofitClient.api.authorizeVisitByCall(
+                    Session.bearer(), visit.id
+                )
+                if (!authorization.isSuccessful) {
+                    message = mensajeDeError(authorization.code(), authorization.errorBody()?.string())
+                    return@runRegistryAction
+                }
+                val entry = RetrofitClient.api.registerVisitEntry(Session.bearer(), visit.id)
+                message = if (entry.isSuccessful) "Visita autorizada e ingreso registrado."
+                else mensajeDeError(entry.code(), entry.errorBody()?.string())
+                load()
+            }
+        }
+    }
+
     val packageFilters = buildList {
         add("Todos" to null)
         add("En portería" to "pendiente")
-        add("Por llegar" to "por_llegar")
         add("Entregados" to "entregado")
         if (canRegister) add("Archivados" to "papelera")
     }
@@ -260,7 +344,9 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            DomuxSectionTabs(tabs, selectedTab.coerceIn(tabs.indices)) { selectedTab = it }
+            if (!Session.isGuard) {
+                DomuxSectionTabs(tabs, selectedTab.coerceIn(tabs.indices)) { selectedTab = it }
+            }
             if (message.isNotBlank()) {
                 DomuxFeedbackBanner(message) { message = "" }
             }
@@ -285,21 +371,6 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         onDeliver = {
                             deliveryPackage = it
                             receiverName = ""
-                        },
-                        onStatusChange = { item, status ->
-                            scope.launch {
-                                runRegistryAction({ message = "No se pudo actualizar el estado: $it" }) {
-                                    val response = RetrofitClient.api.updatePackageStatus(
-                                        Session.bearer(), item.id, UpdatePackageStatusRequest(status)
-                                    )
-                                    if (response.isSuccessful) {
-                                        message = "Estado del paquete actualizado."
-                                        load()
-                                    } else {
-                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                    }
-                                }
-                            }
                         },
                         onMoveToTrash = { item ->
                             confirmation = "¿Archivar este paquete?" to {
@@ -352,8 +423,6 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         onResidentChange = { selectedPackageResident = it },
                         description = packageDescription,
                         onDescriptionChange = { packageDescription = it },
-                        status = packageStatus,
-                        onStatusChange = { packageStatus = it },
                         date = packageDate,
                         onDateChange = { packageDate = it },
                         time = packageTime,
@@ -383,7 +452,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                                     mediaType = mediaType,
                                                     eventDate = packageDate.ifBlank { null },
                                                     eventTime = packageTime.ifBlank { null },
-                                                    status = packageStatus
+                                                    status = "pendiente"
                                                 )
                                             )
                                             if (response.isSuccessful) {
@@ -453,7 +522,17 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                 }
                             }
                         },
-                        onExit = { pendingExit = it }
+                        onExit = { pendingExit = it },
+                        onAuthorizeAndEnter = { authorizeAndEnterByCall(it) },
+                        onScanQr = launchQrScanner,
+                        qrInspection = qrInspection,
+                        qrVisitorName = qrVisitorName,
+                        onQrVisitorNameChange = { qrVisitorName = it },
+                        onQrMessage = { message = it },
+                        onEnterQr = { enterQrVisitor(it) },
+                        onLinkVisit = { linkVisitToQr(it) },
+                        onQrExit = { pendingQrExit = it },
+                        onQrReentry = { reenterVisitByQr(it) }
                     )
                 }
 
@@ -529,78 +608,14 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                             }
                         },
                         isGuard = Session.isGuard,
-                        scanner = { scanner.launch(
-                            ScanOptions()
-                                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                                .setPrompt("Escanea el QR de visitas")
-                        ) },
+                        scanner = launchQrScanner,
                         qrInspection = qrInspection,
                         qrVisitorName = qrVisitorName,
                         onQrVisitorNameChange = { qrVisitorName = it },
-                        onEnterQr = { enterQrVisitor ->
-                            val token = scannedQrToken
-                            if (token != null) {
-                                scope.launch {
-                                    runRegistryAction({ message = "No se pudo registrar el ingreso QR: $it" }) {
-                                        val response = RetrofitClient.api.enterVisitQr(
-                                            Session.bearer(),
-                                            token,
-                                            QrVisitorEntryRequest(visitorName = enterQrVisitor.trim())
-                                        )
-                                        message = if (response.isSuccessful) "Entrada por QR registrada."
-                                        else mensajeDeError(response.code(), response.errorBody()?.string())
-                                        if (response.isSuccessful) {
-                                            qrVisitorName = ""
-                                            refreshQrInspection(token) { qrInspection = it }
-                                            load()
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        onLinkVisit = { visit ->
-                            val token = scannedQrToken
-                            if (token != null) {
-                                scope.launch {
-                                    runRegistryAction({ message = "No se pudo vincular al QR: $it" }) {
-                                        val response = RetrofitClient.api.enterVisitQr(
-                                            Session.bearer(),
-                                            token,
-                                            QrVisitorEntryRequest(visitId = visit.id)
-                                        )
-                                        message = if (response.isSuccessful) {
-                                            "${visit.visitorName} vinculado al QR."
-                                        } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                        if (response.isSuccessful) {
-                                            refreshQrInspection(token) { qrInspection = it }
-                                            load()
-                                        }
-                                    }
-                                }
-                            }
-                        },
+                        onEnterQr = { enterQrVisitor(it) },
+                        onLinkVisit = { linkVisitToQr(it) },
                         onQrExit = { pendingQrExit = it },
-                        onQrReentry = { visit ->
-                            val token = scannedQrToken
-                            if (token != null) {
-                                scope.launch {
-                                    runRegistryAction({ message = "No se pudo registrar el reingreso: $it" }) {
-                                        val response = RetrofitClient.api.enterVisitQr(
-                                            Session.bearer(),
-                                            token,
-                                            QrVisitorEntryRequest(visitId = visit.id)
-                                        )
-                                        message = if (response.isSuccessful) {
-                                            "Reingreso de ${visit.visitorName} registrado."
-                                        } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                        if (response.isSuccessful) {
-                                            refreshQrInspection(token) { qrInspection = it }
-                                            load()
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        onQrReentry = { reenterVisitByQr(it) }
                     )
                 }
 
@@ -620,7 +635,6 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         },
                         canRegister = false,
                         onDeliver = {},
-                        onStatusChange = { _, _ -> },
                         onMoveToTrash = {},
                         onRestore = {},
                         onDeletePermanently = {}
@@ -835,7 +849,6 @@ private fun PackageListSection(
     onClearFilters: () -> Unit,
     canRegister: Boolean,
     onDeliver: (PackageItem) -> Unit,
-    onStatusChange: (PackageItem, String) -> Unit,
     onMoveToTrash: (PackageItem) -> Unit,
     onRestore: (PackageItem) -> Unit,
     onDeletePermanently: (PackageItem) -> Unit
@@ -899,7 +912,6 @@ private fun PackageListSection(
                     item = item,
                     canRegister = canRegister,
                     onDeliver = { onDeliver(item) },
-                    onStatusChange = { onStatusChange(item, it) },
                     onMoveToTrash = { onMoveToTrash(item) },
                     onRestore = { onRestore(item) },
                     onDeletePermanently = { onDeletePermanently(item) }
@@ -914,7 +926,6 @@ private fun PackageRegistryCard(
     item: PackageItem,
     canRegister: Boolean,
     onDeliver: () -> Unit,
-    onStatusChange: (String) -> Unit,
     onMoveToTrash: () -> Unit,
     onRestore: () -> Unit,
     onDeletePermanently: () -> Unit
@@ -927,8 +938,7 @@ private fun PackageRegistryCard(
             Text(item.description.orEmpty(), style = MaterialTheme.typography.titleMedium)
             Text("Para: ${item.residentName.orEmpty()} · ${item.apartment.orEmpty()}")
             val statusLabel = when (item.status) {
-                "por_llegar" -> "Por llegar"
-                "pendiente" -> "En portería"
+                "pendiente", "por_llegar" -> "En portería"
                 else -> "Entregado"
             }
             Row(
@@ -961,11 +971,6 @@ private fun PackageRegistryCard(
                         TextButton(onClick = onDeletePermanently) { Text("Eliminar definitivo") }
                     }
                 } else {
-                    if (item.status == "por_llegar") {
-                        TextButton(onClick = { onStatusChange("pendiente") }) {
-                            Text("Recibir en portería")
-                        }
-                    }
                     if (item.status != "entregado") {
                         TextButton(onClick = onDeliver) { Text("Marcar entregado") }
                     }
@@ -985,12 +990,46 @@ private fun VisitListSection(
     onDecision: (Visit, String) -> Unit,
     onAuthorizeByCall: (Visit) -> Unit,
     onEntry: (Visit) -> Unit,
-    onExit: (Visit) -> Unit
+    onExit: (Visit) -> Unit,
+    onAuthorizeAndEnter: (Visit) -> Unit = {},
+    onScanQr: (() -> Unit)? = null,
+    qrInspection: VisitQrInspectionResponse? = null,
+    qrVisitorName: String = "",
+    onQrVisitorNameChange: (String) -> Unit = {},
+    onQrMessage: (String) -> Unit = {},
+    onEnterQr: (String) -> Unit = {},
+    onLinkVisit: (Visit) -> Unit = {},
+    onQrExit: (Visit) -> Unit = {},
+    onQrReentry: (Visit) -> Unit = {}
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        if (isGuard) {
+            item(key = "visit-qr-scan") {
+                Button(
+                    onClick = { onScanQr?.invoke() },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Escanear / Validar Código QR") }
+            }
+            qrInspection?.let { inspection ->
+                item(key = "visit-qr-inspection") {
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        VisitQrInspectionContent(
+                            inspection = inspection,
+                            qrVisitorName = qrVisitorName,
+                            onQrVisitorNameChange = onQrVisitorNameChange,
+                            onMessage = onQrMessage,
+                            onEnterQr = onEnterQr,
+                            onLinkVisit = onLinkVisit,
+                            onQrExit = onQrExit,
+                            onQrReentry = onQrReentry
+                        )
+                    }
+                }
+            }
+        }
         if (visits.isEmpty()) {
             item {
                 DomuxCard(Modifier.fillMaxWidth()) {
@@ -1008,6 +1047,7 @@ private fun VisitListSection(
                 isGuard = isGuard,
                 onDecision = { onDecision(visit, it) },
                 onAuthorizeByCall = { onAuthorizeByCall(visit) },
+                onAuthorizeAndEnter = { onAuthorizeAndEnter(visit) },
                 onEntry = { onEntry(visit) },
                 onExit = { onExit(visit) }
             )
@@ -1022,6 +1062,7 @@ private fun VisitRegistryCard(
     isGuard: Boolean,
     onDecision: (String) -> Unit,
     onAuthorizeByCall: () -> Unit,
+    onAuthorizeAndEnter: () -> Unit,
     onEntry: () -> Unit,
     onExit: () -> Unit
 ) {
@@ -1031,7 +1072,10 @@ private fun VisitRegistryCard(
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Text(visit.visitorName, style = MaterialTheme.typography.titleMedium)
-            Text("${visit.type} · ${visit.createdAt.orEmpty()} · ${visit.approvalStatus}")
+            Text(
+                "${visit.type.toDomuxDisplayLabel()} · ${visit.createdAt.orEmpty()} · " +
+                    visit.approvalStatus.toDomuxDisplayLabel()
+            )
             Text("Para: ${visit.residentName.orEmpty()} · ${visit.apartment.orEmpty()}")
             if (visit.documentRefused || visit.visitorDocument == "NO SUMINISTRADO") {
                 DomuxStatusBadge("Sin documento (Se negó)", DomuxBadgeTone.ALERT)
@@ -1052,30 +1096,120 @@ private fun VisitRegistryCard(
             )
             visit.events.orEmpty().forEach { event ->
                 Text(
-                    "${event.type} · ${event.createdAt.orEmpty()} · " +
-                        "${event.method} · ${event.actorName.orEmpty()}",
+                    "${event.type.toDomuxDisplayLabel()} · ${event.createdAt.orEmpty()} · " +
+                        "${event.method.toDomuxDisplayLabel()} · ${event.actorName.orEmpty()}",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
             if (isResident && visit.approvalStatus == "pendiente") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     TextButton(onClick = { onDecision("aprobada") }) { Text("Autorizar") }
                     TextButton(onClick = { onDecision("rechazada") }) { Text("Rechazar") }
                 }
             }
             if (isGuard && visit.approvalStatus == "pendiente") {
-                TextButton(onClick = onAuthorizeByCall) { Text("Autorizar por llamada") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onAuthorizeAndEnter,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Autorizar e ingresar") }
+                    OutlinedButton(
+                        onClick = onAuthorizeByCall,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Autorizar por llamada") }
+                }
             }
             if (isGuard && visit.approvalStatus == "aprobada") {
                 if (visit.enteredAt == null || (visit.exitedAt != null && visit.exitReturning)) {
-                    TextButton(onClick = onEntry) { Text("Registrar entrada") }
+                    Button(onClick = onEntry, modifier = Modifier.fillMaxWidth()) {
+                        Text("Registrar entrada")
+                    }
                 } else if (visit.exitedAt != null && !visit.exitReturning) {
                     Text("Salida definitiva. Si vuelve, registra una nueva solicitud.")
                 } else {
-                    TextButton(onClick = onExit) { Text("Registrar salida") }
+                    OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) {
+                        Text("Registrar salida")
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun VisitQrInspectionContent(
+    inspection: VisitQrInspectionResponse,
+    qrVisitorName: String,
+    onQrVisitorNameChange: (String) -> Unit,
+    onMessage: (String) -> Unit,
+    onEnterQr: (String) -> Unit,
+    onLinkVisit: (Visit) -> Unit,
+    onQrExit: (Visit) -> Unit,
+    onQrReentry: (Visit) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("${inspection.residentName.orEmpty()} · ${inspection.apartment.orEmpty()}")
+        Text(
+            "Registrados: ${inspection.qrPass?.registeredPeople ?: 0}/" +
+                "${inspection.qrPass?.maxPeople ?: 0} · " +
+                "Disponibles: ${inspection.qrPass?.remainingPeople ?: 0}"
+        )
+        if (!inspection.canRegister) {
+            Text("Este QR está vencido o revocado: solo se permite registrar la salida.")
+        }
+        OutlinedTextField(
+            value = qrVisitorName,
+            onValueChange = onQrVisitorNameChange,
+            label = { Text("Nombre del visitante que ingresa") },
+            enabled = inspection.canRegister,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = {
+                if (qrVisitorName.isBlank()) onMessage("Escribe el nombre del visitante.")
+                else onEnterQr(qrVisitorName)
+            },
+            enabled = inspection.canRegister,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Registrar ingreso") }
+        if (inspection.linkableVisits.orEmpty().isNotEmpty()) {
+            Text("O vincular un visitante ya registrado:")
+            inspection.linkableVisits.orEmpty().forEach { visit ->
+                OutlinedButton(
+                    enabled = inspection.canRegister,
+                    onClick = { onLinkVisit(visit) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("${visit.visitorName} · vincular e ingresar") }
+            }
+        }
+        inspection.inside.orEmpty().forEach { visit ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("${visit.visitorName} está dentro")
+                TextButton(onClick = { onQrExit(visit) }) { Text("Salida") }
+            }
+        }
+        inspection.registeredVisits.orEmpty()
+            .filter { it.exitedAt != null }
+            .forEach { visit ->
+                TextButton(
+                    enabled = inspection.canRegister,
+                    onClick = { onQrReentry(visit) }
+                ) { Text("Reingreso: ${visit.visitorName}") }
+            }
     }
 }
 
@@ -1086,8 +1220,6 @@ private fun PackageRegistrationSection(
     onResidentChange: (ResidentSummary?) -> Unit,
     description: String,
     onDescriptionChange: (String) -> Unit,
-    status: String,
-    onStatusChange: (String) -> Unit,
     date: String,
     onDateChange: (String) -> Unit,
     time: String,
@@ -1120,18 +1252,6 @@ private fun PackageRegistrationSection(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = status == "pendiente",
-                        onClick = { onStatusChange("pendiente") },
-                        label = { Text("En portería") }
-                    )
-                    FilterChip(
-                        selected = status == "por_llegar",
-                        onClick = { onStatusChange("por_llegar") },
-                        label = { Text("Por llegar") }
-                    )
-                }
                 DatePickerField(
                     "Fecha del paquete",
                     date,
@@ -1205,12 +1325,15 @@ private fun RegistrationAndQrSection(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     listOf("visitante", "domiciliario", "contratista").forEach { type ->
                         FilterChip(
                             selected = visitorType == type,
                             onClick = { onVisitorTypeChange(type) },
-                            label = { Text(type.replaceFirstChar(Char::uppercase)) }
+                            label = { Text(type.toDomuxDisplayLabel()) }
                         )
                     }
                 }

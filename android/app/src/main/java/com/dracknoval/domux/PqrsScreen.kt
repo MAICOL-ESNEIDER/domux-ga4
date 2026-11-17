@@ -48,6 +48,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var statusFilter by remember { mutableStateOf<String?>(null) }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     var includeArchived by remember { mutableStateOf(false) }
+    var showLegalOptions by remember { mutableStateOf(false) }
     var legalSuccessMessage by remember { mutableStateOf("") }
     var legalBusy by remember { mutableStateOf(false) }
     var archiveDialog by remember { mutableStateOf(false) }
@@ -135,6 +136,17 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
         }
         if (selectedTab == 0) {
         if (Session.isAdmin) {
+            TextButton(
+                onClick = { showLegalOptions = !showLegalOptions },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (showLegalOptions) "Ocultar opciones de archivo y Excel legal"
+                    else "Opciones de archivo y Excel legal"
+                )
+            }
+        }
+        if (Session.isAdmin && showLegalOptions) {
             DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Column(
                     Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -182,11 +194,6 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                             modifier = Modifier.weight(1f)
                         ) { Text("Archivar resueltas y limpiar") }
                     }
-                    FilterChip(
-                        selected = includeArchived,
-                        onClick = { includeArchived = !includeArchived },
-                        label = { Text("Ver archivadas") }
-                    )
                 }
             }
         }
@@ -224,6 +231,13 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                     label = { Text(label) }
                 )
             }
+        }
+        if (Session.isAdmin) {
+            FilterChip(
+                selected = includeArchived,
+                onClick = { includeArchived = !includeArchived },
+                label = { Text("Ver archivadas") }
+            )
         }
         }
 
@@ -463,10 +477,15 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     if (batchDialog) {
         AlertDialog(
             onDismissRequest = { batchDialog = false },
-            title = { Text("Respuesta por lotes") },
+            title = {
+                Text(if (selectedIds.size == 1) "Responder PQRS" else "Respuesta por lotes")
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Vas a responder $selectedVisibleCount PQRS de la categoría seleccionada.")
+                    Text(
+                        if (selectedIds.size == 1) "Escribe la respuesta para esta solicitud."
+                        else "Vas a responder $selectedVisibleCount PQRS de la categoría seleccionada."
+                    )
                     OutlinedTextField(
                         value = batchMessage,
                         onValueChange = { batchMessage = it },
@@ -474,12 +493,15 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                         isError = batchMessage.isNotEmpty() && batchMessage.isBlank(),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         listOf("en_proceso", "resuelta").forEach { value ->
                             FilterChip(
                                 selected = batchStatus == value,
                                 onClick = { batchStatus = value },
-                                label = { Text(value.replace('_', ' ')) }
+                                label = { Text(value.toDomuxDisplayLabel()) }
                             )
                         }
                     }
@@ -528,7 +550,13 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                             }
                         }
                     }
-                ) { Text(if (sending) "Enviando..." else "Enviar a $selectedVisibleCount") }
+                ) {
+                    Text(
+                        if (sending) "Enviando..."
+                        else if (selectedIds.size == 1) "Enviar respuesta"
+                        else "Enviar a $selectedVisibleCount"
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { batchDialog = false }) { Text("Cancelar") }
@@ -581,7 +609,7 @@ private fun PqrsCard(
                 if (Session.isAdmin) {
                     Checkbox(checked = selected, onCheckedChange = onToggleSelected)
                 }
-                DomuxStatusBadge(pqrs.status.replace('_', ' '), tone)
+                DomuxStatusBadge(pqrs.status.toDomuxDisplayLabel(), tone)
             }
             Text("${pqrs.residentName ?: "Residente"} · ${pqrs.apartment.orEmpty()}", style = MaterialTheme.typography.bodySmall)
             if (pqrs.createdByAdministration) {
@@ -633,7 +661,7 @@ private fun PqrsCard(
                             FilterChip(
                                 selected = responseStatus == state,
                                 onClick = { responseStatus = state },
-                                label = { Text(state.replace('_', ' ')) }
+                                label = { Text(state.toDomuxDisplayLabel()) }
                             )
                         }
                     }
@@ -717,7 +745,10 @@ private fun PqrsCard(
                     if (pqrs.status == "resuelta") {
                         HorizontalDivider(Modifier.padding(vertical = 8.dp))
                         Text("¿Qué tan satisfecho estás con la solución?")
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             (1..5).forEach { score ->
                                 FilterChip(
                                     selected = rating == score,

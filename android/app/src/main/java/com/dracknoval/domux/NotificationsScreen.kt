@@ -50,7 +50,10 @@ fun NotificationsScreen(navController: NavController) {
                         Column(Modifier.padding(14.dp)) {
                             Text(item.title, style = MaterialTheme.typography.titleMedium)
                             Text(item.message)
-                            Text("${item.type} · ${item.createdAt.orEmpty()}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${item.type.toDomuxDisplayLabel()} · ${item.createdAt.orEmpty()}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
                             if (!item.isRead) {
                                 TextButton(onClick = {
                                     scope.launch {

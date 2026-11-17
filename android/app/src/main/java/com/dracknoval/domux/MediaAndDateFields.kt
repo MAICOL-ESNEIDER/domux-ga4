@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -146,7 +147,10 @@ private fun MediaAttachmentPickerFiltered(
         }
     }
     Column {
-        Button(onClick = { launcher.launch(mimeTypeFilter ?: "*/*") }) {
+        Button(
+            onClick = { launcher.launch(mimeTypeFilter ?: "*/*") },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
             Text(if (attachmentName == null) "Adjuntar imagen, video o audio" else "Cambiar adjunto")
         }
         if (attachmentName != null) {
@@ -232,7 +236,10 @@ fun ExcelFilePickerButton(
             }
         }
     }
-    Button(onClick = { launcher.launch("*/*") }) {
+    Button(
+        onClick = { launcher.launch("*/*") },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    ) {
         Text(label)
     }
 }

@@ -138,22 +138,22 @@ fun HomeScreen(navController: NavController) {
     }
 
     val modules = buildList {
-        add(HomeModule("Anuncios", "Comunicados", "▤", "announcements", Color(0xFFF59E0B)))
+        add(HomeModule("Anuncios", "Comunicados", "▤", "announcements", Color(0xFFFFB300)))
         if (Session.isAdmin) {
-            add(HomeModule("PQRS", "Gestión de solicitudes", "◎", "pqrs", Color(0xFF06B6D4)))
+            add(HomeModule("PQRS", "Gestión de solicitudes", "◎", "pqrs", Color(0xFF00E5FF)))
             add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations", Color(0xFF10B981)))
-            add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry", Color(0xFF8B5CF6)))
+            add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry", Color(0xFFA855F7)))
             add(HomeModule("Usuarios", "Administración", "♙", "createUser", Color(0xFF3B82F6)))
         } else if (Session.isResident) {
             add(HomeModule("Mi perfil", "Mis datos y hogar", "♙", "profile", Color(0xFF3B82F6)))
-            add(HomeModule("Mis PQRS", "Solicitudes y respuestas", "◎", "pqrs", Color(0xFF06B6D4)))
+            add(HomeModule("Mis PQRS", "Solicitudes y respuestas", "◎", "pqrs", Color(0xFF00E5FF)))
             add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations", Color(0xFF10B981)))
-            add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry", Color(0xFF8B5CF6)))
+            add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry", Color(0xFFA855F7)))
         } else if (Session.isGuard) {
-            add(HomeModule("Registrar Visitante", "Visitas y portería", "♙", "registry?initialTab=3", Color(0xFFF97316)))
-            add(HomeModule("Ver Visitas y QR", "Visitas activas", "▦", "registry?initialTab=2", Color(0xFFF97316)))
-            add(HomeModule("Registrar Paquete", "Registrar en portería", "＋", "registry?initialTab=1", Color(0xFF8B5CF6)))
-            add(HomeModule("Bandeja de Paquetes", "Paquetes recibidos", "▣", "registry?initialTab=0", Color(0xFF8B5CF6)))
+            add(HomeModule("Registrar Visitante", "Visitas y portería", "♙", "registry?initialTab=3", Color(0xFFFF6D00)))
+            add(HomeModule("Ver Visitas y QR", "Visitas activas", "▦", "registry?initialTab=2", Color(0xFFFF6D00)))
+            add(HomeModule("Registrar Paquete", "Registrar en portería", "＋", "registry?initialTab=1", Color(0xFFA855F7)))
+            add(HomeModule("Bandeja de Paquetes", "Paquetes recibidos", "▣", "registry?initialTab=0", Color(0xFFA855F7)))
         }
     }
 
@@ -303,7 +303,7 @@ fun HomeScreen(navController: NavController) {
                                         Text(item.title, fontWeight = FontWeight.SemiBold)
                                         Text(item.message, color = Color(0xFFCBD5E1))
                                         Text(
-                                            "${item.type} · ${item.createdAt.orEmpty()}",
+                                            "${item.type.toDomuxDisplayLabel()} · ${item.createdAt.orEmpty()}",
                                             color = Color(0xFF94A3B8),
                                             style = MaterialTheme.typography.bodySmall
                                         )
