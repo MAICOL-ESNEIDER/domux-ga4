@@ -60,6 +60,7 @@ ICONS = {
     "archive": '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/>'
                '<path d="M10 12h4"/>',
     "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    "search": '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
     "filter": '<path d="M4 7h16M7 12h10M10 17h4"/>',
     "close": '<path d="M6 6l12 12M18 6L6 18"/>',
     # Los mismos tres íconos de estado de la app: acierto, en curso y alerta (HU-086).

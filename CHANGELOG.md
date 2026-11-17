@@ -59,6 +59,10 @@ administración.
 - Panel de pendientes, usuarios, estructura de la unidad, datos de la unidad, PQRS, reservas,
   comunicados y zonas con sus reglas, y paquetería y visitas en modo consulta.
 - Botón «Filtros» en las listas.
+- **Buscador general** (HU-089): una caja arriba de cada página con el filtro «Buscar en» (todo,
+  personas, apartamentos, vehículos, PQRS, paquetes o visitas). Muestra los resultados agrupados por
+  tipo, con pocos al buscar en todo y más al elegir un solo lugar, y cada uno lleva a su página. Lo
+  hace el servidor (`GET /api/search`), el mismo que usará la app para administración y portería.
 - Zona **Descargas**: se marca qué datos se quieren (PQRS, reservas, visitas, paquetes…), las fechas
   y, si se quiere, un apartamento. Sale un Excel con una hoja por tipo que junta lo que está en la
   base con lo que ya está en el archivo histórico. También se puede bajar una sola PQRS o una sola

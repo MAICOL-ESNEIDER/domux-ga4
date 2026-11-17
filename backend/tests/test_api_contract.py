@@ -709,6 +709,16 @@ class ContractContentTests(unittest.TestCase):
             "counts": "true", "pageSize": 10,
         })
         self.call(guard, "GET", "/api/resident-vehicles", query={"search": "KLM"})
+        # El buscador general (HU-089): con todo cargado, cada grupo tiene que cumplir el contrato.
+        found = self.data(admin, "GET", "/api/search", query={"q": "Rosa"})
+        self.assertTrue({group["type"] for group in found["groups"]} >= {"personas", "pqrs", "paquetes", "visitas"})
+        found = self.data(admin, "GET", "/api/search", query={"q": "QWE", "in": "vehiculos"})
+        self.assertEqual([item["kind"] for item in found["groups"][0]["items"]], ["visitante"])
+        self.data(guard, "GET", "/api/search", query={"q": "KLM456", "in": "vehiculos"})
+        self.data(guard, "GET", "/api/search", query={"q": "Rosa", "in": "apartamentos"})
+        self.assertTrue(self.data(guard, "GET", "/api/search", query={"q": "R"})["tooShort"])
+        self.call(guard, "GET", "/api/search", query={"q": "Rosa", "in": "pqrs"}, expect=403)
+        self.call(admin, "GET", "/api/search", query={"q": "Rosa", "in": "otra-cosa"}, expect=400)
         self.call(guard, "POST", "/api/resident-vehicles/KLM456/movements", expect=201, json={"type": "entrada"})
         self.call(guard, "PUT", f"/api/vehicle-entries/{entry['id']}/exit")
         self.call(guard, "POST", f"/api/visits/{self.inside_visit['id']}/exit", json={"returningToday": False})

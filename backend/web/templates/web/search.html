@@ -1,0 +1,46 @@
+{% extends "web/base.html" %}
+{% set page_title = "Buscar" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Buscar</h1>
+    {% if text and not too_short %}
+    <p>Resultados para «{{ text }}»{% if place != "todo" %} en {{ place_label }}{% endif %}.</p>
+    {% else %}
+    <p>Escribe en la caja de arriba lo que buscas y elige dónde en «Buscar en».</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if too_short %}
+<section class="card">
+  <p class="empty">Escribe al menos {{ min_chars }} letras o números para buscar.
+    Para buscar un vehículo, escribe al menos 3 caracteres de la placa.</p>
+</section>
+{% elif not groups %}
+<section class="card">
+  <p class="empty">No encontramos nada con «{{ text }}»{% if place != "todo" %} en {{ place_label }}{% endif %}.
+    Revisa que esté bien escrito{% if place != "todo" %} o prueba con «Todo» en «Buscar en»{% endif %}.</p>
+</section>
+{% else %}
+{% for group in groups %}
+<section class="card search-group" aria-labelledby="grupo-{{ group.type }}">
+  <h2 id="grupo-{{ group.type }}">{{ group.label }} <small class="muted">({{ group["items"]|length }}{% if group.more %}+{% endif %})</small></h2>
+  <ul class="list">
+    {% for item in group["items"] %}
+    <li>
+      {% if item.url %}<a href="{{ item.url }}"><strong>{{ item.title }}</strong></a>{% else %}<strong>{{ item.title }}</strong>{% endif %}
+      {% if item.kind == "visitante" %} <span class="badge badge-progress">{{ tone_icon("progress") }}De visitante</span>{% endif %}
+      <br><small class="muted">{{ item.subtitle }}</small>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if group.more %}
+  <p class="small muted mb-0">Hay más resultados de los que se muestran.
+    {% if group.all_url %}<a href="{{ group.all_url }}">Ver todos en {{ group.label }}</a>{% else %}Escribe más del nombre para afinar la búsqueda.{% endif %}</p>
+  {% endif %}
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

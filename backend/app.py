@@ -17,6 +17,7 @@ from routes.admin import bp as admin_bp
 from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
 from routes.legal import bp as legal_bp
+from routes.search import bp as search_bp
 from routes.security import bp as security_bp
 from routes.structure import bp as structure_bp
 from routes.unit import bp as unit_bp
@@ -333,6 +334,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(community_bp)
     app.register_blueprint(legal_bp)
+    app.register_blueprint(search_bp)
     app.register_blueprint(security_bp)
     app.register_blueprint(structure_bp)
     app.register_blueprint(unit_bp)

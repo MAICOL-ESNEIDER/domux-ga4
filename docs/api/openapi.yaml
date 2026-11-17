@@ -127,6 +127,8 @@ tags:
   description: Vehículos de visitantes y de residentes
 - name: Legal
   description: Documentos legales (política de datos, términos, cookies y más); públicos
+- name: Buscador
+  description: Buscar en un solo lugar personas, apartamentos, placas, PQRS, paquetes y visitas
 security:
 - bearerAuth: []
 paths:
@@ -5628,6 +5630,65 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/search:
+    get:
+      tags:
+      - Buscador
+      summary: Buscar en todo o en un solo lugar
+      description: |-
+        **Quién puede usarla:** Solo administración, portería.
+
+        El buscador general con el filtro «Buscar en» (HU-089). Busca el texto en personas, apartamentos, vehículos (por
+        placa, de residentes y de visitantes que están adentro), PQRS (por radicado, asunto o residente), paquetes y
+        visitas, y devuelve los resultados agrupados por tipo, ya con el texto que se muestra. Con menos de 2 letras no
+        busca (`tooShort` es true). Al buscar en todo llegan hasta 5 por grupo; en un solo lugar, hasta 20 (`more` dice
+        si hay más).
+
+        La portería busca con las reglas de siempre: solo residentes activos, por nombre, documento o apartamento (nunca
+        por correo), sin teléfonos ni correos, sin PQRS (403 si las pide) y como mucho 5 por grupo. `places` trae las
+        opciones del filtro que tiene cada rol.
+      operationId: searchEverywhere
+      x-endpoint: search.search
+      x-roles:
+      - ADMIN
+      - GUARD
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Lo que se busca
+      - name: in
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - todo
+          - personas
+          - apartamentos
+          - vehiculos
+          - pqrs
+          - paquetes
+          - visitas
+        description: Dónde se busca (por defecto, en todo)
+      responses:
+        '200':
+          description: Los resultados, agrupados por tipo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/unit-info:
     get:
       tags:
@@ -9444,6 +9505,112 @@ components:
         exitedByName:
           type: string
           nullable: true
+    SearchResponse:
+      type: object
+      required:
+      - query
+      - in
+      - places
+      - tooShort
+      - groups
+      properties:
+        query:
+          type: string
+          description: El texto que se buscó, sin espacios al principio ni al final
+        in:
+          type: string
+          description: Dónde se buscó
+        places:
+          type: array
+          description: Las opciones del filtro «Buscar en» que tiene este rol, empezando por «Todo»
+          items:
+            $ref: '#/components/schemas/SearchPlace'
+        tooShort:
+          type: boolean
+          description: Si el texto tiene menos de 2 letras (entonces no se busca)
+        groups:
+          type: array
+          description: Un grupo por cada tipo que tuvo resultados
+          items:
+            $ref: '#/components/schemas/SearchGroup'
+    SearchPlace:
+      type: object
+      required:
+      - value
+      - label
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+    SearchGroup:
+      type: object
+      required:
+      - type
+      - label
+      - items
+      - more
+      properties:
+        type:
+          type: string
+          enum:
+          - personas
+          - apartamentos
+          - vehiculos
+          - pqrs
+          - paquetes
+          - visitas
+        label:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        more:
+          type: boolean
+          description: Si hay más resultados de los que llegaron (hay que escribir más o buscar en un solo lugar)
+    SearchResult:
+      type: object
+      required:
+      - type
+      - id
+      - title
+      - subtitle
+      - apartmentId
+      - apartmentLabel
+      - kind
+      properties:
+        type:
+          type: string
+          enum:
+          - personas
+          - apartamentos
+          - vehiculos
+          - pqrs
+          - paquetes
+          - visitas
+        id:
+          type: integer
+          description: El id del registro en su propia lista (usuario, apartamento, vehículo, PQRS, paquete o visita)
+        title:
+          type: string
+        subtitle:
+          type: string
+        apartmentId:
+          type: integer
+          nullable: true
+          description: El apartamento relacionado, si hay uno
+        apartmentLabel:
+          type: string
+          nullable: true
+          description: El mismo apartamento escrito como «Torre 1 · Apto 101», para abrirlo en la lista de apartamentos
+        kind:
+          type: string
+          nullable: true
+          enum:
+          - residente
+          - visitante
+          description: Solo en vehículos, de quién es (residente) o si es de un visitante que está adentro
     ParkingBoard:
       type: object
       required:

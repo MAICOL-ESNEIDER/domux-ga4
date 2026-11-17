@@ -42,6 +42,17 @@
         <a href="{{ url_for('web.panel') }}">Inicio</a>
         {% if page_title and request.endpoint != 'web.panel' %} › <span aria-current="page">{{ page_title }}</span>{% endif %}
       </nav>
+      {% set find = search_form() %}
+      <form class="search" role="search" method="get" action="{{ url_for('web.search_page') }}">
+        <label class="sr-only" for="buscar-texto">Buscar</label>
+        <input type="search" id="buscar-texto" name="q" value="{{ find.text }}" maxlength="100"
+               placeholder="Buscar personas, apartamentos, placas…" autocomplete="off">
+        <label class="sr-only" for="buscar-en">Buscar en</label>
+        <select id="buscar-en" name="en">
+          {% for option in find.places %}<option value="{{ option.value }}"{% if option.value == find.place %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn btn-small">{{ icon("search") }}<span class="sr-only">Buscar</span></button>
+      </form>
       <div class="who">
         <span class="who-name">{{ web_user.full_name }} · {{ role_labels.get(web_user.role, web_user.role) }}</span>
         <a class="btn btn-quiet btn-small" href="{{ url_for('web.password_change') }}">Cambiar contraseña</a>
