@@ -19,7 +19,6 @@ from datetime import timedelta
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 
-from config import visitor_parking_max_days
 from errors import ApiError
 from extensions import db
 from models import (
@@ -30,6 +29,7 @@ from models import (
     Visit,
     VisitorVehicleEntry,
 )
+from services.unit_rules import current_rules
 from time_utils import utc_now
 from validators import normalize_plate, validate_colombian_plate
 
@@ -160,7 +160,7 @@ def visitor_board(now=None):
         "suggestedSpotId": free[0].id if free else None,
         "withoutSpot": [entry.to_dict(now) for entry in inside if entry.spot_id is None],
         "overdue": sum(1 for entry in inside if entry.is_overdue(now)),
-        "maxDays": visitor_parking_max_days(),
+        "maxDays": current_rules().visitor_parking_max_days,
     }
 
 
@@ -322,8 +322,8 @@ def entry_counts(plate=None, apartment_id=None, now=None):
 
 
 def _max_stay():
-    """Cuánto puede quedarse un vehículo visitante: 3 días o el plazo de la unidad (RN-015)."""
-    return timedelta(days=visitor_parking_max_days())
+    """Cuánto puede quedarse un vehículo visitante: 3 días o el plazo que fijó la unidad (RN-015)."""
+    return timedelta(days=current_rules().visitor_parking_max_days)
 
 
 # ---------------------------------------------------------------------------

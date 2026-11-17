@@ -43,6 +43,7 @@ def init_web(app):
         views_pqrs,
         views_registry,
         views_reservations,
+        views_rules,
         views_search,
         views_structure,
         views_unit,

@@ -13,6 +13,7 @@ from sqlalchemy import or_
 
 from errors import ApiError
 from models import Apartment, PackageItem, Pqrs, Tower, User, Vehicle, Visit, VisitorVehicleEntry
+from services.unit_rules import current_rules
 from validators import normalize_plate
 
 #: Dónde se puede buscar, en el orden del filtro «Buscar en».
@@ -43,7 +44,6 @@ ROLE_LABELS = {"ADMIN": "Administración", "GUARD": "Portería", "RESIDENT": "Re
 OCCUPANCY_LABELS = {"propietario": "Propietario", "arrendatario": "Arrendatario", "residente": "Residente"}
 PQRS_STATUS_LABELS = {"abierta": "Abierta", "en_proceso": "En proceso", "resuelta": "Resuelta"}
 PACKAGE_STATUS_LABELS = {"por_llegar": "Por llegar", "pendiente": "En portería", "entregado": "Entregado"}
-PACKAGE_ALERT_LABELS = {"naranja": "Más de 48 h sin reclamar", "rojo": "Más de 72 h sin reclamar"}
 VISIT_TYPE_LABELS = {"visitante": "Visitante", "domiciliario": "Domiciliario", "contratista": "Contratista"}
 VEHICLE_TYPE_LABELS = {"carro": "Carro", "moto": "Moto"}
 
@@ -190,6 +190,13 @@ def _pqrs(text, user, limit):
     return items, more
 
 
+
+def _package_alert_label(alert):
+    """«Más de 48 h sin reclamar» con las horas de la unidad, o None si el paquete no tiene alerta."""
+    rules = current_rules()
+    hours = {"naranja": rules.package_orange_hours, "rojo": rules.package_red_hours}.get(alert)
+    return None if hours is None else f"Más de {hours} h sin reclamar"
+
 def _packages(text, user, limit):
     pattern = _like(text)
     query = (
@@ -207,7 +214,7 @@ def _packages(text, user, limit):
         resident = package.resident
         alert = package.claim_alert() if package.status == "pendiente" else None
         subtitle = _join(
-            PACKAGE_STATUS_LABELS.get(package.status, package.status), PACKAGE_ALERT_LABELS.get(alert),
+            PACKAGE_STATUS_LABELS.get(package.status, package.status), _package_alert_label(alert),
             resident.full_name if resident is not None else None,
             resident.apartment if resident is not None else None,
         )

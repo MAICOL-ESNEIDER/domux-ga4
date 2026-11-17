@@ -490,6 +490,19 @@ class ContractContentTests(unittest.TestCase):
         logo = self.call(resident, "GET", "/api/unit-info/logo")
         self.call(resident, "GET", "/api/unit-info/logo", expect=304, headers={"If-None-Match": logo.headers["ETag"]})
 
+        # Las reglas de la unidad: se ven, se cambian (con un plazo propio) y vuelven al valor de DOMUX.
+        self.call(admin, "GET", "/api/admin/unit-rules")
+        self.call(admin, "PUT", "/api/admin/unit-rules", json={
+            "pqrsTermDays": 20, "pqrsWarningDays": 6, "pqrsTermsByCategory": {"Daño": 5},
+            "packageOrangeHours": 36, "packageRedHours": 60, "visitorParkingMaxDays": 4,
+        })
+        self.call(admin, "PUT", "/api/admin/unit-rules", expect=400, json={"pqrsTermDays": 500})
+        self.call(resident, "GET", "/api/unit-info")
+        self.call(admin, "PUT", "/api/admin/unit-rules", json={
+            "pqrsTermDays": None, "pqrsWarningDays": None, "pqrsTermsByCategory": None,
+            "packageOrangeHours": None, "packageRedHours": None, "visitorParkingMaxDays": None,
+        })
+
         template = self.data(admin, "GET", "/api/admin/census-template")
         census = self.data(admin, "POST", "/api/admin/import-census", json={
             "fileBase64": template["base64"], "fileName": template["fileName"], "dataProcessingConsent": True,

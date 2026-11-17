@@ -13,10 +13,10 @@ from datetime import timedelta
 
 from sqlalchemy import update
 
-from config import visitor_parking_max_days
 from extensions import db
 from models import User, Visit, VisitorVehicleEntry
 from services.notification_service import notify_user
+from services.unit_rules import current_rules
 from time_utils import to_colombia, utc_now
 
 
@@ -83,11 +83,11 @@ def alert_overstays(now=None):
 def alert_overdue_vehicles(now=None):
     """Avisa a los guardias de los vehículos visitantes que pasaron el tiempo máximo (RN-015, HU-041).
 
-    Son 3 días, o el plazo que fije la unidad. Devuelve cuántos vehículos avisó.
+    Son 3 días, o el plazo que fije la administración en las reglas de la unidad. Devuelve cuántos vehículos avisó.
     No hace commit: lo hace run_alerts.
     """
     now = now or utc_now()
-    max_days = visitor_parking_max_days()
+    max_days = current_rules().visitor_parking_max_days
     pending = VisitorVehicleEntry.query.filter(
         VisitorVehicleEntry.exited_at.is_(None),
         VisitorVehicleEntry.overdue_alerted_at.is_(None),

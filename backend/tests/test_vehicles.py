@@ -25,6 +25,7 @@ from models import (
     VisitorVehicleEntry,
 )
 from services import vehicle_service
+from services.unit_rules import forget_rules
 from structure_fixtures import apartment_for, parking_spot
 from time_utils import utc_now
 from werkzeug.security import generate_password_hash
@@ -471,6 +472,7 @@ class VehicleTests(unittest.TestCase):
         self.age_entry(entry["id"], days=4)
 
         with patch.dict(os.environ, {"VISITOR_PARKING_MAX_DAYS": "5"}):
+            forget_rules()  # la prueba vive en una sola solicitud; el servidor lee la variable al arrancar
             listed = self.client.get(
                 "/api/vehicle-entries?overdue=true", headers=self.auth(self.guard)
             ).get_json()
@@ -479,6 +481,7 @@ class VehicleTests(unittest.TestCase):
         self.assertEqual(Notification.query.filter_by(type="vehicle").count(), 0)
 
         with patch.dict(os.environ, {"VISITOR_PARKING_MAX_DAYS": "1"}):
+            forget_rules()
             alert = self.client.get("/api/notifications", headers=self.auth(self.guard))
         message = [i for i in alert.get_json()["notifications"] if i["type"] == "vehicle"][0]["message"]
         self.assertIn("El máximo es 1 día.", message)
@@ -486,6 +489,7 @@ class VehicleTests(unittest.TestCase):
     def test_an_invalid_maximum_time_falls_back_to_three_days(self):
         for value in ("", "abc", "0", "-2", "1.5"):
             with self.subTest(value=value), patch.dict(os.environ, {"VISITOR_PARKING_MAX_DAYS": value}):
+                forget_rules()
                 self.assertEqual(self.board().get_json()["maxDays"], 3)
 
     def test_alerts_wait_if_there_is_no_active_guard(self):

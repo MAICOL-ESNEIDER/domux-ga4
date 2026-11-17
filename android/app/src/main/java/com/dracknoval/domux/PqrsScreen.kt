@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.dracknoval.domux.data.ComplexInfoStore
 import com.dracknoval.domux.data.Pqrs
 import com.dracknoval.domux.data.Session
 import kotlinx.coroutines.delay
@@ -56,7 +57,7 @@ private val pqrsStates = listOf(
 
 /**
  * Peticiones, quejas, reclamos y sugerencias (HU-072 y HU-073). Cada PQRS muestra su radicado y,
- * mientras no esté resuelta, el semáforo de su plazo de 15 días hábiles. La pantalla solo dibuja
+ * mientras no esté resuelta, el semáforo de su plazo en días hábiles (15 por defecto; lo fija la administración). La pantalla solo dibuja
  * lo que le da [PqrsViewModel].
  */
 @Composable
@@ -274,7 +275,7 @@ private fun semaphoreLabel(pqrs: Pqrs): String? {
     if (pqrs.semaphore == null) return null
     val due = humanDate(pqrs.dueDate)
     val days = pqrs.daysRemaining
-        ?: return if (due.isBlank()) "Plazo de 15 días hábiles" else "Vence el $due"
+        ?: return if (due.isBlank()) "Plazo de ${businessDaysText(ComplexInfoStore.rules.termFor(pqrs.category))}" else "Vence el $due"
     val dueNote = if (due.isBlank()) "" else " · vence el $due"
     return when {
         days < 0 -> "Plazo vencido hace ${businessDaysText(-days)}" + if (due.isBlank()) "" else " · era el $due"
@@ -668,7 +669,7 @@ private fun PqrsForm(
                     }
                 }
                 Text(
-                    "Al radicarla recibe un número de radicado y tiene 15 días hábiles para ser respondida.",
+                    "Al radicarla recibe un número de radicado y tiene ${businessDaysText(ComplexInfoStore.rules.termFor(category))} para ser respondida.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 DatePickerField("Fecha del incidente", incidentDate, { incidentDate = it })
