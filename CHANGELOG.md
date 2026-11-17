@@ -90,6 +90,12 @@ administración.
 
 **Calidad e infraestructura**
 - Migraciones de la base con Flask-Migrate (TT-008).
+- Datos de prueba para todas las opciones (CAL-01): el servidor agrega, sin borrar ni cambiar lo que
+  ya hay, lo que falta para llegar a 17 usuarios (1 de administración, 4 guardias y 12 residentes en
+  cuatro hogares con propietarios, arrendatarios, dueños que no viven ahí, adultos mayores y menores
+  de edad) y lo mínimo de cada opción: parqueaderos, cuartos útiles, vehículos, mascotas, comunicados,
+  PQRS con su semáforo, reservas, paquetes de más de 48 y 72 horas, visitas, QR y notificaciones.
+  Cada cuenta usa la contraseña de su rol (las mismas variables `SEED_*`) y se cargan una sola vez.
 - Pipeline en GitHub Actions: pruebas en SQLite y en PostgreSQL, cobertura mínima de 70 %, revisión
   de errores con Ruff, búsqueda de librerías con fallas conocidas y compilación del APK
   (TT-021, TT-023).

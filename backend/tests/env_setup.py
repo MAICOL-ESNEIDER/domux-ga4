@@ -16,6 +16,10 @@ os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 for _name in ("SEED_ADMIN_PASSWORD", "SEED_GUARD_PASSWORD", "SEED_RESIDENT_PASSWORD"):
     os.environ.setdefault(_name, secrets.token_urlsafe(9) + "Aa1*")
 
+# Cada grupo de pruebas arma sus propios datos: los datos de prueba de demo_data.py solo se
+# cargan en las pruebas que los piden (test_demo_data.py).
+os.environ.setdefault("DOMUX_DEMO_DATA", "0")
+
 
 def release_app(app):
     """Cierra las conexiones que dejó abiertas la app de un grupo de pruebas.

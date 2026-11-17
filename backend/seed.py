@@ -1,7 +1,8 @@
 """Cuentas y datos de prueba para una base vacía.
 
 Las contraseñas de las cuentas de prueba nunca se escriben en el código ni se
-muestran en la consola (SEC-004 y SEC-013): se leen de variables de entorno.
+muestran en la consola (SEC-004 y SEC-013): se leen de variables de entorno, una
+por rol. Lo que se agrega después para probar cada opción está en demo_data.py.
 """
 
 import logging
@@ -31,7 +32,8 @@ from validators import validate_strong_password
 
 logger = logging.getLogger(__name__)
 
-#: Cada cuenta de prueba y la variable de entorno que guarda su contraseña.
+#: Cada cuenta de prueba que crea la semilla y la variable de entorno que guarda su
+#: contraseña. Las que se agregan después (demo_data.py) usan las mismas variables.
 DEMO_PASSWORD_VARS = {
     "admin@domux.com": "SEED_ADMIN_PASSWORD",
     "guardia@domux.com": "SEED_GUARD_PASSWORD",
@@ -57,16 +59,45 @@ def _random_password():
     return f"{body}Aa1*"
 
 
+#: Contraseñas creadas al azar en este arranque, una por variable (solo en desarrollo). La
+#: semilla y los datos de prueba usan la misma: así cada rol tiene una sola contraseña.
+_generated_passwords = {}
+
+
+def demo_password(var):
+    """La contraseña de prueba de una variable: la del entorno o, en desarrollo, una al azar.
+
+    En producción devuelve None si la variable falta o no cumple la política.
+    """
+    password = _env_password(var)
+    if password:
+        return password
+    if is_production():
+        return None
+    if var not in _generated_passwords:
+        _generated_passwords[var] = _random_password()
+    return _generated_passwords[var]
+
+
 def _save_generated_credentials(credentials):
     """Guarda en instance/ las contraseñas creadas al azar en desarrollo.
 
     La carpeta instance/ está fuera de Git, así que el archivo nunca se sube. Se
     usa en lugar de la consola para que las contraseñas no queden en los registros.
+    Si el archivo ya existe, se agregan o se actualizan las cuentas y las demás se
+    conservan.
     """
     folder = Path(current_app.instance_path)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / "demo_credentials.txt"
-    lines = [f"{email}: {password}" for email, password in credentials.items()]
+    saved = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            email, separator, password = line.partition(": ")
+            if separator:
+                saved[email.strip()] = password
+    saved.update(credentials)
+    lines = [f"{email}: {password}" for email, password in saved.items()]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     path.chmod(0o600)
     logger.warning(
@@ -75,50 +106,73 @@ def _save_generated_credentials(credentials):
     )
 
 
+def remember_generated_credentials(credentials):
+    """Anota en instance/demo_credentials.txt las cuentas cuya contraseña se creó al azar.
+
+    Las que salen de una variable del entorno nunca se escriben en un archivo.
+    """
+    generated = set(_generated_passwords.values())
+    chosen = {email: password for email, password in credentials.items() if password in generated}
+    if chosen:
+        _save_generated_credentials(chosen)
+
+
 def _demo_passwords():
     """Reúne las contraseñas de las cuentas de prueba, una por variable.
 
     En producción, si falta alguna variable, devuelve None y no se crean cuentas
     de prueba. En desarrollo crea al azar las que falten.
     """
-    passwords = {var: _env_password(var) for var in set(DEMO_PASSWORD_VARS.values())}
-    missing = sorted(var for var, value in passwords.items() if not value)
-    if missing and is_production():
-        logger.warning(
-            "No se crearon las cuentas de prueba: faltan %s.", ", ".join(missing)
-        )
-        return None
-    for var in missing:
-        passwords[var] = _random_password()
-    if missing:
-        _save_generated_credentials({
-            email: passwords[var]
-            for email, var in DEMO_PASSWORD_VARS.items()
-            if var in missing
-        })
+    variables = set(DEMO_PASSWORD_VARS.values())
+    if is_production():
+        missing = sorted(var for var in variables if not _env_password(var))
+        if missing:
+            logger.warning(
+                "No se crearon las cuentas de prueba: faltan %s.", ", ".join(missing)
+            )
+            return None
+    passwords = {var: demo_password(var) for var in variables}
+    remember_generated_credentials({email: passwords[var] for email, var in DEMO_PASSWORD_VARS.items()})
     return passwords
 
 
 def sync_demo_passwords():
-    """Pone a las cuentas de prueba la contraseña que diga el entorno.
+    """Pone a las cuentas de prueba la contraseña que diga el entorno: la de su rol.
 
     Para cambiar una contraseña de prueba basta con cambiar su variable y reiniciar
-    el servidor; no hace falta borrar la base. Solo toca las cuentas de prueba que
+    el servidor; no hace falta borrar la base. Cambia la de todas las cuentas de
+    prueba de ese rol, las de la semilla y las de demo_data.py. Solo toca las que
     existan y nunca muestra la contraseña.
     """
+    # Se importa aquí y no arriba porque demo_data importa este módulo.
+    from demo_data import NEW_ACCOUNT_VARS
+
+    accounts = {**DEMO_PASSWORD_VARS, **NEW_ACCOUNT_VARS}
     changed = False
-    for email, var in DEMO_PASSWORD_VARS.items():
+    # Las cuentas nuevas de un rol comparten el mismo hash: se revisa una sola vez.
+    checked = {}
+    for var in sorted(set(accounts.values())):
         password = _env_password(var)
         if not password:
-            # En el servidor de pruebas se avisa: la cuenta sigue con su clave vieja.
+            # En el servidor de pruebas se avisa: las cuentas siguen con su clave vieja.
             if is_production() and not os.environ.get(var):
-                logger.warning("%s no está configurada: %s conserva su contraseña anterior.", var, email)
+                logger.warning(
+                    "%s no está configurada: las cuentas de prueba de ese rol conservan su contraseña anterior.",
+                    var,
+                )
             continue
-        user = User.query.filter_by(email=email).first()
-        if user is not None and not check_password_hash(user.password_hash, password):
-            user.password_hash = generate_password_hash(password)
+        emails = [email for email, account_var in accounts.items() if account_var == var]
+        new_hash = None
+        for user in User.query.filter(User.email.in_(emails)).order_by(User.email).all():
+            key = (user.password_hash, var)
+            if key not in checked:
+                checked[key] = check_password_hash(user.password_hash, password)
+            if checked[key]:
+                continue
+            new_hash = new_hash or generate_password_hash(password)
+            user.password_hash = new_hash
             changed = True
-            logger.info("Contraseña de prueba de %s actualizada desde %s.", email, var)
+            logger.info("Contraseña de prueba de %s actualizada desde %s.", user.email, var)
     if changed:
         db.session.commit()
 
