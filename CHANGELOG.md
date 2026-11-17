@@ -46,6 +46,25 @@ administración.
   Al cerrar una zona, las reservas que ya tenía se mantienen y la administración recibe un aviso con
   cuántas son; no se puede aprobar una solicitud pendiente de una zona cerrada ni retirar una zona con
   reservas próximas. Nada se borra: una zona retirada conserva sus reservas viejas con su nombre.
+- **Reglas de la unidad** (DEC-032): lo que la asamblea cambia cada año ahora lo ajusta la
+  administración en la web, sin pedirle nada al equipo técnico: los **días hábiles para responder una
+  PQRS** (general y propio de cada tipo: petición, queja, reclamo, sugerencia o daño), cuántos días
+  antes del vencimiento el semáforo pasa a amarillo, las **horas sin reclamar** para el aviso naranja
+  y rojo de un paquete y los **días máximos de un vehículo visitante** en el parqueadero. Cada valor
+  se revisa (con su mínimo y su máximo) y el sistema avisa si las reglas no tienen sentido juntas. Un
+  cambio rige desde que se guarda, también para lo que ya existe, y los textos de la app, de la web y
+  de las alertas dicen el plazo real de la unidad. Donde no se cambia nada rige el valor de DOMUX
+  (15 días hábiles, 5 de aviso, 48 y 72 horas, 3 días) y cada regla se puede restablecer. Cada cambio
+  queda en la auditoría con lo de antes y lo de después.
+- **Documentos de la unidad** (DEC-032): la administración sube en la web el manual de convivencia,
+  las reglas, los presupuestos aprobados, los históricos de gastos y las actas (PDF o imagen de hasta
+  6 MB, revisados por sus primeros bytes y no por el nombre) y **marca quién los puede ver**:
+  propietarios, arrendatarios, otros residentes o portería. Cada persona ve en la app solo los suyos,
+  agrupados por tipo, y los abre dentro de la app sin guardar nada en el celular; un documento que no
+  es suyo responde como si no existiera. Se puede avisar con una notificación a quienes lo ven.
+  La administración edita el título, la descripción, el tipo y los públicos, retira un documento (deja
+  de verse pero queda guardado) y lo vuelve a publicar con los mismos públicos; para una versión nueva
+  se sube un documento nuevo y se retira el viejo. Cada cambio queda en la auditoría.
 - Comunicados por categoría y por torre, con vencimiento, lectura y «Archivados»
   (HU-058 a HU-062).
 - PQRS con radicado, semáforo de plazos, conversación y respuestas por lotes (HU-072 y HU-073).
@@ -62,8 +81,8 @@ administración.
   guarda el correo y el nombre, nunca la contraseña. En el siguiente ingreso salen como «Cuentas
   recientes en este equipo»: se toca la cuenta y se escribe solo la contraseña, y cada una se quita con
   su X. El servidor no guarda ninguna lista.
-- Panel de pendientes, usuarios, estructura de la unidad, datos de la unidad, PQRS, reservas,
-  comunicados y zonas con sus reglas, y paquetería y visitas en modo consulta.
+- Panel de pendientes, usuarios, estructura de la unidad, documentos de la unidad, datos de la
+  unidad, PQRS, reservas, comunicados y zonas con sus reglas, y paquetería y visitas en modo consulta.
 - Botón «Filtros» en las listas.
 - **Buscador general** (HU-089): una caja arriba de cada página con el filtro «Buscar en» (todo,
   personas, apartamentos, vehículos, PQRS, paquetes o visitas). Muestra los resultados agrupados por

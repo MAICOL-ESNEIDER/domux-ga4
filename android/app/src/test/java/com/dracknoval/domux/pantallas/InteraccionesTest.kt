@@ -10,9 +10,13 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.dracknoval.domux.data.AppPreferences
+import com.dracknoval.domux.data.ComplexInfoStore
 import com.dracknoval.domux.data.TextSize
+import com.dracknoval.domux.data.UnitRules
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.robolectric.annotation.Config
@@ -119,6 +123,37 @@ class InteraccionesTest : BaseDeFotos() {
         compose.onNodeWithText("Motivo: Cambio del piso", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Reservar").assertDoesNotExist()
         sacarFoto("interaccion-07-zona-cerrada")
+    }
+
+    @Test
+    fun el_inicio_de_administracion_escribe_las_horas_de_paquetes_que_fijo_la_unidad() {
+        DatosDeMentira.reglasDeLaUnidad = UnitRules(packageOrangeHours = 40, packageRedHours = 60)
+        entrarComo(Roles.ADMINISTRACION)
+        abrir("home")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Paquetes con más de 40 h").assertExists()
+        compose.onNodeWithText("1 con más de 60 h").assertExists()
+        compose.onNodeWithText("Paquetes con más de 48 h").assertDoesNotExist()
+        sacarFoto("interaccion-08-horas-de-paquetes-de-la-unidad")
+    }
+
+    @Test
+    fun el_plazo_de_una_pqrs_nueva_sigue_la_regla_de_su_tipo() {
+        DatosDeMentira.reglasDeLaUnidad = UnitRules(pqrsTermDays = 20, pqrsTermsByCategory = mapOf("Daño" to 5))
+        entrarComo(Roles.RESIDENTE)
+        // En la app las reglas llegan al abrir el inicio; aquí se piden directamente.
+        runBlocking { ComplexInfoStore.refresh() }
+        abrir("pqrs?tab=nueva")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        // Una petición usa el plazo general de la unidad; un daño, el suyo propio.
+        compose.onNodeWithText("tiene 20 días hábiles para ser respondida", substring = true).assertExists()
+        // El chip «Daño» queda al final de una fila que se mueve de lado y no cabe en la pantalla: se acerca antes de tocarlo.
+        compose.onAllNodesWithText("Daño").onLast().performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("tiene 5 días hábiles para ser respondida", substring = true).assertExists()
+        sacarFoto("interaccion-09-plazo-de-pqrs-por-tipo")
     }
 
     @Test

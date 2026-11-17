@@ -16,6 +16,7 @@ from extensions import db
 from models import Pqrs, PqrsMessage
 from services import pqrs_service
 from services.audit_service import add_audit_log
+from services.unit_rules import PQRS_CATEGORIES
 from web import bp
 from web.api import Api
 from web.exports import PQRS_COLUMNS, excel_download, filters_text
@@ -28,8 +29,8 @@ from web.uploads import attach_media
 #: Filas de la bandeja por página.
 PAGE_SIZE = 15
 
-#: Los tipos de PQRS que ofrece la app (PqrsScreen.kt).
-CATEGORIES = ("Petición", "Queja", "Reclamo", "Sugerencia", "Daño")
+#: Los tipos de PQRS que ofrece la app (PqrsScreen.kt); son los mismos a los que se les fija un plazo.
+CATEGORIES = PQRS_CATEGORIES
 
 STATUS_OPTIONS = tuple((key, label) for key, (label, _tone) in PQRS_STATUSES.items())
 

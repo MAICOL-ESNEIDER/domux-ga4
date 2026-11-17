@@ -237,6 +237,37 @@ data class AnnouncementReadResponse(
     val unreadCount: Int = 0
 )
 
+/**
+ * Documento de la unidad (DEC-032): el manual de convivencia, las reglas, los presupuestos aprobados,
+ * los históricos de gastos, las actas... La lista no trae el archivo: se pide aparte al abrirlo
+ * (`api/documents/{id}/file`). Cada persona recibe solo los documentos que la administración le marcó.
+ */
+data class UnitDocument(
+    val id: Int,
+    val title: String,
+    val description: String? = null,
+    // Una de las llaves de los tipos que manda el servidor (convivencia, reglas, presupuesto, gastos, actas u otro).
+    val category: String? = null,
+    val categoryLabel: String? = null,
+    val fileName: String? = null,
+    val mimeType: String? = null,
+    // «pdf» o «image»: así se muestra.
+    val kind: String? = null,
+    val sizeBytes: Int = 0,
+    // Cambia solo cuando cambia el archivo; sirve para no descargarlo dos veces.
+    val version: String? = null,
+    val createdAt: String? = null,
+    val uploadedByName: String? = null,
+    // Solo la administración recibe a quién se lo muestra: propietario, arrendatario, residente o guardia.
+    val visibleTo: List<String>? = null
+)
+data class DocumentOption(val key: String, val label: String)
+data class DocumentsListResponse(
+    val documents: List<UnitDocument>?,
+    val categories: List<DocumentOption>? = null,
+    val audiences: List<DocumentOption>? = null
+)
+
 data class Pqrs(
     val id: Int,
     val subject: String,
@@ -653,6 +684,7 @@ data class AdminSummaryCounts(
     val pqrsOverdue: Int = 0,
     val pqrsDueSoon: Int = 0,
     val reservationsPending: Int = 0,
+    // Pasaron las horas del aviso naranja y del rojo de la unidad (48 y 72 por defecto, ver UnitRules).
     val packagesOver48: Int = 0,
     val packagesOver72: Int = 0,
     val unreadNotifications: Int = 0

@@ -88,7 +88,7 @@ En el inicio de sesión, la casilla «Recordar mi correo en este equipo» (apaga
 
 ### Contrato de la API
 
-El servidor tiene 116 operaciones en 18 módulos (salud, sesión, usuarios, residentes, administración, hogares, unidad, estructura, comunicados, PQRS, zonas comunes, reservas, notificaciones, paquetes, visitas, códigos QR, vehículos y documentos legales). Todas están descritas en [`docs/api/openapi.yaml`](docs/api/openapi.yaml), el contrato en formato OpenAPI 3.0 (cómo se ve y cómo se mantiene: [`docs/api/README.md`](docs/api/README.md)). Una prueba automática lo compara con el servidor real en cada cambio, así que no puede quedar desactualizado.
+El servidor tiene 125 operaciones en 19 módulos (salud, sesión, usuarios, residentes, administración, hogares, unidad, estructura, comunicados, PQRS, zonas comunes, reservas, notificaciones, paquetes, visitas, códigos QR, vehículos, documentos de la unidad y documentos legales). Todas están descritas en [`docs/api/openapi.yaml`](docs/api/openapi.yaml), el contrato en formato OpenAPI 3.0 (cómo se ve y cómo se mantiene: [`docs/api/README.md`](docs/api/README.md)). Una prueba automática lo compara con el servidor real en cada cambio, así que no puede quedar desactualizado.
 
 ## 4. Tecnologías
 

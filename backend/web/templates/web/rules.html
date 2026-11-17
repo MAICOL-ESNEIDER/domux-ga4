@@ -1,0 +1,75 @@
+{% extends "web/base.html" %}
+{% from "web/_forms.html" import field %}
+{% set page_title = "Reglas de la unidad" %}
+
+{# El texto de ayuda de un campo, con el valor de DOMUX y, si la administración lo cambió, un recordatorio. #}
+{% macro help_with_default(text, key, unit) -%}
+{{ text }} Valor de DOMUX: {{ defaults[key] }} {{ unit }}.{% if customized[key] %} Esta regla ya la cambiaste.{% endif %}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Reglas de la unidad</h1>
+    <p>Aquí ajustas lo que la asamblea decide cada año: cuánto tiempo tiene la administración para responder una PQRS, cuándo un paquete sin reclamar pasa a naranja o a rojo y cuántos días puede quedarse el carro de un visitante. Cada regla ya trae el valor de DOMUX; cámbialo solo si tu unidad usa otro.</p>
+  </div>
+</div>
+
+<p class="notice notice-info">Los cambios rigen desde que guardas y también para lo que ya existe: por ejemplo, el semáforo de las PQRS que siguen abiertas se calcula de nuevo con el plazo nuevo.</p>
+
+<form method="post" action="{{ url_for('web.rules_page') }}" class="card form-narrow" aria-label="Reglas de la unidad">
+  {{ csrf_input() }}
+
+  <h2>Respuesta a las PQRS</h2>
+  <p class="muted">Los plazos se cuentan en días hábiles: no cuentan sábados, domingos ni festivos, ni el día en que se radica la PQRS.</p>
+  {{ field("pqrsTermDays", "Plazo general para responder (días hábiles)", values.pqrsTermDays, type="number", required=True,
+           extra={"min": limits.pqrsTermDays[0], "max": limits.pqrsTermDays[1], "inputmode": "numeric"},
+           help=help_with_default("Es el plazo de todos los tipos de PQRS que no tengan uno propio.", "pqrsTermDays", "días hábiles")) }}
+  {{ field("pqrsWarningDays", "El semáforo pasa a amarillo cuando faltan (días hábiles)", values.pqrsWarningDays, type="number", required=True,
+           extra={"min": limits.pqrsWarningDays[0], "max": limits.pqrsWarningDays[1], "inputmode": "numeric"},
+           help=help_with_default("Con esos días hábiles o menos por vencer, la PQRS se ve en amarillo; vencido el plazo, en rojo. No puede ser mayor que el plazo general.", "pqrsWarningDays", "días hábiles")) }}
+
+  <fieldset class="field">
+    <legend>Plazo propio de cada tipo (opcional)</legend>
+    <p class="help">Si un tipo necesita más o menos tiempo que el general (por ejemplo, un daño que hay que arreglar pronto), escríbelo aquí. Déjalo vacío para que use el plazo general
+      {% if customized.pqrsTermsByCategory %}<strong>Ya hay plazos propios guardados.</strong>{% endif %}</p>
+    <div class="form-row">
+      {% for field_id, name in categories %}
+      {{ field(field_id, name ~ " (días hábiles)", values[field_id], type="number",
+               extra={"min": category_limits[0], "max": category_limits[1], "inputmode": "numeric", "placeholder": rules.pqrsTermDays}) }}
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <h2>Paquetes sin reclamar</h2>
+  <p class="muted">Un paquete que espera en la portería se marca en naranja y luego en rojo, para que el residente y la administración no lo olviden. Las horas se cuentan desde que llega a la portería.</p>
+  {{ field("packageOrangeHours", "Aviso naranja a las (horas)", values.packageOrangeHours, type="number", required=True,
+           extra={"min": limits.packageOrangeHours[0], "max": limits.packageOrangeHours[1], "inputmode": "numeric"},
+           help=help_with_default("Pasadas estas horas sin que lo recojan, el paquete se ve en naranja.", "packageOrangeHours", "horas")) }}
+  {{ field("packageRedHours", "Aviso rojo a las (horas)", values.packageRedHours, type="number", required=True,
+           extra={"min": limits.packageRedHours[0], "max": limits.packageRedHours[1], "inputmode": "numeric"},
+           help=help_with_default("Debe ser mayor que las del aviso naranja.", "packageRedHours", "horas")) }}
+
+  <h2>Parqueadero de visitantes</h2>
+  {{ field("visitorParkingMaxDays", "Días máximos de un vehículo visitante", values.visitorParkingMaxDays, type="number", required=True,
+           extra={"min": limits.visitorParkingMaxDays[0], "max": limits.visitorParkingMaxDays[1], "inputmode": "numeric"},
+           help=help_with_default("Pasado este tiempo, la portería recibe un aviso para hablar con el visitante.", "visitorParkingMaxDays", "días")) }}
+
+  <div class="form-actions">
+    <button type="submit" class="btn">Guardar las reglas</button>
+    <a class="btn btn-quiet" href="{{ url_for('web.panel') }}">Cancelar</a>
+  </div>
+  {% if view.updatedAt %}
+  <p class="small muted mt-1">Última actualización: {{ view.updatedAt|date_es }}{% if view.updatedByName %} por {{ view.updatedByName }}{% endif %}.</p>
+  {% endif %}
+</form>
+
+<section class="card form-narrow" aria-labelledby="reset-title">
+  <h2 id="reset-title">Volver a los valores de DOMUX</h2>
+  <p>Devuelve todas las reglas de esta página a los valores con los que viene DOMUX. No cambia nada más de la unidad.</p>
+  <form method="post" action="{{ url_for('web.rules_reset') }}">
+    {{ csrf_input() }}
+    <button type="submit" class="btn btn-quiet" data-confirm="¿Volver todas las reglas a los valores de DOMUX? Los plazos y las alertas cambiarán de inmediato." data-confirm-label="Volver a los valores de DOMUX">Volver a los valores de DOMUX</button>
+  </form>
+</section>
+{% endblock %}

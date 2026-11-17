@@ -18,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.dracknoval.domux.AnnouncementsScreen
 import com.dracknoval.domux.CreateUserScreen
+import com.dracknoval.domux.DocumentsScreen
 import com.dracknoval.domux.HomeScreen
 import com.dracknoval.domux.LegalScreen
 import com.dracknoval.domux.LoginScreen
@@ -36,6 +37,7 @@ import com.dracknoval.domux.data.AppPreferences
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.TextSize
+import com.dracknoval.domux.data.UnitRules
 import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.ui.theme.DomuxAppTheme
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -105,6 +107,7 @@ abstract class BaseDeFotos {
     @After
     fun cerrarSesion() {
         Session.clear()
+        DatosDeMentira.reglasDeLaUnidad = UnitRules()
         AppPreferences.saveTextSize(RuntimeEnvironment.getApplication(), TextSize.NORMAL)
     }
 
@@ -253,6 +256,7 @@ private fun GrafoDeLaApp(navegacion: NavHostController, rutaPedida: String) {
             UnitProfileScreen(navegacion, entry.arguments?.getString("apartment").orEmpty())
         }
         composable("notifications") { NotificationsScreen(navegacion) }
+        composable("documents") { DocumentsScreen(navegacion) }
         composable(
             "legal?slug={slug}",
             arguments = listOf(navArgument("slug") {

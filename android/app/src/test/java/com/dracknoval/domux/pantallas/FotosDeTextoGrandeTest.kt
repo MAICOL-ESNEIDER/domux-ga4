@@ -49,6 +49,13 @@ class FotosDeTextoGrandeTest : BaseDeFotos() {
     }
 
     @Test
+    fun residente_documentos() {
+        entrarComo(Roles.RESIDENTE)
+        conTamanoDeTexto(TextSize.EXTRA_LARGE)
+        foto("texto-muy-grande-residente-02-documentos", "documents")
+    }
+
+    @Test
     fun inicio_de_sesion() {
         conTamanoDeTexto(TextSize.EXTRA_LARGE)
         foto("texto-muy-grande-login-01-inicio-de-sesion", "login")

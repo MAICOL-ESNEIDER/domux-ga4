@@ -7,9 +7,9 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, deferred
 from sqlalchemy.orm.attributes import set_committed_value
 
-from config import visitor_parking_max_days
 from extensions import db
 from services.pqrs_rules import make_radicado, running_semaphore
+from services.unit_rules import current_rules, forget_rules
 from services.zone_rules import (
     DEFAULT_ALLOW_FULL_DAY,
     DEFAULT_CANCEL_DEADLINE_DAYS,
@@ -40,10 +40,6 @@ ANNOUNCEMENT_CATEGORIES = {
 #: Tipos de parqueadero de la unidad (HU-015).
 PARKING_KINDS = ("residente", "visitante")
 
-#: Horas sin reclamar para resaltar un paquete en naranja y en rojo (RN-018, HU-049).
-UNCLAIMED_ORANGE_HOURS = 48
-UNCLAIMED_RED_HOURS = 72
-
 #: Movimientos de un vehículo de residente por la portería (HU-040).
 MOVEMENT_TYPES = ("entrada", "salida")
 
@@ -52,15 +48,18 @@ def package_wait(status, is_deleted, arrived_at, now=None):
     """Cuánto lleva un paquete sin reclamar y su color de alerta: ``(minutos, alerta)`` (RN-018).
 
     Un paquete que no espera a su dueño (no está «pendiente», está archivado o no tiene hora de
-    llegada) da ``(None, None)``. La alerta es «rojo» con más de 72 horas, «naranja» con más de 48 o
-    None. Es la regla de ``PackageItem`` para quien tiene solo las columnas, como las listas livianas.
+    llegada) da ``(None, None)``. La alerta es «rojo» cuando pasa las horas rojas de la unidad (72 por
+    defecto), «naranja» cuando pasa las naranjas (48 por defecto) o None; la administración puede cambiar
+    las horas (reglas de la unidad). Es la regla de ``PackageItem`` para quien tiene solo las columnas,
+    como las listas livianas.
     """
     if status != "pendiente" or is_deleted or arrived_at is None:
         return None, None
+    rules = current_rules()
     minutes = max(0, int(((now or utc_now()) - arrived_at).total_seconds() // 60))
-    if minutes > UNCLAIMED_RED_HOURS * 60:
+    if minutes > rules.package_red_hours * 60:
         return minutes, "rojo"
-    if minutes > UNCLAIMED_ORANGE_HOURS * 60:
+    if minutes > rules.package_orange_hours * 60:
         return minutes, "naranja"
     return minutes, None
 
@@ -531,6 +530,150 @@ class ComplexProfile(db.Model):
             "logoVersion": self.logo_version,
             "updatedAt": _fmt(self.updated_at),
         }
+
+
+#: Los tipos de documento de la unidad, con el nombre que ve la persona (DEC-032).
+DOCUMENT_CATEGORIES = {
+    "convivencia": "Manual de convivencia",
+    "reglas": "Reglas de la unidad",
+    "presupuesto": "Presupuestos aprobados",
+    "gastos": "Gastos e informes",
+    "actas": "Actas de asamblea",
+    "otro": "Otros",
+}
+
+#: A quién puede mostrarle la administración un documento: a cada tipo de residente y a la portería.
+#: La administración siempre los ve todos. Las llaves de los residentes son las de ``occupancy_type``.
+DOCUMENT_AUDIENCES = {
+    "propietario": "Propietarios",
+    "arrendatario": "Arrendatarios",
+    "residente": "Otros residentes",
+    "guardia": "Portería",
+}
+
+
+class UnitDocument(RetirableMixin, db.Model):
+    """Un documento de la unidad que sube la administración: manual de convivencia, reglas, presupuestos...
+
+    El archivo (PDF, PNG, JPG o WebP de hasta 6 MB) se guarda en la base, revisado por sus primeros bytes
+    al subirlo. La administración marca quién lo puede ver (``for_*``): sin ninguna marca solo lo ve ella.
+    Nada se borra (ADR-013): un documento retirado deja de verse para los demás, pero queda guardado.
+    ``content_sha256`` es la huella del archivo: sirve de versión para no descargarlo de nuevo si no cambió.
+    """
+
+    __tablename__ = "unit_documents"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    category = db.Column(db.String(20), nullable=False, default="otro")
+    file_name = db.Column(db.String(160), nullable=False)
+    mime_type = db.Column(db.String(30), nullable=False)
+    size_bytes = db.Column(db.Integer, nullable=False)
+    # «deferred»: los bytes se leen solo cuando alguien abre el documento, no al listar.
+    content = deferred(db.Column(db.LargeBinary, nullable=False))
+    content_sha256 = db.Column(db.String(64), nullable=False)
+    for_owners = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    for_tenants = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    for_residents = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    for_guards = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    uploaded_by_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", name="fk_unit_documents_uploaded_by_id_users"), nullable=False,
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now, onupdate=utc_now)
+
+    uploaded_by = db.relationship("User", foreign_keys=[uploaded_by_id])
+    retired_by = db.relationship("User", foreign_keys="UnitDocument.retired_by_id")
+
+    __table_args__ = (
+        Index("ix_unit_documents_retired_at_created_at", "retired_at", "created_at"),
+    )
+
+    #: Cada llave de ``DOCUMENT_AUDIENCES`` con la columna que la guarda.
+    AUDIENCE_COLUMNS = {
+        "propietario": "for_owners",
+        "arrendatario": "for_tenants",
+        "residente": "for_residents",
+        "guardia": "for_guards",
+    }
+
+    @property
+    def audiences(self):
+        """A quién se lo muestra la administración, en el orden de ``DOCUMENT_AUDIENCES``."""
+        return [key for key, column in self.AUDIENCE_COLUMNS.items() if getattr(self, column)]
+
+    @property
+    def version(self):
+        """Un texto corto que cambia solo cuando cambia el archivo."""
+        return self.content_sha256[:12]
+
+    @property
+    def kind(self):
+        """«pdf» o «image»: lo que la app necesita saber para saber cómo mostrarlo."""
+        return "pdf" if self.mime_type == "application/pdf" else "image"
+
+    def to_dict(self, admin=False):
+        """El documento sin el archivo. Solo la administración ve a quién se lo muestra y si está retirado."""
+        data = {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "category": self.category,
+            "categoryLabel": DOCUMENT_CATEGORIES.get(self.category, DOCUMENT_CATEGORIES["otro"]),
+            "fileName": self.file_name,
+            "mimeType": self.mime_type,
+            "kind": self.kind,
+            "sizeBytes": self.size_bytes,
+            "version": self.version,
+            "createdAt": format_colombia(self.created_at),
+            "updatedAt": format_colombia(self.updated_at),
+            "uploadedByName": self.uploaded_by.full_name if self.uploaded_by is not None else None,
+        }
+        if admin:
+            data.update({
+                "visibleTo": self.audiences,
+                "isRetired": self.is_retired,
+                "retiredAt": format_colombia(self.retired_at),
+                "retiredByName": self.retired_by.full_name if self.retired_by is not None else None,
+            })
+        return data
+
+
+class UnitSettings(db.Model):
+    """Reglas de la unidad que la administración ajusta: plazos de PQRS, alertas de paquetes y parqueadero.
+
+    Hay una sola fila (id 1) y nace la primera vez que la administración guarda las reglas. Una columna
+    vacía (NULL) significa «usa el valor de DOMUX» (services/unit_rules.py): así, mientras la fila no
+    exista, todo se comporta como antes de que estas reglas fueran editables (DEC-032).
+
+    pqrs_terms_by_category guarda como texto JSON los plazos propios de algunos tipos de PQRS
+    (``{"Daño": 5}``); los tipos que no aparecen usan pqrs_term_days.
+    """
+
+    __tablename__ = "unit_settings"
+
+    #: La única fila que existe.
+    SINGLE_ID = 1
+
+    id = db.Column(db.Integer, primary_key=True)
+    pqrs_term_days = db.Column(db.Integer, nullable=True)
+    pqrs_warning_days = db.Column(db.Integer, nullable=True)
+    pqrs_terms_by_category = db.Column(db.String(400), nullable=True)
+    package_orange_hours = db.Column(db.Integer, nullable=True)
+    package_red_hours = db.Column(db.Integer, nullable=True)
+    visitor_parking_max_days = db.Column(db.Integer, nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_unit_settings_updated_by_id_users"),
+        nullable=True,
+    )
+
+
+# Cualquier cambio en la fila hace que las reglas se lean de nuevo en esa misma solicitud.
+for _event in ("after_insert", "after_update", "after_delete"):
+    event.listen(UnitSettings, _event, lambda *_args: forget_rules())
 
 
 class ResidentialUnit(db.Model):
@@ -1265,7 +1408,7 @@ class PackageItem(db.Model):
         return package_wait(self.status, self.is_deleted, self.arrived_at, now)[0]
 
     def claim_alert(self, now=None):
-        """«rojo» con más de 72 horas sin reclamar, «naranja» con más de 48, o None (RN-018)."""
+        """«rojo» o «naranja» cuando lleva más horas sin reclamar que las de la unidad (72 y 48 por defecto), o None (RN-018)."""
         return package_wait(self.status, self.is_deleted, self.arrived_at, now)[1]
 
     def to_dict(self):
@@ -1603,7 +1746,7 @@ class VisitorVehicleEntry(db.Model):
 
     def deadline(self):
         """Cuándo vence el tiempo máximo de parqueo (RN-015): 3 días o el plazo de la unidad."""
-        return self.entered_at + timedelta(days=visitor_parking_max_days())
+        return self.entered_at + timedelta(days=current_rules().visitor_parking_max_days)
 
     def is_overdue(self, now=None):
         """Un vehículo que sigue adentro y ya pasó el tiempo máximo (RN-015)."""
@@ -1627,7 +1770,7 @@ class VisitorVehicleEntry(db.Model):
             "exitedAt": _fmt(self.exited_at),
             "isInside": self.is_inside,
             "parkedMinutes": self.parked_minutes(now),
-            "maxDays": visitor_parking_max_days(),
+            "maxDays": current_rules().visitor_parking_max_days,
             "isOverdue": self.is_overdue(now),
             "registeredByName": self.guard.full_name if self.guard else None,
             "exitedByName": self.exited_by.full_name if self.exited_by else None,

@@ -10,10 +10,11 @@ from datetime import timedelta
 
 from sqlalchemy.orm import joinedload, load_only
 
-from models import UNCLAIMED_ORANGE_HOURS, Notification, PackageItem, Pqrs, Reservation, User
+from models import Notification, PackageItem, Pqrs, Reservation, User
 from services.alert_service import run_alerts
 from services.pqrs_rules import RED, RUNNING_STATUSES, YELLOW, pqrs_semaphore
 from services.reservation_service import PENDING_RESERVATION_STATUSES
+from services.unit_rules import current_rules
 from time_utils import colombia_today, to_colombia, utc_now
 
 #: Cuántas filas trae cada lista del panel.
@@ -96,8 +97,8 @@ def _pending_reservations():
     return rows, total
 
 
-def _unclaimed_packages():
-    """Cuántos paquetes llevan más de 48 horas en portería y cuántos más de 72 (RN-018)."""
+def _unclaimed_packages(rules):
+    """Cuántos paquetes pasaron las horas naranjas sin reclamar (48 por defecto) y cuántos las rojas (72) (RN-018)."""
     now = utc_now()
     waiting = (
         PackageItem.query
@@ -108,7 +109,7 @@ def _unclaimed_packages():
             PackageItem.status == "pendiente",
             PackageItem.is_deleted.is_(False),
             PackageItem.arrived_at.isnot(None),
-            PackageItem.arrived_at <= now - timedelta(hours=UNCLAIMED_ORANGE_HOURS),
+            PackageItem.arrived_at <= now - timedelta(hours=rules.package_orange_hours),
         )
         .all()
     )
@@ -123,7 +124,8 @@ def admin_summary(admin):
     run_alerts()
     pqrs_rows, pqrs_open, pqrs_overdue, pqrs_due_soon = _urgent_pqrs()
     reservation_rows, reservations_pending = _pending_reservations()
-    packages_over_48, packages_over_72 = _unclaimed_packages()
+    rules = current_rules()
+    packages_over_48, packages_over_72 = _unclaimed_packages(rules)
     unread = Notification.query.filter_by(user_id=admin.id, is_read=False).count()
     return {
         "counts": {
@@ -131,6 +133,8 @@ def admin_summary(admin):
             "pqrsOverdue": pqrs_overdue,
             "pqrsDueSoon": pqrs_due_soon,
             "reservationsPending": reservations_pending,
+            # Los nombres vienen de las horas de DOMUX (48 y 72): son los paquetes que pasaron las horas
+            # naranjas y rojas de la unidad, que la administración puede cambiar.
             "packagesOver48": packages_over_48,
             "packagesOver72": packages_over_72,
             "unreadNotifications": unread,

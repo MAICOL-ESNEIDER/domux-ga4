@@ -33,8 +33,8 @@
        "Esperan tu decisión" if counts.reservationsPending else "Ninguna pendiente",
        reservations_link, "is-warn" if counts.reservationsPending else "") }}
   {{ counter(
-       counts.packagesOver48, "Paquetes con más de 48 horas",
-       (plural(counts.packagesOver72, "lleva", "llevan") ~ " más de 72 horas") if counts.packagesOver72 else "Sin reclamar en portería",
+       counts.packagesOver48, "Paquetes con más de " ~ package_alert_hours("naranja") ~ " horas",
+       (plural(counts.packagesOver72, "lleva", "llevan") ~ " más de " ~ package_alert_hours("rojo") ~ " horas") if counts.packagesOver72 else "Sin reclamar en portería",
        packages_link, "is-alert" if counts.packagesOver72 else ("is-warn" if counts.packagesOver48 else "")) }}
 </section>
 

@@ -25,7 +25,34 @@ data class ComplexInfo(
     val updatedAt: String? = null
 )
 
-data class ComplexInfoResponse(val unit: ComplexInfo?)
+/** Los valores con los que viene DOMUX mientras la administración no cambie las reglas de la unidad. */
+const val DEFAULT_PQRS_TERM_DAYS = 15
+const val DEFAULT_PACKAGE_ORANGE_HOURS = 48
+const val DEFAULT_PACKAGE_RED_HOURS = 72
+
+/**
+ * Las reglas vigentes de la unidad (DEC-032): lo que la administración ajusta en la web cuando la asamblea
+ * lo decide. Cada regla puede faltar (servidor viejo o sin conexión); entonces rige el valor de DOMUX.
+ */
+data class UnitRules(
+    // Días hábiles para responder una PQRS, y el plazo propio de algunos tipos («Daño» → 5).
+    val pqrsTermDays: Int? = null,
+    val pqrsWarningDays: Int? = null,
+    val pqrsTermsByCategory: Map<String, Int>? = null,
+    // Horas sin reclamar para que un paquete pase a naranja y a rojo.
+    val packageOrangeHours: Int? = null,
+    val packageRedHours: Int? = null,
+    val visitorParkingMaxDays: Int? = null
+) {
+    /** Los días hábiles que tiene una PQRS de ese tipo para ser respondida. */
+    fun termFor(category: String?): Int =
+        pqrsTermsByCategory?.get(category) ?: pqrsTermDays ?: DEFAULT_PQRS_TERM_DAYS
+
+    val orangeHours: Int get() = packageOrangeHours ?: DEFAULT_PACKAGE_ORANGE_HOURS
+    val redHours: Int get() = packageRedHours ?: DEFAULT_PACKAGE_RED_HOURS
+}
+
+data class ComplexInfoResponse(val unit: ComplexInfo?, val rules: UnitRules? = null)
 
 /** El nombre que se muestra mientras la administración no haya guardado el de la unidad. */
 const val DEFAULT_COMPLEX_NAME = "Altos de DOMUX"
@@ -41,6 +68,10 @@ object ComplexInfoStore {
     var logo by mutableStateOf<ImageBitmap?>(null)
         private set
 
+    /** Las reglas vigentes de la unidad; mientras no lleguen, las de DOMUX. */
+    var rules by mutableStateOf(UnitRules())
+        private set
+
     private var logoVersion: String? = null
 
     /** El nombre de la unidad, o el de siempre si la administración aún no lo guardó. */
@@ -54,6 +85,7 @@ object ComplexInfoStore {
             val received = response.body()?.unit
             if (!response.isSuccessful || received == null) return
             info = received
+            response.body()?.rules?.let { rules = it }
             if (!received.hasLogo) {
                 logo = null
                 logoVersion = null
@@ -83,5 +115,6 @@ object ComplexInfoStore {
         info = null
         logo = null
         logoVersion = null
+        rules = UnitRules()
     }
 }

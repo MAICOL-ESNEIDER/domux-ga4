@@ -10,6 +10,7 @@ from markupsafe import Markup
 from extensions import db
 from models import Notification
 from services import unit_service
+from services.unit_rules import current_rules
 from web import bp, texts
 from web.security import csrf_token, current_admin, take_account_to_remember
 from web.support import filter_chips
@@ -32,10 +33,12 @@ MENU = (
     ("Comunidad", (
         ("Usuarios", "web.users_list", "users", "web.user"),
         ("Estructura de la unidad", "web.structure_towers", "building", "web.structure"),
+        ("Documentos de la unidad", "web.documents_list", "file", "web.document"),
     )),
     ("Configuración", (
         ("Datos de la unidad", "web.unit_data", "card", "web.unit"),
         ("Zonas comunes y reglas", "web.zones_list", "sliders", "web.zone"),
+        ("Reglas de la unidad", "web.rules_page", "settings", "web.rules"),
         # Un solo lugar para sacar información: descargas a la medida, archivo histórico y respaldos.
         ("Descargas", "web.downloads_page", "archive", ("web.downloads", "web.archive", "web.backup")),
     )),
@@ -70,6 +73,7 @@ ICONS = {
     "clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     "warning": '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
     "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+    "file": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
     "clip": '<path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/>',
     "logout": '<path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9"/>',
 }
@@ -85,6 +89,12 @@ NEW_ITEMS = (
     ("Apartamento", "web.apartment_new", "building"),
     ("PQRS a nombre de un residente", "web.pqrs_new", "chat"),
 )
+
+
+def package_alert_hours(alert):
+    """Las horas sin reclamar que fijó la unidad para esa alerta de paquete («naranja» o «rojo»), o None."""
+    rules = current_rules()
+    return {"naranja": rules.package_orange_hours, "rojo": rules.package_red_hours}.get(alert)
 
 
 def icon(name):
@@ -234,10 +244,12 @@ for _name, _function in (
     ("unit_brand", unit_brand),
     ("authorization_method_text", texts.authorization_method_text),
     ("badge_info", texts.badge_info),
+    ("package_alert_hours", package_alert_hours),
     ("deadline_text", texts.deadline_text),
     ("duration_text", texts.duration_text),
     ("notification_type", texts.notification_type),
     ("plural", texts.plural),
+    ("size_text", texts.size_text),
     ("visit_event_text", texts.visit_event_text),
     ("visit_type_text", texts.visit_type_text),
 ):

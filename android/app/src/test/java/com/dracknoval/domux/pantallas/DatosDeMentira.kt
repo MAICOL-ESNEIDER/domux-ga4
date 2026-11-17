@@ -3,6 +3,10 @@ package com.dracknoval.domux.pantallas
 import com.dracknoval.domux.data.*
 import com.dracknoval.domux.defaultSearchPlaces
 import com.google.gson.Gson
+import okhttp3.MediaType
+import okhttp3.ResponseBody
+import okio.Buffer
+import okio.BufferedSource
 import retrofit2.Response
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
@@ -21,6 +25,12 @@ import java.lang.reflect.WildcardType
  * («2026-11-20 10:05», hora de Colombia): así las fotos no cambian de un día a otro.
  */
 object DatosDeMentira {
+
+    /**
+     * Las reglas que contesta «getComplexInfo». Por defecto son las de DOMUX (48 y 72 horas, 15 días hábiles);
+     * una prueba las cambia para comprobar que la pantalla escribe lo que fijó la administración.
+     */
+    var reglasDeLaUnidad = UnitRules()
 
     fun api(): ApiService = falso(ApiService::class.java) { metodo, argumentos -> cuerpoPara(metodo, argumentos) }
 
@@ -47,7 +57,7 @@ object DatosDeMentira {
     // --- Lo que contesta cada llamada --------------------------------------------------------
 
     private fun cuerpoPara(metodo: Method, a: Array<out Any?>): Any? = when (metodo.name) {
-        "getComplexInfo" -> ComplexInfoResponse(unidad())
+        "getComplexInfo" -> ComplexInfoResponse(unidad(), reglasDeLaUnidad)
         "getNotifications" -> NotificationsListResponse(notificaciones())
         "getAdminSummary" -> resumenDeAdministracion()
         // getVisitsSummary(auth, status, dateFrom, inside, pageSize, view)
@@ -145,6 +155,10 @@ object DatosDeMentira {
             VehicleEntriesListResponse(lista, page = 1, pageSize = 25, total = lista.size, totalPages = 1)
         }
         "searchResidentVehicles" -> ResidentVehiclesResponse(vehiculosDeResidentes())
+
+        // Documentos de la unidad: cada rol ve solo los que le marcaron; la administración, todos
+        "getDocuments" -> DocumentsListResponse(misDocumentos(), tiposDeDocumento(), publicosDeDocumento())
+        "getDocumentFile" -> archivoDeMentira()
 
         // Textos legales
         "getLegalDocuments" -> LegalDocumentsResponse(documentosLegales())
@@ -480,6 +494,92 @@ object DatosDeMentira {
             category = "general", categoryLabel = "General", isRead = true, readApartments = 9, totalApartments = 10
         )
     )
+
+    // --- Documentos de la unidad (DEC-032) ---------------------------------------------------------
+
+    private fun tiposDeDocumento() = listOf(
+        DocumentOption("convivencia", "Manual de convivencia"),
+        DocumentOption("reglas", "Reglas de la unidad"),
+        DocumentOption("presupuesto", "Presupuestos aprobados"),
+        DocumentOption("gastos", "Gastos e informes"),
+        DocumentOption("actas", "Actas de asamblea"),
+        DocumentOption("otro", "Otros")
+    )
+
+    private fun publicosDeDocumento() = listOf(
+        DocumentOption("propietario", "Propietarios"),
+        DocumentOption("arrendatario", "Arrendatarios"),
+        DocumentOption("residente", "Otros residentes"),
+        DocumentOption("guardia", "Portería")
+    )
+
+    /** Un documento de ejemplo con los públicos a los que la administración se lo marcó. */
+    private class DocumentoDeMentira(val documento: UnitDocument, val para: List<String>)
+
+    private fun documento(
+        id: Int, titulo: String, tipo: String, descripcion: String?, pdf: Boolean, bytes: Int, fecha: String,
+        para: List<String>
+    ) = DocumentoDeMentira(
+        UnitDocument(
+            id = id, title = titulo, description = descripcion, category = tipo,
+            categoryLabel = tiposDeDocumento().first { it.key == tipo }.label,
+            fileName = if (pdf) "documento-$id.pdf" else "documento-$id.png",
+            mimeType = if (pdf) "application/pdf" else "image/png", kind = if (pdf) "pdf" else "image",
+            sizeBytes = bytes, version = "versión-$id", createdAt = fecha, uploadedByName = "Administración Domux"
+        ),
+        para
+    )
+
+    private fun documentos() = listOf(
+        documento(
+            1, "Manual de convivencia 2027", "convivencia", "Versión aprobada en la asamblea de marzo", true,
+            1_240_000, "2026-11-10 09:00", listOf("propietario", "arrendatario", "residente", "guardia")
+        ),
+        documento(
+            2, "Reglas de la piscina", "reglas", null, false, 340_000, "2026-11-12 10:30",
+            listOf("propietario", "arrendatario", "residente", "guardia")
+        ),
+        documento(
+            3, "Presupuesto aprobado 2027", "presupuesto", "Aprobado por la asamblea de copropietarios", true,
+            860_000, "2026-11-05 14:00", listOf("propietario")
+        ),
+        documento(
+            4, "Gastos del primer semestre", "gastos", null, true, 2_400_000, "2026-10-20 11:15",
+            listOf("propietario", "arrendatario")
+        ),
+        documento(5, "Acta de la asamblea de marzo", "actas", null, true, 410_000, "2026-03-30 18:45", listOf("propietario")),
+        documento(
+            6, "Protocolo de portería", "otro", "Turnos, rondas y reporte de novedades", true, 150_000,
+            "2026-11-01 07:00", listOf("guardia")
+        ),
+        documento(
+            7, "Borrador del reglamento de mascotas", "reglas", "Solo para revisión de la administración", true,
+            90_000, "2026-11-16 16:20", emptyList()
+        )
+    )
+
+    /** Lo que ve cada rol: la administración todo (y a quién se lo muestra); los demás, lo que les marcaron. */
+    private fun misDocumentos(): List<UnitDocument> = when (Session.role) {
+        "ADMIN" -> documentos().map { it.documento.copy(visibleTo = it.para) }
+        "GUARD" -> documentos().filter { "guardia" in it.para }.map { it.documento }
+        else -> {
+            val tipo = usuarios().firstOrNull { it.id == miId }?.occupancyType ?: "propietario"
+            documentos().filter { tipo in it.para }.map { it.documento }
+        }
+    }
+
+    /** El archivo que contesta «getDocumentFile»: una imagen de 1 × 1 píxel, suficiente para abrir el visor. */
+    private fun archivoDeMentira(): ResponseBody {
+        val bytes = java.util.Base64.getDecoder().decode(PNG_DE_UN_PIXEL)
+        return object : ResponseBody() {
+            override fun contentType(): MediaType? = null
+            override fun contentLength(): Long = bytes.size.toLong()
+            override fun source(): BufferedSource = Buffer().write(bytes)
+        }
+    }
+
+    private const val PNG_DE_UN_PIXEL =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
     private fun pqrsLista() = listOf(
         Pqrs(

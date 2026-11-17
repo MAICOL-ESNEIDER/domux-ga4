@@ -1,0 +1,97 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import badge %}
+{% set page_title = "Documentos de la unidad" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Documentos de la unidad</h1>
+    <p>Sube el manual de convivencia, las reglas, los presupuestos aprobados, los históricos de gastos y las actas, y marca quién puede verlos en la app: propietarios, arrendatarios, otros residentes o portería. Si no marcas a nadie, solo los ve la administración. Un documento retirado deja de verse, pero queda guardado.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('web.document_new') }}">Subir documento</a>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Tipo de documento">
+  <a href="{{ url_for('web.documents_list') }}"{% if not category %} aria-current="page"{% endif %}>Todos</a>
+  {% for key, label in category_options %}
+  <a href="{{ url_for('web.documents_list', tipo=key) }}"{% if category == key %} aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if documents %}
+<section class="card" aria-label="Documentos publicados">
+  <div class="table-wrap">
+    <table>
+      <caption class="sr-only">Documentos publicados</caption>
+      <thead>
+        <tr>
+          <th scope="col">Documento</th>
+          <th scope="col">Quién lo ve</th>
+          <th scope="col">Archivo</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in documents %}
+        <tr>
+          <td>
+            <strong>{{ item.title }}</strong>
+            <div class="badges">{{ badge(item.categoryLabel) }}</div>
+            {% if item.description %}<p class="muted">{{ item.description }}</p>{% endif %}
+          </td>
+          <td>
+            {% if item.audienceNames %}{{ item.audienceNames|join(", ") }}{% else %}{{ badge("Solo la administración", "progress") }}{% endif %}
+          </td>
+          <td>
+            {{ "PDF" if item.kind == "pdf" else "Imagen" }} · {{ item.size }}
+            <span class="help">Subido el {{ item.created }}{% if item.uploadedByName %} por {{ item.uploadedByName }}{% endif %}</span>
+          </td>
+          <td class="actions">
+            <a class="btn btn-quiet" href="{{ url_for('web.document_file', document_id=item.id) }}">Abrir<span class="sr-only"> {{ item.title }}</span></a>
+            <a class="btn btn-quiet" href="{{ url_for('web.document_edit', document_id=item.id) }}">Editar<span class="sr-only"> {{ item.title }}</span></a>
+            <form method="post" action="{{ url_for('web.document_retire', document_id=item.id) }}" class="inline-form">
+              {{ csrf_input() }}
+              <button type="submit" class="btn btn-quiet"
+                      data-confirm="¿Retirar «{{ item.title }}»? Dejará de verse en la app, pero queda guardado y lo puedes volver a publicar."
+                      data-confirm-label="Retirar">Retirar<span class="sr-only"> {{ item.title }}</span></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="card" aria-label="Documentos publicados">
+  <p class="empty">{% if category %}No hay documentos de este tipo.{% else %}Todavía no hay documentos. Sube el primero con «Subir documento».{% endif %}</p>
+</section>
+{% endif %}
+
+{% if retired %}
+<section class="card" aria-labelledby="retired-title">
+  <details>
+    <summary id="retired-title">Documentos retirados ({{ retired|length }})</summary>
+    <p class="help">Ya no se ven en la app, pero siguen guardados. Al volver a publicarlos los ven las mismas personas de antes.</p>
+    <ul class="list">
+      {% for item in retired %}
+      <li>
+        <strong>{{ item.title }}</strong> <span class="help">· {{ item.categoryLabel }}{% if item.retiredOn %} · retirado el {{ item.retiredOn }}{% endif %}{% if item.retiredByName %} por {{ item.retiredByName }}{% endif %}</span>
+        <div class="actions">
+          <a class="btn btn-quiet" href="{{ url_for('web.document_file', document_id=item.id) }}">Abrir<span class="sr-only"> {{ item.title }}</span></a>
+          <form method="post" action="{{ url_for('web.document_restore', document_id=item.id) }}" class="inline-form">
+            {{ csrf_input() }}
+            <button type="submit" class="btn btn-quiet"
+                    data-confirm="¿Volver a publicar «{{ item.title }}»? Lo verán otra vez las personas que lo veían."
+                    data-confirm-label="Publicar" data-confirm-danger="no">Volver a publicar<span class="sr-only"> {{ item.title }}</span></button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+</section>
+{% endif %}
+{% endblock %}

@@ -466,9 +466,10 @@ private fun AdminHome(summary: AdminSummaryResponse?, loading: Boolean, navContr
     CountCard(
         icon = R.drawable.ic_package,
         count = counts?.packagesOver48 ?: 0,
-        label = "Paquetes con más de 48 h",
-        note = if ((counts?.packagesOver72 ?: 0) > 0) "${counts?.packagesOver72} con más de 72 h" to DomuxBadgeTone.ALERT
-        else null
+        label = "Paquetes con más de ${ComplexInfoStore.rules.orangeHours} h",
+        note = if ((counts?.packagesOver72 ?: 0) > 0) {
+            "${counts?.packagesOver72} con más de ${ComplexInfoStore.rules.redHours} h" to DomuxBadgeTone.ALERT
+        } else null
     ) { navController.openMainDestination("registry") }
 
     val reservations = summary?.pendingReservations.orEmpty()
