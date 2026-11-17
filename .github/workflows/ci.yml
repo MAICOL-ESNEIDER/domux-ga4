@@ -101,3 +101,40 @@ jobs:
           name: domux-apk-${{ github.run_number }}
           path: android/app/build/outputs/apk/prod/debug/*.apk
           retention-days: 14
+
+  # Fotos de pantalla de la app: se dibuja cada pantalla con datos de mentira en un celular simulado
+  # (Robolectric) y se guarda una foto. Sirven para ver cómo queda la app sin un celular y, desde la
+  # congelación, para comprobar que dividir los archivos grandes no cambia cómo se ve nada.
+  pantallas:
+    name: Pantallas (fotos de la app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Versiones disponibles de las librerías (solo para armar esta prueba)
+        run: |
+          for ruta in io/github/takahirom/roborazzi/roborazzi org/robolectric/robolectric; do
+            echo "== $ruta"
+            curl -sf "https://repo1.maven.org/maven2/$ruta/maven-metadata.xml" | grep "<version>" | tail -30 | tr -d ' \n' || true
+            echo
+          done
+      - name: Dibujar las pantallas con datos de mentira y sacarles una foto
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testProdDebugUnitTest -Proborazzi.test.record=true --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: fotos-de-pantallas-${{ github.run_number }}
+          path: |
+            android/app/build/fotos-de-pantallas/**
+            android/app/build/reports/tests/**
+          retention-days: 14

@@ -18,19 +18,23 @@ object RetrofitClient {
     private val client = OkHttpClient.Builder()
         .build()
 
-    val api: ApiService = Retrofit.Builder()
+    // «var» solo para las pruebas de pantallas (app/src/test): ahí se cambia por una conexión de
+    // mentira con datos de ejemplo. La app nunca la cambia.
+    var api: ApiService = Retrofit.Builder()
         .baseUrl(baseUrl)
         .client(client)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
         .create(ApiService::class.java)
+        internal set
 
     // Las rutas de la estructura de la unidad necesitan enviar el null de verdad (por ejemplo,
     // para dejar un parqueadero sin apartamento); el resto de la API omite los valores nulos.
-    val structureApi: StructureApiService = Retrofit.Builder()
+    var structureApi: StructureApiService = Retrofit.Builder()
         .baseUrl(baseUrl)
         .client(client)
         .addConverterFactory(GsonConverterFactory.create(GsonBuilder().serializeNulls().create()))
         .build()
         .create(StructureApiService::class.java)
+        internal set
 }
