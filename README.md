@@ -74,6 +74,8 @@ Funciona en el navegador del computador y es solo para la administración. Tiene
 
 Páginas: usuarios, estructura de la unidad, datos de la unidad, zonas comunes, comunicados, PQRS, reservas, paquetería, visitas, vehículos, notificaciones, descargas, archivo histórico y respaldo.
 
+En el inicio de sesión, la casilla «Recordar mi correo en este equipo» (apagada al comienzo) hace que ese navegador guarde el correo y el nombre, nunca la contraseña. La próxima vez basta con tocar la cuenta y escribir la contraseña; cada cuenta se quita del equipo con su X.
+
 ### Seguridad
 
 - **Sesión con token.** Quien inicia sesión recibe un token JWT (una «llave» firmada) que dura 7 días. En el celular se guarda cifrado con el Android Keystore (`AES/GCM`).

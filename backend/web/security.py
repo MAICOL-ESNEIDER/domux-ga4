@@ -205,6 +205,29 @@ def mark_password_confirmed():
     session["pwd_at"] = int(time.time())
 
 
+#: Marca de la sesión que dice «guarda este correo en las cuentas recientes de este navegador».
+REMEMBER_ACCOUNT_KEY = "recordar_cuenta"
+
+
+def mark_account_to_remember():
+    """Anota que la persona marcó «Recordar mi correo en este equipo» al entrar.
+
+    Va después de ``start_session``, que borra la sesión. El servidor no guarda ninguna lista: solo
+    avisa una vez a la página siguiente, y es el navegador el que guarda el correo y el nombre.
+    """
+    session[REMEMBER_ACCOUNT_KEY] = True
+
+
+def take_account_to_remember(user):
+    """Devuelve el correo y el nombre para guardar en el navegador, una sola vez, o ``None``.
+
+    Nunca incluye la contraseña. Se lee y se borra en la misma página, así que no se repite.
+    """
+    if user is None or not session.pop(REMEMBER_ACCOUNT_KEY, False):
+        return None
+    return {"correo": user.email, "nombre": user.full_name}
+
+
 def password_confirmation_required(back_endpoint):
     """Antes de una descarga delicada pide otra vez la contraseña; va después de ``login_required``.
 

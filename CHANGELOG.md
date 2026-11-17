@@ -52,6 +52,10 @@ administración.
 
 **Web de administración** (HU-074 a HU-081, HU-087 y HU-088)
 - Inicio de sesión solo para la administración, sesión segura y la misma identidad visual de la app.
+- «Recordar mi correo en este equipo» (HU-074): la casilla empieza apagada; si se marca, el navegador
+  guarda el correo y el nombre, nunca la contraseña. En el siguiente ingreso salen como «Cuentas
+  recientes en este equipo»: se toca la cuenta y se escribe solo la contraseña, y cada una se quita con
+  su X. El servidor no guarda ninguna lista.
 - Panel de pendientes, usuarios, estructura de la unidad, datos de la unidad, PQRS, reservas,
   comunicados y zonas con sus reglas, y paquetería y visitas en modo consulta.
 - Botón «Filtros» en las listas.

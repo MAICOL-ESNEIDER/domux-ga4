@@ -52,6 +52,8 @@
       </div>
     </header>
     <main id="contenido" tabindex="-1">
+    {# Solo tras entrar con «Recordar mi correo»: domux.js guarda el correo y el nombre en este navegador. #}
+    {% if recordar_cuenta %}<div hidden data-recordar-cuenta data-correo="{{ recordar_cuenta.correo }}" data-nombre="{{ recordar_cuenta.nombre }}"></div>{% endif %}
 {% else %}
 <main id="contenido" class="auth-wrap" tabindex="-1">
   <div class="auth-card card{% if wide_card %} auth-card-wide{% endif %}">

@@ -19,6 +19,7 @@ from web.security import (
     current_admin,
     end_session,
     login_required,
+    mark_account_to_remember,
     mark_password_confirmed,
     safe_next,
     start_session,
@@ -67,6 +68,9 @@ def login_submit():
         return _login_page(email, next_url, NOT_ADMIN_MESSAGE, 403)
 
     start_session(user)
+    # «Recordar mi correo en este equipo»: solo después de entrar bien y siendo administración.
+    if request.form.get("recordar") == "1":
+        mark_account_to_remember()
     add_audit_log("user", user.id, "web_login", None, actor=user)
     db.session.commit()
     return redirect(next_url or url_for("web.panel"))
