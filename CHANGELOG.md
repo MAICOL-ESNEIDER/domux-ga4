@@ -63,6 +63,13 @@ administración.
   personas, apartamentos, vehículos, PQRS, paquetes o visitas). Muestra los resultados agrupados por
   tipo, con pocos al buscar en todo y más al elegir un solo lugar, y cada uno lleva a su página. Lo
   hace el servidor (`GET /api/search`), el mismo que usará la app para administración y portería.
+- **Diseño «Mixto»** (HU-087): menú oscuro a la izquierda y contenido claro, con los mismos colores de
+  estado y el contraste revisado por una prueba automática. Abajo del menú va quién entró (nombre,
+  rol, Preferencias, Cambiar contraseña y Cerrar sesión) y arriba, la búsqueda y el botón **«+ Nuevo»**
+  para crear un comunicado, un usuario, una torre, un apartamento o una PQRS a nombre de un residente.
+- **Preferencias**: apariencia (Automático, Mixto u Oscuro), tamaño del texto (normal, grande o muy
+  grande) y las cuentas recordadas en ese equipo, que se pueden quitar. Se guardan solo en el
+  navegador; el servidor no guarda nada de esto.
 - Zona **Descargas**: se marca qué datos se quieren (PQRS, reservas, visitas, paquetes…), las fechas
   y, si se quiere, un apartamento. Sale un Excel con una hoja por tipo que junta lo que está en la
   base con lo que ya está en el archivo histórico. También se puede bajar una sola PQRS o una sola

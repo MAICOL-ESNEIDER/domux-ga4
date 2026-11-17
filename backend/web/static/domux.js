@@ -426,4 +426,124 @@
       showList(false);
     }
   }
+
+  // --- Menú «+ Nuevo» --------------------------------------------------------------------------------
+  // Es un <details>: abre y cierra solo. Aquí se cierra también al tocar fuera o con Escape.
+  var newMenu = document.querySelector("[data-new-menu]");
+  if (newMenu) {
+    document.addEventListener("click", function (event) {
+      if (newMenu.open && !newMenu.contains(event.target)) {
+        newMenu.open = false;
+      }
+    });
+    newMenu.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && newMenu.open) {
+        newMenu.open = false;
+        newMenu.querySelector("summary").focus();
+      }
+    });
+  }
+
+  // --- Preferencias: apariencia, tamaño del texto y cuentas recordadas -----------------------------------
+  // La página «Preferencias» marca con data-preferencias. Todo se guarda solo en este navegador.
+  var preferences = document.querySelector("[data-preferencias]");
+  if (preferences) {
+    var THEME_KEY = "domux.apariencia";
+    var SIZE_KEY = "domux.tamanoTexto";
+
+    var saved = function (key, allowed, fallback) {
+      try {
+        var value = window.localStorage.getItem(key);
+        return allowed.indexOf(value) >= 0 ? value : fallback;
+      } catch (error) {
+        return fallback;
+      }
+    };
+
+    var store = function (key, value, defaultValue) {
+      try {
+        if (value === defaultValue) {
+          window.localStorage.removeItem(key);
+        } else {
+          window.localStorage.setItem(key, value);
+        }
+      } catch (error) {
+        // Sin almacenamiento: el cambio se ve ahora, pero no se recuerda al cerrar la pestaña.
+      }
+    };
+
+    var setAttr = function (name, value, defaultValue) {
+      if (value === defaultValue) {
+        root.removeAttribute(name);
+      } else {
+        root.setAttribute(name, value);
+      }
+    };
+
+    var check = function (name, value) {
+      var input = preferences.querySelector("input[name='" + name + "'][value='" + value + "']");
+      if (input) {
+        input.checked = true;
+      }
+    };
+
+    check("apariencia", saved(THEME_KEY, ["auto", "mixto", "oscuro"], "auto"));
+    check("texto", saved(SIZE_KEY, ["normal", "grande", "muy-grande"], "normal"));
+
+    preferences.addEventListener("change", function (event) {
+      var field = event.target;
+      if (!field || field.type !== "radio") {
+        return;
+      }
+      if (field.name === "apariencia") {
+        store(THEME_KEY, field.value, "auto");
+        setAttr("data-tema", field.value, "auto");
+      } else if (field.name === "texto") {
+        store(SIZE_KEY, field.value, "normal");
+        setAttr("data-texto", field.value, "normal");
+      }
+    });
+
+    // Cuentas recordadas: las mismas del inicio de sesión, con su X para quitarlas.
+    var accountsList = preferences.querySelector("[data-cuentas-recordadas]");
+    var accountsEmpty = preferences.querySelector("[data-sin-cuentas]");
+    var forgetAll = preferences.querySelector("[data-olvidar-todas]");
+    var forgetNotice = preferences.querySelector("[data-cuenta-olvidada]");
+    var accountTemplate = preferences.querySelector("[data-cuenta-plantilla]");
+
+    var showAccounts = function () {
+      var accounts = storageWorks() ? readAccounts() : [];
+      accountsList.textContent = "";
+      accounts.forEach(function (account) {
+        var item = accountTemplate.content.firstElementChild.cloneNode(true);
+        item.querySelector("[data-iniciales]").textContent = initialsOf(account.nombre, account.correo);
+        item.querySelector("[data-nombre]").textContent = account.nombre || account.correo;
+        item.querySelector("[data-correo]").textContent = account.correo;
+        item.querySelector("[data-quitar-texto]").textContent = "Quitar " + account.correo + " de este equipo";
+        item.querySelector("[data-quitar]").addEventListener("click", function () {
+          writeAccounts(readAccounts().filter(function (other) {
+            return !sameEmail(other.correo, account.correo);
+          }));
+          forgetNotice.textContent = "Se quitó " + account.correo + " de este equipo.";
+          forgetNotice.hidden = false;
+          showAccounts();
+          (accountsList.querySelector("button") || preferences.querySelector("[data-foco-cuentas]")).focus();
+        });
+        accountsList.appendChild(item);
+      });
+      accountsList.hidden = accounts.length === 0;
+      accountsEmpty.hidden = accounts.length > 0;
+      forgetAll.hidden = accounts.length < 2;
+    };
+
+    forgetAll.addEventListener("click", function () {
+      writeAccounts([]);
+      forgetNotice.textContent = "Se quitaron todas las cuentas de este equipo.";
+      forgetNotice.hidden = false;
+      showAccounts();
+      preferences.querySelector("[data-foco-cuentas]").focus();
+    });
+
+    showAccounts();
+  }
 })();

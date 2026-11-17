@@ -1,0 +1,73 @@
+{% extends "web/base.html" %}
+{% set page_title = "Preferencias" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Preferencias</h1>
+    <p>Cómo quieres ver la web en este equipo. Se guardan solo en este navegador: si entras desde otro equipo, se eligen de nuevo.</p>
+  </div>
+</div>
+
+<div data-preferencias>
+  <noscript><p class="notice notice-warn">Para cambiar estas opciones hay que activar JavaScript en el navegador.</p></noscript>
+
+  <section class="card" aria-labelledby="pref-apariencia">
+    <h2 id="pref-apariencia">Apariencia</h2>
+    <fieldset class="options">
+      <legend class="sr-only">Apariencia de la web</legend>
+      <label class="option">
+        <input type="radio" name="apariencia" value="auto" checked>
+        <span><strong>Automático</strong><small>Menú oscuro y contenido claro; si tu equipo está en modo oscuro, todo se ve oscuro.</small></span>
+      </label>
+      <label class="option">
+        <input type="radio" name="apariencia" value="mixto">
+        <span><strong>Mixto</strong><small>Menú oscuro y contenido claro, siempre.</small></span>
+      </label>
+      <label class="option">
+        <input type="radio" name="apariencia" value="oscuro">
+        <span><strong>Oscuro</strong><small>Todo oscuro, como la app.</small></span>
+      </label>
+    </fieldset>
+  </section>
+
+  <section class="card" aria-labelledby="pref-texto">
+    <h2 id="pref-texto">Tamaño del texto</h2>
+    <fieldset class="options">
+      <legend class="sr-only">Tamaño del texto</legend>
+      <label class="option">
+        <input type="radio" name="texto" value="normal" checked>
+        <span><strong>Normal</strong></span>
+      </label>
+      <label class="option">
+        <input type="radio" name="texto" value="grande">
+        <span><strong>Grande</strong><small>Un poco más grande, para leer con menos esfuerzo.</small></span>
+      </label>
+      <label class="option">
+        <input type="radio" name="texto" value="muy-grande">
+        <span><strong>Muy grande</strong><small>El más grande.</small></span>
+      </label>
+    </fieldset>
+    <p class="sample-text">Así se ve el texto: PQRS-2026-000002 · Torre 1 · Apto 101.</p>
+  </section>
+
+  <section class="card" aria-labelledby="pref-cuentas">
+    <h2 id="pref-cuentas" tabindex="-1" data-foco-cuentas>Cuentas recordadas en este equipo</h2>
+    <p class="muted">Son las cuentas que marcaste con «Recordar mi correo en este equipo» al entrar. Se guarda solo el correo y el nombre, nunca la contraseña. Quita las que no quieras que queden aquí, sobre todo si el computador es compartido.</p>
+    <p class="notice notice-info" role="status" data-cuenta-olvidada hidden></p>
+    <ul class="accounts-list" aria-label="Cuentas recordadas" data-cuentas-recordadas hidden></ul>
+    <p class="empty" data-sin-cuentas>No hay cuentas recordadas en este equipo.</p>
+    <button type="button" class="btn btn-quiet" data-olvidar-todas hidden>Quitar todas las cuentas</button>
+  </section>
+
+  <template data-cuenta-plantilla>
+    <li class="account">
+      <span class="avatar" aria-hidden="true" data-iniciales></span>
+      <span class="account-text"><span class="account-name" data-nombre></span><span class="account-email" data-correo></span></span>
+      <button type="button" class="account-remove" data-quitar>
+        {{ icon("close") }}<span class="sr-only" data-quitar-texto></span>
+      </button>
+    </li>
+  </template>
+</div>
+{% endblock %}
