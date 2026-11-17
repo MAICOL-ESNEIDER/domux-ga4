@@ -21,6 +21,7 @@ from routes.security import bp as security_bp
 from routes.structure import bp as structure_bp
 from routes.unit import bp as unit_bp
 from routes.vehicles import bp as vehicles_bp
+from demo_data import add_demo_data
 from seed import seed_if_empty, sync_demo_passwords
 from validators import OCCUPANCY_TYPES, validate_no_empty_strings
 from web import init_web
@@ -374,6 +375,8 @@ def create_app():
     with app.app_context():
         prepare_database()
         seed_if_empty()
+        # Agrega lo que falta para probar cada opción, sin tocar lo que ya hay (demo_data.py).
+        add_demo_data()
         sync_demo_passwords()
         # Limpia los intentos fallidos de inicio de sesión que ya no sirven (no hay tarea programada).
         purge_login_attempts()
