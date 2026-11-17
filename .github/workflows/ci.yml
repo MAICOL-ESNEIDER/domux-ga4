@@ -119,17 +119,30 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v6
-      - name: Versiones disponibles de las librerías (solo para armar esta prueba)
-        run: |
-          for ruta in io/github/takahirom/roborazzi/roborazzi org/robolectric/robolectric; do
-            echo "== $ruta"
-            curl -sf "https://repo1.maven.org/maven2/$ruta/maven-metadata.xml" | grep "<version>" | tail -30 | tr -d ' \n' || true
-            echo
-          done
       - name: Dibujar las pantallas con datos de mentira y sacarles una foto
         run: |
           chmod +x gradlew
           ./gradlew :app:testProdDebugUnitTest -Proborazzi.test.record=true --no-daemon --stacktrace
+      - name: Vista previa de las fotos en el registro (temporal, se quita antes de entregar)
+        if: always()
+        run: |
+          python3 -m venv /tmp/entorno
+          /tmp/entorno/bin/pip install --quiet pillow
+          /tmp/entorno/bin/python - <<'PY'
+          import base64, glob, io, os
+          from PIL import Image
+          for ruta in sorted(glob.glob("app/build/fotos-de-pantallas/*.png")):
+              im = Image.open(ruta).convert("RGB")
+              ancho, alto = im.size
+              im = im.resize((ancho // 2, alto // 2), Image.LANCZOS)
+              memoria = io.BytesIO()
+              im.save(memoria, "JPEG", quality=72)
+              datos = base64.b64encode(memoria.getvalue()).decode()
+              print("FOTO-INICIO " + os.path.basename(ruta) + " " + str(len(datos)))
+              for i in range(0, len(datos), 2000):
+                  print("FOTO-DATOS " + datos[i:i + 2000])
+              print("FOTO-FIN")
+          PY
       - uses: actions/upload-artifact@v7
         if: always()
         with:

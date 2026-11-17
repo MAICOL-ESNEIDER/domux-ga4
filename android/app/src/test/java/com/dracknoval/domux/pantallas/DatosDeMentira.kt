@@ -83,7 +83,7 @@ object DatosDeMentira {
         val respuesta = (argumento as? WildcardType)?.lowerBounds?.firstOrNull() ?: argumento
         val tipoDelCuerpo = (respuesta as? ParameterizedType)?.actualTypeArguments?.firstOrNull() ?: return null
         return try {
-            Gson().fromJson("{}", tipoDelCuerpo)
+            Gson().fromJson<Any?>("{}", tipoDelCuerpo)
         } catch (_: Exception) {
             null
         }
