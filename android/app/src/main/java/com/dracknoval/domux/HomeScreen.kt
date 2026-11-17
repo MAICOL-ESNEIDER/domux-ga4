@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -146,6 +149,8 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel = viewMode
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Administración y portería buscan desde aquí: la caja abre el buscador general.
+                if (hasQuickActions()) SearchEntry(navController)
                 WelcomeCard(context)
                 when {
                     Session.isAdmin -> AdminHome(state.adminSummary, state.dashboardLoading, navController)
@@ -187,6 +192,29 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel = viewMode
                 showGuardShift = false
                 viewModel.showNotice(shiftMessage, isError = false)
             }
+        )
+    }
+}
+
+/** La caja del buscador general en el inicio: al tocarla se abre el buscador (HU-089). */
+@Composable
+private fun SearchEntry(navController: NavController) {
+    OutlinedButton(
+        onClick = { navController.navigate("search") },
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, DomuxColor.FieldBorder),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = DomuxColor.TextSoft)
+    ) {
+        Icon(painterResource(R.drawable.ic_search), contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            if (Session.isGuard) "Buscar residente, placa, paquete..." else "Buscar personas, apartamentos, placas...",
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

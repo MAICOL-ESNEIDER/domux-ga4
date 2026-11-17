@@ -91,6 +91,12 @@ object RecentAccountsStore {
     fun forget(context: Context, email: String): List<RecentAccount> =
         save(context, RecentAccountsRules.forget(read(context), email))
 
+    /** Quita todas las cuentas de este celular (la opción «Quitar todas» de Preferencias). */
+    fun forgetAll(context: Context): List<RecentAccount> {
+        clear(context)
+        return emptyList()
+    }
+
     /** Vuelve a poner una cuenta quitada en el puesto que tenía. */
     fun restore(context: Context, account: RecentAccount, index: Int): List<RecentAccount> =
         save(context, RecentAccountsRules.restore(read(context), account, index))

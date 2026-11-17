@@ -563,6 +563,8 @@ fun DomuxScreenScaffold(
     showBackButton: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
     showMenu: Boolean = true,
+    // La administración y la portería ven arriba la lupa del buscador y el botón «+ Nuevo».
+    showQuickActions: Boolean = true,
     content: @Composable (PaddingValues) -> Unit
 ) {
     // Se lee para que el menú se vuelva a dibujar si cambian los datos de la sesión (por ejemplo,
@@ -596,7 +598,10 @@ fun DomuxScreenScaffold(
                         }
                     }
                 },
-                actions = actions,
+                actions = {
+                    actions()
+                    if (showMenu && showQuickActions && hasQuickActions()) DomuxQuickActions(navController)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DomuxColor.Deep,
                     titleContentColor = DomuxColor.TextBright,

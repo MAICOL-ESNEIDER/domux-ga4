@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,11 +69,27 @@ private fun RetireRequest.explanation(): String = when (kind) {
  * hizo la persona; las reglas (códigos únicos, qué se puede retirar) las valida el servidor.
  */
 @Composable
-fun StructureScreen(navController: NavController, viewModel: StructureViewModel = viewModel()) {
+fun StructureScreen(
+    navController: NavController,
+    // «+ Nuevo → Torre» o «→ Apartamento» abre de una vez la ventana de crear (una sola vez).
+    initialAction: String = "",
+    viewModel: StructureViewModel = viewModel()
+) {
     val state by viewModel.state.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
     var towerForm by remember { mutableStateOf<TowerForm?>(null) }
     var apartmentForm by remember { mutableStateOf<ApartmentForm?>(null) }
+    var pendingAction by rememberSaveable { mutableStateOf(initialAction) }
+    LaunchedEffect(pendingAction) {
+        when (pendingAction) {
+            "torre" -> towerForm = TowerForm(null)
+            "apartamento" -> {
+                selectedTab = 1
+                apartmentForm = ApartmentForm(null)
+            }
+        }
+        pendingAction = ""
+    }
     var showFloorForm by remember { mutableStateOf(false) }
     var parkingForm by remember { mutableStateOf<ParkingForm?>(null) }
     var storageForm by remember { mutableStateOf<StorageForm?>(null) }

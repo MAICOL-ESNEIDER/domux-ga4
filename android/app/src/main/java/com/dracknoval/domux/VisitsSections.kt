@@ -85,10 +85,12 @@ fun VisitListSection(
     onDecision: (Visit, String) -> Unit,
     onAuthorizeByCall: (Visit) -> Unit,
     onEntry: (Visit) -> Unit,
-    onExit: (Visit) -> Unit
+    onExit: (Visit) -> Unit,
+    // El texto con el que abre la caja de búsqueda (lo deja puesto el buscador general).
+    initialSearch: String = ""
 ) {
     // El texto del buscador vive aquí y el ViewModel recibe el valor ya aplicado, tras una pausa.
-    var searchText by rememberSaveable { mutableStateOf("") }
+    var searchText by rememberSaveable { mutableStateOf(initialSearch) }
     LaunchedEffect(searchText) {
         if (searchText.isNotBlank()) delay(300)
         onSearch(searchText)

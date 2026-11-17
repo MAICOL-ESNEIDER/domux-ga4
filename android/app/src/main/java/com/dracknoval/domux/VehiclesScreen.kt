@@ -55,7 +55,14 @@ private fun cleanPlate(text: String): String =
  * administración consulta. La pantalla solo dibuja lo que le da [VehiclesViewModel].
  */
 @Composable
-fun VehiclesScreen(navController: NavController, viewModel: VehiclesViewModel = viewModel()) {
+fun VehiclesScreen(
+    navController: NavController,
+    // Lo que piden los atajos del buscador y de «+ Nuevo»: la pestaña por su nombre y, en
+    // «Residentes», la placa que ya viene puesta en la caja.
+    initialTab: String = "",
+    initialSearch: String = "",
+    viewModel: VehiclesViewModel = viewModel()
+) {
     val state by viewModel.state.collectAsState()
     val isGuard = Session.isGuard
     val tabs = if (isGuard) {
@@ -63,7 +70,14 @@ fun VehiclesScreen(navController: NavController, viewModel: VehiclesViewModel = 
     } else {
         listOf("Parqueaderos", "Residentes", "Historial")
     }
-    var selectedTab by remember { mutableIntStateOf(0) }
+    val wantedTab = when (initialTab) {
+        "parqueaderos" -> "Parqueaderos"
+        "registrar-entrada" -> "Registrar entrada"
+        "residentes" -> "Residentes"
+        "historial" -> "Historial"
+        else -> ""
+    }
+    var selectedTab by remember { mutableIntStateOf(tabs.indexOf(wantedTab).coerceAtLeast(0)) }
     val tab = selectedTab.coerceIn(tabs.indices)
     var pendingExit by remember { mutableStateOf<VisitorVehicleEntryData?>(null) }
 
@@ -104,7 +118,8 @@ fun VehiclesScreen(navController: NavController, viewModel: VehiclesViewModel = 
                     state = state,
                     isGuard = isGuard,
                     onSearch = { viewModel.searchResidentVehicles(it) },
-                    onMovement = { vehicle, type -> viewModel.registerResidentMovement(vehicle, type) }
+                    onMovement = { vehicle, type -> viewModel.registerResidentMovement(vehicle, type) },
+                    initialText = initialSearch
                 )
 
                 else -> VehicleHistorySection(
@@ -530,9 +545,10 @@ private fun ResidentVehiclesSection(
     state: VehiclesUiState,
     isGuard: Boolean,
     onSearch: (String) -> Unit,
-    onMovement: (ResidentVehicleItem, String) -> Unit
+    onMovement: (ResidentVehicleItem, String) -> Unit,
+    initialText: String = ""
 ) {
-    var text by rememberSaveable { mutableStateOf("") }
+    var text by rememberSaveable { mutableStateOf(cleanPlate(initialText)) }
     val canSearch = text.trim().length >= VehiclesViewModel.MIN_PLATE_SEARCH
     // Con menos de 2 caracteres no se muestran resultados viejos de una búsqueda anterior.
     val shown = if (canSearch) state.residentVehicles else emptyList<ResidentVehicleItem>()

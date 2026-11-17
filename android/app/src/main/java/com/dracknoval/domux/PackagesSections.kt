@@ -61,11 +61,13 @@ fun PackageListSection(
     onStatusChange: (PackageItem, String) -> Unit,
     onMoveToTrash: (PackageItem) -> Unit,
     onRestore: (PackageItem) -> Unit,
-    onCreatePickupCode: (PackageItem) -> Unit
+    onCreatePickupCode: (PackageItem) -> Unit,
+    // El texto con el que abre la caja de búsqueda (lo deja puesto el buscador general).
+    initialSearch: String = ""
 ) {
     // El texto del buscador vive aquí y el ViewModel recibe el valor ya aplicado, con una pausa
     // de 300 ms para no consultar al servidor en cada letra.
-    var searchText by rememberSaveable { mutableStateOf("") }
+    var searchText by rememberSaveable { mutableStateOf(initialSearch) }
     LaunchedEffect(searchText) {
         if (searchText.isNotBlank()) delay(300)
         onSearch(searchText)

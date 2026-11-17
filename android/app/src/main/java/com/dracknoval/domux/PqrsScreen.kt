@@ -63,13 +63,18 @@ private val pqrsStates = listOf(
 fun PqrsScreen(
     navController: NavController,
     targetResidentId: Int? = null,
+    // Lo que piden los atajos del buscador y de «+ Nuevo»: la pestaña «nueva» o un texto ya buscado.
+    initialTab: String = "",
+    initialSearch: String = "",
     viewModel: PqrsViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val canCreate = Session.isAdmin || Session.isResident
     val tabs = if (canCreate) listOf(PQRS_TAB_LIST, PQRS_TAB_NEW) else listOf(PQRS_TAB_LIST)
-    // Si la administración llega desde el perfil de un residente, abre directo la PQRS nueva.
-    var selectedTab by rememberSaveable { mutableStateOf(if (targetResidentId != null && canCreate) 1 else 0) }
+    // Si la administración llega desde el perfil de un residente (o desde «+ Nuevo»), abre directo la PQRS nueva.
+    var selectedTab by rememberSaveable {
+        mutableStateOf(if ((targetResidentId != null || initialTab == "nueva") && canCreate) 1 else 0)
+    }
     val tab = selectedTab.coerceIn(tabs.indices)
     var batchDialog by remember { mutableStateOf(false) }
 
@@ -99,7 +104,8 @@ fun PqrsScreen(
                     modifier = Modifier.weight(1f),
                     state = state,
                     viewModel = viewModel,
-                    onBatch = { batchDialog = true }
+                    onBatch = { batchDialog = true },
+                    initialSearch = initialSearch
                 )
             }
         }
@@ -119,9 +125,10 @@ private fun PqrsList(
     modifier: Modifier,
     state: PqrsUiState,
     viewModel: PqrsViewModel,
-    onBatch: () -> Unit
+    onBatch: () -> Unit,
+    initialSearch: String = ""
 ) {
-    var searchText by rememberSaveable { mutableStateOf(state.search) }
+    var searchText by rememberSaveable { mutableStateOf(state.search.ifEmpty { initialSearch }) }
     var expandedId by rememberSaveable { mutableStateOf<Int?>(null) }
 
     // La búsqueda espera un instante a que termines de escribir antes de preguntarle al servidor.

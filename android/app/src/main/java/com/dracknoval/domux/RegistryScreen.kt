@@ -39,6 +39,8 @@ import com.journeyapps.barcodescanner.ScanOptions
 fun RegistryScreen(
     navController: NavController,
     initialTab: String = "",
+    // Lo que deja el buscador general: el texto con el que abre la lista de paquetes o la de visitas.
+    initialSearch: String = "",
     packagesVm: PackagesViewModel = viewModel(),
     visitsVm: VisitsViewModel = viewModel()
 ) {
@@ -92,6 +94,9 @@ fun RegistryScreen(
         else -> "Paquetería y visitas"
     }
     val tab = selectedTab.coerceIn(tabs.indices)
+    // El texto buscado va a la lista que se abre: la de visitas si piden «visitas», si no la de paquetes.
+    val packageSearch = if (initialTab == "visitas") "" else initialSearch
+    val visitSearch = if (initialTab == "visitas") initialSearch else ""
 
     DomuxScreenScaffold(title = title, navController = navController) { scaffoldPadding ->
         Column(
@@ -144,7 +149,8 @@ fun RegistryScreen(
                         confirmation = "¿Archivar este paquete? Sigue guardado y se puede sacar de «Archivados»." to { packagesVm.moveToTrash(item) }
                     },
                     onRestore = { packagesVm.restore(it) },
-                    onCreatePickupCode = {}
+                    onCreatePickupCode = {},
+                    initialSearch = packageSearch
                 )
 
                 canRegister && tab == 1 -> PackageRegistrationSection(
@@ -170,7 +176,8 @@ fun RegistryScreen(
                     onDecision = { _, _ -> },
                     onAuthorizeByCall = { visitsVm.authorizeByCall(it) },
                     onEntry = { pendingEntry = it },
-                    onExit = { pendingExit = it }
+                    onExit = { pendingExit = it },
+                    initialSearch = visitSearch
                 )
 
                 Session.isGuard && tab == 3 -> VisitRegistrationSection(
@@ -213,7 +220,8 @@ fun RegistryScreen(
                     onStatusChange = { _, _ -> },
                     onMoveToTrash = {},
                     onRestore = {},
-                    onCreatePickupCode = { packagesVm.createPickupCode(it) }
+                    onCreatePickupCode = { packagesVm.createPickupCode(it) },
+                    initialSearch = packageSearch
                 )
 
                 Session.isResident && tab == 1 -> VisitListSection(
@@ -231,7 +239,8 @@ fun RegistryScreen(
                     onDecision = { visit, decision -> visitsVm.decide(visit, decision) },
                     onAuthorizeByCall = {},
                     onEntry = {},
-                    onExit = {}
+                    onExit = {},
+                    initialSearch = visitSearch
                 )
 
                 Session.isResident && tab == 2 -> ResidentQrSection(
