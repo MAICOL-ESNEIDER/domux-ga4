@@ -91,19 +91,22 @@ class NovedadesDeLaVersionTest {
         como(Roles.ADMINISTRACION)
         assertEquals(
             listOf(
-                "Comunicados", "Vehículos", "Usuarios", "Estructura de la unidad", "Notificaciones",
+                "Comunicados", "Vehículos", "Usuarios", "Estructura de la unidad", "Documentos", "Notificaciones",
                 "Preferencias", "Legal y privacidad"
             ),
             moreDestinations().map { it.label }
         )
         como(Roles.PORTERIA)
         assertEquals(
-            listOf("Comunicados", "Notificaciones", "Preferencias", "Legal y privacidad"),
+            listOf("Comunicados", "Documentos", "Notificaciones", "Preferencias", "Legal y privacidad"),
             moreDestinations().map { it.label }
         )
         como(Roles.RESIDENTE)
         assertEquals(
-            listOf("Mi perfil", "Mis paquetes", "Mis visitas y mi QR", "Notificaciones", "Preferencias", "Legal y privacidad"),
+            listOf(
+                "Mi perfil", "Mis paquetes", "Mis visitas y mi QR", "Documentos", "Notificaciones", "Preferencias",
+                "Legal y privacidad"
+            ),
             moreDestinations().map { it.label }
         )
     }

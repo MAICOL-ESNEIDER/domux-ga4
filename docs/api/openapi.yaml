@@ -109,6 +109,8 @@ tags:
   description: Torres, apartamentos, parqueaderos y cuartos útiles
 - name: Comunicados
   description: Avisos de la administración a los residentes
+- name: Documentos
+  description: Manual de convivencia, reglas, presupuestos y otros documentos que la administración comparte con quien elige
 - name: PQRS
   description: Peticiones, quejas, reclamos y sugerencias
 - name: Zonas comunes
@@ -1608,6 +1610,383 @@ paths:
           $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+  /api/documents:
+    get:
+      tags:
+      - Documentos
+      summary: Listar los documentos de la unidad
+      description: |-
+        **Quién puede usarla:** Cualquier persona con sesión (administración, portería o residente).
+
+        Los documentos que la persona puede ver, los más nuevos primero y sin el archivo (este se pide aparte, en `/api/documents/{document_id}/file`). Cada persona ve solo los que la administración le marcó: propietarios, arrendatarios, otros residentes o portería. La administración ve todos, con a quién se los muestra (`visibleTo`), y con `includeRetired=true` también los retirados. También llegan los tipos de documento y los públicos que existen.
+      operationId: documentsListDocuments
+      x-endpoint: documents.list_documents
+      x-roles:
+      - ADMIN
+      - GUARD
+      - RESIDENT
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - convivencia
+          - reglas
+          - presupuesto
+          - gastos
+          - actas
+          - otro
+        description: Dejar solo un tipo de documento
+      - name: includeRetired
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Incluir también los documentos retirados. Solo lo respeta la administración.
+      responses:
+        '200':
+          description: Los documentos que la persona puede ver
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - documents
+                - categories
+                - audiences
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UnitDocument'
+                  categories:
+                    type: array
+                    description: Los tipos de documento, en el orden en que se muestran
+                    items:
+                      $ref: '#/components/schemas/DocumentOption'
+                  audiences:
+                    type: array
+                    description: A quién se le puede mostrar un documento
+                    items:
+                      $ref: '#/components/schemas/DocumentOption'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+      - Documentos
+      summary: Subir un documento
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Sube un documento y marca quién lo puede ver. El archivo llega como texto `data:<tipo>;base64,<datos>`: PDF, PNG, JPG o WebP de máximo 6 MB; el tipo se reconoce por los primeros bytes del archivo, no por lo que diga quien lo manda, y la extensión del nombre se corrige a la real. Dos documentos publicados no pueden llamarse igual (409). Con `notify: true` se avisa, dentro de la app y al celular, a las personas que lo pueden ver. Una lista vacía en `visibleTo` deja el documento solo para la administración.
+      operationId: documentsUploadDocument
+      x-endpoint: documents.upload_document
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitDocumentInput'
+      responses:
+        '201':
+          description: Documento publicado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - document
+                - notified
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  document:
+                    $ref: '#/components/schemas/UnitDocument'
+                  notified:
+                    type: integer
+                    description: A cuántas personas se les avisó (0 si no se pidió avisar)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+  /api/documents/{document_id}:
+    get:
+      tags:
+      - Documentos
+      summary: Ver un documento
+      description: |-
+        **Quién puede usarla:** Cualquier persona con sesión (administración, portería o residente).
+
+        Los datos de un documento, sin el archivo. Si la persona no lo puede ver (no se lo marcaron o está retirado) responde 404, igual que si no existiera.
+      operationId: documentsGetDocument
+      x-endpoint: documents.get_document
+      x-roles:
+      - ADMIN
+      - GUARD
+      - RESIDENT
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        description: Id del documento
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: El documento
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - document
+                properties:
+                  document:
+                    $ref: '#/components/schemas/UnitDocument'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+      - Documentos
+      summary: Cambiar un documento
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Cambia el título, la descripción, el tipo o quién ve el documento; solo lo que se envíe. El archivo no se cambia: para publicar otra versión se sube un documento nuevo y se retira este. Un documento retirado no se puede cambiar (409). Los cambios quedan en la auditoría con lo de antes y lo de después. Una descripción `null` la quita.
+      operationId: documentsUpdateDocument
+      x-endpoint: documents.update_document
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        description: Id del documento
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitDocumentChanges'
+      responses:
+        '200':
+          description: Documento actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - document
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  document:
+                    $ref: '#/components/schemas/UnitDocument'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+      - Documentos
+      summary: Retirar un documento
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        El documento no se borra: deja de verse para los demás, pero queda guardado y se puede volver a publicar. Retirar uno que ya está retirado responde 409.
+      operationId: documentsRetireDocument
+      x-endpoint: documents.retire_document
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        description: Id del documento
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Documento retirado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - document
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  document:
+                    $ref: '#/components/schemas/UnitDocument'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/documents/{document_id}/file:
+    get:
+      tags:
+      - Documentos
+      summary: Descargar el archivo de un documento
+      description: |-
+        **Quién puede usarla:** Cualquier persona con sesión (administración, portería o residente).
+
+        El PDF o la imagen del documento, con su tipo real y su nombre. Si no cambió desde la última vez (cabecera `If-None-Match`) responde 304 sin cuerpo. Si la persona no puede ver el documento responde 404. La respuesta no puede cargar ni ejecutar nada (`Content-Security-Policy`).
+      operationId: documentsGetDocumentFile
+      x-endpoint: documents.get_document_file
+      x-roles:
+      - ADMIN
+      - GUARD
+      - RESIDENT
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        description: Id del documento
+        schema:
+          type: integer
+          minimum: 1
+      - name: If-None-Match
+        in: header
+        required: false
+        description: El ETag que se recibió la última vez
+        schema:
+          type: string
+      responses:
+        '200':
+          description: El archivo del documento (PDF, PNG, JPG o WebP)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+          headers:
+            ETag:
+              description: 'Huella del archivo: sirve para preguntar después si cambió'
+              schema:
+                type: string
+            Content-Disposition:
+              description: Cómo se muestra (`inline`) y con qué nombre
+              schema:
+                type: string
+        '304':
+          description: No cambió desde la última descarga
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/documents/{document_id}/restore:
+    post:
+      tags:
+      - Documentos
+      summary: Volver a publicar un documento retirado
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Vuelve a mostrar el documento a quienes lo veían. Si ya está publicado responde 409, y también si mientras tanto se publicó otro documento con el mismo título.
+      operationId: documentsRestoreDocument
+      x-endpoint: documents.restore_document
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        description: Id del documento
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Documento publicado de nuevo
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - document
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  document:
+                    $ref: '#/components/schemas/UnitDocument'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/admin/unit-rules:
     get:
       tags:
@@ -8112,6 +8491,193 @@ components:
         apartment:
           type: string
           nullable: true
+    DocumentOption:
+      type: object
+      description: Un tipo de documento o un público al que se le puede mostrar uno.
+      required:
+      - key
+      - label
+      properties:
+        key:
+          type: string
+          example: convivencia
+        label:
+          type: string
+          example: Manual de convivencia
+    UnitDocument:
+      type: object
+      description: Un documento de la unidad, sin el archivo. Los campos `visibleTo`, `isRetired`, `retiredAt` y `retiredByName` solo los ve la administración.
+      required:
+      - id
+      - title
+      - description
+      - category
+      - categoryLabel
+      - fileName
+      - mimeType
+      - kind
+      - sizeBytes
+      - version
+      - createdAt
+      - updatedAt
+      - uploadedByName
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          description: Único entre los documentos publicados (sin importar mayúsculas)
+          example: Manual de convivencia
+        description:
+          type: string
+          nullable: true
+          example: Versión aprobada en la asamblea de marzo.
+        category:
+          type: string
+          enum:
+          - convivencia
+          - reglas
+          - presupuesto
+          - gastos
+          - actas
+          - otro
+        categoryLabel:
+          type: string
+          example: Manual de convivencia
+        fileName:
+          type: string
+          description: Con la extensión del tipo real del archivo
+          example: manual-convivencia.pdf
+        mimeType:
+          type: string
+          enum:
+          - application/pdf
+          - image/png
+          - image/jpeg
+          - image/webp
+        kind:
+          type: string
+          description: Cómo mostrarlo
+          enum:
+          - pdf
+          - image
+        sizeBytes:
+          type: integer
+          example: 245760
+        version:
+          type: string
+          description: Cambia solo si cambia el archivo; sirve para no descargarlo de nuevo
+          example: 3fa81c0d9b2e
+        createdAt:
+          type: string
+          nullable: true
+          description: AAAA-MM-DD HH:MM
+        updatedAt:
+          type: string
+          nullable: true
+          description: AAAA-MM-DD HH:MM
+        uploadedByName:
+          type: string
+          nullable: true
+        visibleTo:
+          type: array
+          description: Solo la administración. A quién se le muestra; vacía es solo la administración.
+          items:
+            type: string
+            enum:
+            - propietario
+            - arrendatario
+            - residente
+            - guardia
+        isRetired:
+          type: boolean
+          description: Solo la administración
+        retiredAt:
+          type: string
+          nullable: true
+          description: Solo la administración. AAAA-MM-DD HH:MM
+        retiredByName:
+          type: string
+          nullable: true
+          description: Solo la administración
+    UnitDocumentInput:
+      type: object
+      description: Un documento nuevo.
+      required:
+      - title
+      - file
+      - visibleTo
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: Presupuesto aprobado 2027
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        category:
+          type: string
+          description: Si no se envía, «otro»
+          enum:
+          - convivencia
+          - reglas
+          - presupuesto
+          - gastos
+          - actas
+          - otro
+        file:
+          type: string
+          description: El archivo como `data:<tipo>;base64,<datos>`. PDF, PNG, JPG o WebP de máximo 6 MB.
+          example: data:application/pdf;base64,JVBERi0xLjQK...
+        fileName:
+          type: string
+          description: El nombre del archivo; si falta se usa el título. La extensión se corrige a la del tipo real.
+          example: presupuesto-2027.pdf
+        visibleTo:
+          type: array
+          description: A quién se le muestra. Vacía es solo la administración.
+          items:
+            type: string
+            enum:
+            - propietario
+            - arrendatario
+            - residente
+            - guardia
+        notify:
+          type: boolean
+          description: Avisar a las personas que lo pueden ver (por defecto no)
+    UnitDocumentChanges:
+      type: object
+      description: Los cambios de un documento; al menos uno. El archivo no se cambia.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        category:
+          type: string
+          enum:
+          - convivencia
+          - reglas
+          - presupuesto
+          - gastos
+          - actas
+          - otro
+        visibleTo:
+          type: array
+          items:
+            type: string
+            enum:
+            - propietario
+            - arrendatario
+            - residente
+            - guardia
     UnitRules:
       type: object
       description: Las reglas vigentes de la unidad. Donde la administración no cambió nada rige el valor de DOMUX.

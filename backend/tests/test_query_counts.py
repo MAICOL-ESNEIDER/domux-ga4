@@ -25,11 +25,12 @@ from models import (
     PqrsMessage,
     Reservation,
     ReservationMessage,
+    UnitDocument,
     User,
     Visit,
 )
 from structure_fixtures import apartment_for
-from time_utils import colombia_today
+from time_utils import colombia_today, utc_now
 
 FEW, MANY = 3, 12
 
@@ -44,9 +45,13 @@ LISTS = (
     ("ADMIN", "/api/packages"),
     ("ADMIN", "/api/visits"),
     ("ADMIN", "/api/admin/summary"),
+    ("ADMIN", "/api/documents"),
+    ("ADMIN", "/api/documents?includeRetired=true"),
     ("ADMIN", "/api/admin/export/legal-report"),
     ("GUARD", "/api/packages"),
     ("GUARD", "/api/visits"),
+    ("GUARD", "/api/documents"),
+    ("RESIDENT", "/api/documents"),
     ("RESIDENT", "/api/pqrs"),
     ("RESIDENT", "/api/reservations"),
     ("RESIDENT", "/api/announcements"),
@@ -125,6 +130,18 @@ class QueryCountTests(unittest.TestCase):
                 title=f"Aviso {index}", message="Texto", category="general", author_id=self.admin.id,
             ))
             db.session.add(Notification(user_id=resident.id, title="Aviso", message="Texto"))
+            # Cada documento lo sube otra persona de la administración: así la lista no puede apoyarse en
+            # que quien lo subió ya estaba cargado y tiene que traer a todas juntas.
+            author = self.person("ADMIN", f"autor{index}-consultas@test.local")
+            document = UnitDocument(
+                title=f"Documento {index}", category="otro", file_name=f"documento{index}.pdf",
+                mime_type="application/pdf", size_bytes=8, content=b"%PDF-1.4", content_sha256="0" * 64,
+                for_owners=True, for_guards=True, uploaded_by_id=author.id,
+            )
+            if index % 2:  # la mitad retirados, por otra persona, para que la lista también cargue quién los retiró
+                retirer = self.person("ADMIN", f"retira{index}-consultas@test.local")
+                document.retired_at, document.retired_by_id = utc_now(), retirer.id
+            db.session.add(document)
             self.rows += 1
         db.session.commit()
 

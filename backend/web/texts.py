@@ -92,6 +92,7 @@ NOTIFICATION_TYPES = {
     "pqrs": "PQRS",
     "reservation": "Reservas",
     "announcement": "Comunicados",
+    "document": "Documentos",
     "package": "Paquetes",
     "visit": "Visitas",
     "vehicle": "Vehículos",
@@ -173,6 +174,15 @@ def slot_length_text(minutes):
     if rest == 0:
         return base
     return f"{base} y media" if rest == 30 else f"{base} y {rest} minutos"
+
+
+def size_text(size):
+    """El tamaño de un archivo con palabras: «340 KB» o «1,2 MB»."""
+    if size is None:
+        return ""
+    if size < 1024 * 1024:
+        return f"{max(1, round(size / 1024))} KB"
+    return f"{size / (1024 * 1024):.1f}".replace(".", ",") + " MB"
 
 
 def plural(count, singular, plural_form):

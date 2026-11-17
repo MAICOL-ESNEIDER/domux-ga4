@@ -14,8 +14,9 @@ from services.media import MAX_MEDIA_BYTES, PDF_MIME, is_pdf, sniff_media
 
 __all__ = (
     "MAX_MEDIA_BYTES", "MEDIA_ACCEPT", "MEDIA_FORMATS_TEXT", "DOCUMENT_ACCEPT", "DOCUMENT_FORMATS_TEXT",
+    "UNIT_DOCUMENT_ACCEPT", "UNIT_DOCUMENT_FORMATS_TEXT",
     "attach_media",
-    "UploadError", "read_media", "sniff_media",
+    "UploadError", "read_media", "read_unit_document", "sniff_media",
 )
 
 #: Lo que se le dice a la persona que puede subir, y lo que acepta el campo del formulario.
@@ -26,6 +27,11 @@ MEDIA_ACCEPT = (
 #: Lo mismo donde además se puede adjuntar un documento PDF (los comunicados).
 DOCUMENT_FORMATS_TEXT = MEDIA_FORMATS_TEXT.replace(" o WAV", ", WAV o PDF")
 DOCUMENT_ACCEPT = MEDIA_ACCEPT + "," + PDF_MIME
+
+
+#: Lo que se puede subir como documento de la unidad: PDF y fotos, nada de video ni audio.
+UNIT_DOCUMENT_ACCEPT = "application/pdf,image/png,image/jpeg,image/webp"
+UNIT_DOCUMENT_FORMATS_TEXT = "PDF, PNG, JPG o WebP"
 
 
 class UploadError(ValueError):
@@ -79,3 +85,21 @@ def read_media(upload, allow_document=False):
         raise UploadError(f"El archivo no es {what} que se pueda publicar ({formats}).")
     mime, kind = found
     return f"data:{mime};base64,{base64.b64encode(raw).decode()}", kind
+
+
+def read_unit_document(upload):
+    """El archivo elegido para un documento de la unidad: ``(texto data:…, nombre del archivo)``.
+
+    Lo único que se revisa aquí es que se haya elegido uno y que no pese demasiado (para no cargar en
+    memoria un archivo enorme); el tipo real lo revisa la API por los primeros bytes. Si no hay archivo o pesa
+    de más, levanta ``UploadError`` con el mensaje para la persona.
+    """
+    if upload is None or not upload.filename:
+        raise UploadError("Elige el archivo del documento.")
+    raw = upload.read(MAX_MEDIA_BYTES + 1)
+    if len(raw) > MAX_MEDIA_BYTES:
+        raise UploadError(
+            f"El archivo pesa demasiado: el máximo es {MAX_MEDIA_BYTES // (1024 * 1024)} MB. "
+            "Elige uno más liviano."
+        )
+    return f"data:application/octet-stream;base64,{base64.b64encode(raw).decode()}", upload.filename
