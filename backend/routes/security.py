@@ -147,6 +147,8 @@ def get_packages():
         return error_response(403, "No tienes permiso para ver los paquetes")
 
     status = request.args.get("status")
+    if status == "por_llegar":
+        status = "pendiente"
     if status == "papelera":
         query = query.filter(PackageItem.is_deleted.is_(True))
     elif status is None or status in VALID_PACKAGE_STATUSES:
@@ -181,7 +183,9 @@ def register_package():
     if failure:
         return failure
     status = data.get("status", "pendiente")
-    if status not in ("pendiente", "por_llegar"):
+    if status == "por_llegar":
+        status = "pendiente"
+    if status != "pendiente":
         return error_response(400, "Estado de paquete inválido")
     validation_error = require_non_empty_fields(
         data,
@@ -227,7 +231,9 @@ def update_package_status(pkg_id):
     if failure:
         return failure
     status = data.get("status")
-    if status not in ("por_llegar", "pendiente"):
+    if status == "por_llegar":
+        status = "pendiente"
+    if status != "pendiente":
         return error_response(400, "Estado de paquete inválido")
     package = db.session.get(PackageItem, pkg_id)
     if package is None:

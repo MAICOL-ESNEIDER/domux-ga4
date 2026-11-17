@@ -27,6 +27,7 @@ from services.excel_service import (
 )
 from services.reservation_service import (
     ACTIVE_RESERVATION_STATUSES,
+    finalize_expired_reservations,
     reservation_availability,
     reservation_conflicts,
     time_slots_overlap,
@@ -63,6 +64,7 @@ def _add_audit_log(entity_type, entity_id, action, details=None):
 @token_required
 @role_required("ADMIN")
 def archive_history():
+    finalize_expired_reservations()
     today = date.today().isoformat()
     pqrs_items = Pqrs.query.filter(
         Pqrs.status == "resuelta",
@@ -579,6 +581,7 @@ def get_common_areas():
 @bp.get("/reservations")
 @token_required
 def get_reservations():
+    finalize_expired_reservations()
     user = g.current_user
     if user.role == "ADMIN":
         query = Reservation.query
@@ -609,6 +612,7 @@ def get_reservation_availability():
     if db.session.get(CommonArea, common_area_id) is None:
         return error_response(404, "Zona común no encontrada")
 
+    finalize_expired_reservations()
     slots = reservation_availability(common_area_id, date)
     return jsonify({
         "commonAreaId": common_area_id,
@@ -629,6 +633,7 @@ def get_reservation_calendar():
         return error_response(400, "El mes o año del calendario no es válido.")
     if db.session.get(CommonArea, common_area_id) is None:
         return error_response(404, "Zona común no encontrada.")
+    finalize_expired_reservations()
     prefix = f"{year:04d}-{month:02d}-"
     rows = db.session.query(Reservation.date, Reservation.time_slot).filter(
         Reservation.common_area_id == common_area_id,
@@ -699,6 +704,7 @@ def create_reservation():
             403,
             "Los menores de edad requieren autorización parental registrada por administración para solicitar reservas.",
         )
+    finalize_expired_reservations()
     if g.current_user.role == "RESIDENT":
         active_statuses = ("pendiente", "activa", "aprobada")
         daily_reservation = Reservation.query.filter(
@@ -784,6 +790,7 @@ def update_reservation_status(res_id):
     status = data.get("status")
     if status not in ("aprobada", "rechazada"):
         return error_response(400, "El estado debe ser 'aprobada' o 'rechazada'.")
+    finalize_expired_reservations()
     reservation = db.session.get(Reservation, res_id)
     if reservation is None:
         return error_response(404, "Reserva no encontrada")
@@ -848,6 +855,7 @@ def add_reservation_message(res_id):
     if not (message and message.strip()) and not data.get("mediaUrl"):
         return error_response(400, "Escribe un mensaje o adjunta un archivo.")
 
+    finalize_expired_reservations()
     reservation = db.session.get(Reservation, res_id)
     if reservation is None:
         return error_response(404, "Reserva no encontrada.")
@@ -892,6 +900,7 @@ def add_reservation_message(res_id):
 @token_required
 @role_required("RESIDENT", "ADMIN")
 def cancel_reservation(res_id):
+    finalize_expired_reservations()
     reservation = db.session.get(Reservation, res_id)
     if reservation is None:
         return error_response(404, "Reserva no encontrada")
