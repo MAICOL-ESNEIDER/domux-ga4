@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("io.github.takahirom.roborazzi")
     id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
@@ -87,6 +88,26 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    // Pruebas de la app en el computador (sin celular): dibujan las pantallas con datos de mentira y
+    // sacan una foto de cada una. Corren solo en GitHub; ver app/src/test.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+}
+
+// Dibujar pantallas en el computador pide más memoria y el dibujo «hardware» de Robolectric.
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "2g"
+    systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+    // Si una prueba de pantalla falla, que el registro de GitHub diga por qué.
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
 }
 
 dependencies {
@@ -115,4 +136,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    // Fotos de pantalla: Robolectric simula el celular en el computador y Roborazzi guarda la foto.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.26.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.26.0")
 }

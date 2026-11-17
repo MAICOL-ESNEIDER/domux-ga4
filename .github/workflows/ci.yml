@@ -11,6 +11,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      ver_fotos:
+        description: "Imprimir en el registro las fotos de las pantallas, en pequeño, para verlas sin bajarlas"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -100,4 +105,55 @@ jobs:
         with:
           name: domux-apk-${{ github.run_number }}
           path: android/app/build/outputs/apk/prod/debug/*.apk
+          retention-days: 14
+
+  # Fotos de pantalla de la app: se dibuja cada pantalla con datos de mentira en un celular simulado
+  # (Robolectric) y se guarda una foto. Sirven para ver cómo queda la app sin un celular y, desde la
+  # congelación, para comprobar que dividir los archivos grandes no cambia cómo se ve nada.
+  pantallas:
+    name: Pantallas (fotos de la app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Dibujar las pantallas con datos de mentira y sacarles una foto
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testProdDebugUnitTest -Proborazzi.test.record=true --no-daemon --stacktrace
+      # Solo corre si se lanza a mano con «ver_fotos»: sirve para revisar las fotos sin bajarlas.
+      - name: Vista previa de las fotos en el registro (solo si se pide al lanzar a mano)
+        if: always() && inputs.ver_fotos
+        run: |
+          python3 -m venv /tmp/entorno
+          /tmp/entorno/bin/pip install --quiet pillow
+          /tmp/entorno/bin/python - <<'PY'
+          import base64, glob, io, os
+          from PIL import Image
+          for ruta in sorted(glob.glob("app/build/fotos-de-pantallas/*.png")):
+              im = Image.open(ruta).convert("RGB")
+              ancho, alto = im.size
+              im = im.resize((ancho // 2, alto // 2), Image.LANCZOS)
+              memoria = io.BytesIO()
+              im.save(memoria, "JPEG", quality=62)
+              datos = base64.b64encode(memoria.getvalue()).decode()
+              print("FOTO-INICIO " + os.path.basename(ruta) + " " + str(len(datos)))
+              for i in range(0, len(datos), 2000):
+                  print("FOTO-DATOS " + datos[i:i + 2000])
+              print("FOTO-FIN")
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: fotos-de-pantallas-${{ github.run_number }}
+          path: |
+            android/app/build/fotos-de-pantallas/**
+            android/app/build/reports/tests/**
           retention-days: 14
