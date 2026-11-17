@@ -9,7 +9,7 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import AuditLog, CommonArea, Notification, Reservation, ReservationMessage, User
-from validators import VALID_TIME_SLOTS
+from validators import STANDARD_TIME_SLOTS, VALID_TIME_SLOTS
 from werkzeug.security import generate_password_hash
 
 
@@ -181,7 +181,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         self.assertEqual(reservations[1].status, "pendiente")
 
     def test_calendar_blocks_only_fully_occupied_days(self):
-        for index, slot in enumerate(VALID_TIME_SLOTS):
+        for index, slot in enumerate(STANDARD_TIME_SLOTS):
             db.session.add(Reservation(
                 resident_id=self.resident.id,
                 common_area_id=self.area.id,
@@ -213,6 +213,91 @@ class ReservationWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["blockedDates"], [self.future_date])
+
+    def test_extended_slots_are_social_hall_only_and_conflicts_use_overlap(self):
+        approved_half_day = Reservation(
+            resident_id=self.resident.id,
+            common_area_id=self.area.id,
+            date=self.future_date,
+            time_slot="08:00-15:00",
+            status="aprobada",
+        )
+        gym = CommonArea(name="GIMNASIO")
+        db.session.add_all([approved_half_day, gym])
+        db.session.commit()
+
+        overlapping = self.create_request(
+            resident=self.other_resident,
+            slot="10:00-12:00",
+        )
+        adjacent = self.create_request(
+            resident=self.other_resident,
+            slot="15:00-22:00",
+        )
+        invalid_zone = self.create_request(
+            resident=self.other_resident,
+            commonAreaId=gym.id,
+            slot="08:00-15:00",
+        )
+
+        self.assertEqual(overlapping.status_code, 409)
+        self.assertEqual(adjacent.status_code, 201)
+        self.assertEqual(invalid_zone.status_code, 400)
+        self.assertEqual(
+            invalid_zone.json["error"],
+            "El día completo o media jornada es exclusivo del Salón Social.",
+        )
+
+    def test_invalid_legacy_reservation_can_still_be_rejected(self):
+        gym = CommonArea(name="GIMNASIO")
+        db.session.add(gym)
+        db.session.flush()
+        reservation = Reservation(
+            resident_id=self.resident.id,
+            common_area_id=gym.id,
+            date=self.future_date,
+            time_slot="08:00-15:00",
+            status="pendiente",
+        )
+        db.session.add(reservation)
+        db.session.commit()
+
+        rejected = self.client.put(
+            f"/api/reservations/{reservation.id}/status",
+            headers=self.headers(self.admin),
+            json={"status": "rechazada"},
+        )
+
+        self.assertEqual(rejected.status_code, 200)
+
+    def test_archived_active_reservation_does_not_conflict(self):
+        archived = Reservation(
+            resident_id=self.resident.id,
+            common_area_id=self.area.id,
+            date=self.future_date,
+            time_slot="10:00-12:00",
+            status="aprobada",
+            is_archived=True,
+        )
+        db.session.add(archived)
+        db.session.commit()
+
+        created = self.create_request(resident=self.other_resident)
+        self.assertEqual(created.status_code, 201)
+        reservation_id = created.json["reservation"]["id"]
+        approved = self.client.put(
+            f"/api/reservations/{reservation_id}/status",
+            headers=self.headers(self.admin),
+            json={"status": "aprobada"},
+        )
+
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(Reservation.query.filter_by(
+            date=self.future_date,
+            time_slot="10:00-12:00",
+            is_archived=False,
+            status="aprobada",
+        ).count(), 1)
 
     def test_admin_reply_notifies_resident_and_resident_message_notifies_admin(self):
         created = self.create_request()

@@ -32,6 +32,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import android.net.Uri
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -255,6 +257,7 @@ fun CreateUserScreen(navController: NavController) {
                     onClick = {
                         attemptedSubmit = true
                         if (listOf(name, lastName, email, phone, documentId).any { it.trim().isEmpty() } ||
+                            phone.length != 10 ||
                             (role == "RESIDENT" && apartment.trim().isEmpty()) ||
                             (role == "RESIDENT" && !consentConfirmed) ||
                             !email.trim().contains("@") || !validStrongPassword(password)
@@ -560,6 +563,10 @@ fun CreateUserScreen(navController: NavController) {
             confirmButton = {
                 TextButton(onClick = {
                     attemptedEdit = true
+                    if (ePhone.length != 10) {
+                        message = "El teléfono debe tener exactamente 10 dígitos."
+                        return@TextButton
+                    }
                     if (listOf(eName, eLastName, eEmail, ePhone, eDocument).any { it.trim().isEmpty() } ||
                         !eEmail.trim().contains("@") || (eRole == "RESIDENT" && eApartment.trim().isEmpty()) ||
                         (eRole == "RESIDENT" && user.role != "RESIDENT" && !eConsent)
@@ -828,17 +835,27 @@ private fun UserInput(
     password: Boolean = false,
     showMissingError: Boolean = false
 ) {
+    val isPhone = label == "Teléfono"
     val missing = required && showMissingError && value.trim().isEmpty()
     val invalidEmail = label == "Correo" && value.isNotEmpty() && !value.trim().contains("@")
     val invalidPassword = password && value.isNotEmpty() && !validStrongPassword(value)
+    val invalidPhone = isPhone && showMissingError && value.length != 10
     OutlinedTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { input ->
+            onValueChange(if (isPhone) input.filter { ch -> ch.isDigit() }.take(10) else input)
+        },
         label = { Text(label) },
         singleLine = true,
-        isError = missing || invalidEmail || invalidPassword,
+        isError = missing || invalidEmail || invalidPassword || invalidPhone,
+        keyboardOptions = if (isPhone) {
+            KeyboardOptions(keyboardType = KeyboardType.Number)
+        } else {
+            KeyboardOptions.Default
+        },
         supportingText = {
-            if (missing) Text("$label es obligatorio")
+            if (isPhone) Text("10 dígitos (ej. 3001234567)")
+            else if (missing) Text("$label es obligatorio")
             else if (invalidEmail) Text("Ingresa un correo válido")
             else if (invalidPassword) Text("Usa 8 caracteres con mayúscula, minúscula, número y símbolo")
         },

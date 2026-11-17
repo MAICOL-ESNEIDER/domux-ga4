@@ -53,7 +53,8 @@ private data class HomeModule(
     val title: String,
     val detail: String,
     val icon: String,
-    val route: String
+    val route: String,
+    val accentColor: Color
 )
 
 @Composable
@@ -137,19 +138,22 @@ fun HomeScreen(navController: NavController) {
     }
 
     val modules = buildList {
-        add(HomeModule("Anuncios", "Comunicados", "▤", "announcements"))
+        add(HomeModule("Anuncios", "Comunicados", "▤", "announcements", Color(0xFFF59E0B)))
         if (Session.isAdmin) {
-            add(HomeModule("PQRS", "Gestión de solicitudes", "◎", "pqrs"))
-            add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations"))
-            add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry"))
-            add(HomeModule("Usuarios", "Administración", "♙", "createUser"))
+            add(HomeModule("PQRS", "Gestión de solicitudes", "◎", "pqrs", Color(0xFF06B6D4)))
+            add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations", Color(0xFF10B981)))
+            add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry", Color(0xFF8B5CF6)))
+            add(HomeModule("Usuarios", "Administración", "♙", "createUser", Color(0xFF3B82F6)))
         } else if (Session.isResident) {
-            add(HomeModule("Mi perfil", "Mis datos y hogar", "♙", "profile"))
-            add(HomeModule("Mis PQRS", "Solicitudes y respuestas", "◎", "pqrs"))
-            add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations"))
-            add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry"))
+            add(HomeModule("Mi perfil", "Mis datos y hogar", "♙", "profile", Color(0xFF3B82F6)))
+            add(HomeModule("Mis PQRS", "Solicitudes y respuestas", "◎", "pqrs", Color(0xFF06B6D4)))
+            add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations", Color(0xFF10B981)))
+            add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry", Color(0xFF8B5CF6)))
         } else if (Session.isGuard) {
-            add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry"))
+            add(HomeModule("Registrar Visitante", "Visitas y portería", "♙", "registry?initialTab=3", Color(0xFFF97316)))
+            add(HomeModule("Ver Visitas y QR", "Visitas activas", "▦", "registry?initialTab=2", Color(0xFFF97316)))
+            add(HomeModule("Registrar Paquete", "Registrar en portería", "＋", "registry?initialTab=1", Color(0xFF8B5CF6)))
+            add(HomeModule("Bandeja de Paquetes", "Paquetes recibidos", "▣", "registry?initialTab=0", Color(0xFF8B5CF6)))
         }
     }
 
@@ -243,7 +247,8 @@ fun HomeScreen(navController: NavController) {
                         title = module.title,
                         detail = module.detail,
                         icon = module.icon,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        accentColor = module.accentColor
                     ) { navController.navigate(module.route) }
                 }
                 if (rowModules.size == 1) Spacer(Modifier.weight(1f))

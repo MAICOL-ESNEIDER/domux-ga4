@@ -11,7 +11,15 @@ os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 from app import create_app
 from auth import generate_token
 from extensions import db
-from models import DevicePushToken, Notification, PackageItem, User, Visit, VisitQrPass
+from models import (
+    Announcement,
+    DevicePushToken,
+    Notification,
+    PackageItem,
+    User,
+    Visit,
+    VisitQrPass,
+)
 from services import notification_service
 from werkzeug.security import generate_password_hash
 
@@ -74,6 +82,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             "residentId": self.resident.id,
             "visitorName": "Visita de prueba",
             "type": "visitante",
+            "documentRefused": True,
         }
         data.update(fields)
         return self.client.post("/api/visits", headers=self.auth(self.guard), json=data)
@@ -94,12 +103,16 @@ class SecurityWorkflowTests(unittest.TestCase):
         return response.get_json()["qrPass"]
 
     def test_visit_needs_consent_for_document_and_notifies_resident(self):
-        response = self.register_visit(visitorDocument="1234")
+        response = self.register_visit(
+            visitorDocument="1234",
+            documentRefused=False,
+        )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Visit.query.count(), 0)
 
         response = self.register_visit(
             visitorDocument="1234",
+            documentRefused=False,
             mediaConsent=True,
             mediaUrl="data:image/jpeg;base64,AA==",
             mediaType="image",
@@ -108,7 +121,61 @@ class SecurityWorkflowTests(unittest.TestCase):
         visit = Visit.query.one()
         self.assertEqual(visit.visitor_document, "1234")
         self.assertTrue(visit.media_consent)
+        self.assertFalse(visit.document_refused)
+        self.assertFalse(response.json["visit"]["documentRefused"])
         self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 1)
+
+    def test_visit_requires_document_or_explicit_refusal(self):
+        response = self.register_visit(
+            visitorDocument="",
+            documentRefused=False,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json["error"],
+            "El documento de identidad del visitante es obligatorio, o debes marcar que se negó a suministrarlo.",
+        )
+        self.assertEqual(Visit.query.count(), 0)
+
+    def test_refused_document_is_recorded_without_document_consent(self):
+        response = self.register_visit(
+            visitorDocument="",
+            documentRefused=True,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        visit = Visit.query.one()
+        self.assertEqual(visit.visitor_document, "NO SUMINISTRADO")
+        self.assertTrue(visit.document_refused)
+        self.assertFalse(visit.media_consent)
+        self.assertTrue(response.json["visit"]["documentRefused"])
+
+    def test_announcement_and_package_reject_past_event_dates(self):
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        announcement = self.client.post(
+            "/api/announcements",
+            headers=self.auth(self.admin),
+            json={
+                "title": "Evento vencido",
+                "message": "No se debe publicar.",
+                "eventDate": yesterday,
+            },
+        )
+        package = self.client.post(
+            "/api/packages",
+            headers=self.auth(self.guard),
+            json={
+                "residentId": self.resident.id,
+                "description": "Evento vencido",
+                "eventDate": yesterday,
+            },
+        )
+
+        self.assertEqual(announcement.status_code, 400)
+        self.assertEqual(package.status_code, 400)
+        self.assertEqual(Announcement.query.count(), 0)
+        self.assertEqual(PackageItem.query.count(), 0)
 
     def test_resident_decision_call_authorization_entry_and_exit_are_audited(self):
         visit_response = self.register_visit()

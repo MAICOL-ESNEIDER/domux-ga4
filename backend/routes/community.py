@@ -1,5 +1,6 @@
 import base64
 import json
+import unicodedata
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, g, jsonify, request
@@ -28,10 +29,12 @@ from services.reservation_service import (
     ACTIVE_RESERVATION_STATUSES,
     reservation_availability,
     reservation_conflicts,
+    time_slots_overlap,
 )
 from validators import (
+    EXTENDED_TIME_SLOTS,
     VALID_PQRS_STATUSES,
-    VALID_TIME_SLOTS,
+    STANDARD_TIME_SLOTS,
     parse_optional_bool,
     require_non_empty_fields,
     validate_future_or_today_date,
@@ -123,9 +126,28 @@ def _media_and_event_error(data, date_key, time_key):
     event_date = data.get(date_key)
     if event_date is not None and (error := validate_iso_date(event_date)):
         return error
+    if event_date is not None and event_date < date.today().isoformat():
+        return "La fecha del evento no puede ser anterior a hoy."
     event_time = data.get(time_key)
     if event_time is not None and (error := validate_time(event_time)):
         return error
+    return None
+
+
+def _is_social_hall(area_name):
+    normalized_name = unicodedata.normalize("NFD", area_name or "")
+    normalized_name = "".join(
+        character for character in normalized_name
+        if not unicodedata.combining(character)
+    ).casefold()
+    return "salon" in normalized_name
+
+
+def _special_reservation_slot_error(area, time_slot):
+    if time_slot in EXTENDED_TIME_SLOTS and (
+        area is None or not _is_social_hall(area.name)
+    ):
+        return "El día completo o media jornada es exclusivo del Salón Social."
     return None
 
 
@@ -608,21 +630,28 @@ def get_reservation_calendar():
     if db.session.get(CommonArea, common_area_id) is None:
         return error_response(404, "Zona común no encontrada.")
     prefix = f"{year:04d}-{month:02d}-"
-    rows = db.session.query(
-        Reservation.date,
-        db.func.count(db.func.distinct(Reservation.time_slot)),
-    ).filter(
+    rows = db.session.query(Reservation.date, Reservation.time_slot).filter(
         Reservation.common_area_id == common_area_id,
         Reservation.date.like(f"{prefix}%"),
         Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
-    ).group_by(Reservation.date).having(
-        db.func.count(db.func.distinct(Reservation.time_slot)) >= len(VALID_TIME_SLOTS)
+        Reservation.is_archived.is_(False),
     ).all()
+    slots_by_date = {}
+    for reservation_date, time_slot in rows:
+        slots_by_date.setdefault(reservation_date, []).append(time_slot)
+    blocked_dates = [
+        reservation_date
+        for reservation_date, occupied_slots in slots_by_date.items()
+        if all(
+            any(time_slots_overlap(slot, occupied) for occupied in occupied_slots)
+            for slot in STANDARD_TIME_SLOTS
+        )
+    ]
     return jsonify({
         "commonAreaId": common_area_id,
         "year": year,
         "month": month,
-        "blockedDates": [reservation_date for reservation_date, _ in rows],
+        "blockedDates": blocked_dates,
     })
 
 
@@ -650,6 +679,8 @@ def create_reservation():
     if error := validate_future_or_today_date(data["date"]):
         return error_response(400, error)
     if error := validate_time_slot(data["timeSlot"]):
+        return error_response(400, error)
+    if error := _special_reservation_slot_error(area, data["timeSlot"]):
         return error_response(400, error)
     message = data.get("message")
     if message is not None and not isinstance(message, str):
@@ -758,6 +789,11 @@ def update_reservation_status(res_id):
         return error_response(404, "Reserva no encontrada")
     if reservation.status not in ("pendiente", "activa"):
         return error_response(400, "Solo puedes aprobar o rechazar reservas pendientes.")
+    if status in ACTIVE_RESERVATION_STATUSES:
+        if error := _special_reservation_slot_error(
+            reservation.common_area, reservation.time_slot
+        ):
+            return error_response(400, error)
     if status in ACTIVE_RESERVATION_STATUSES and reservation_conflicts(
         reservation.common_area_id,
         reservation.date,

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -147,13 +149,14 @@ fun DomuxBentoCard(
     detail: String,
     icon: String,
     modifier: Modifier = Modifier,
+    accentColor: Color = Color(0xFF38BDF8),
     onClick: () -> Unit
 ) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         color = Color(0xFF0F1E33),
         shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, Color(0xFF1E334D))
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -162,10 +165,10 @@ fun DomuxBentoCard(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .background(Color(0xFF152C4A), RoundedCornerShape(13.dp)),
+                    .background(accentColor.copy(alpha = 0.16f), RoundedCornerShape(13.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(icon, color = Color(0xFF38BDF8), fontSize = 19.sp)
+                Text(icon, color = accentColor, fontSize = 19.sp)
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelMedium)
@@ -223,18 +226,13 @@ fun DomuxBrandMark(size: Dp = 54.dp) {
 fun DomuxFeedbackBanner(message: String, onDismiss: (() -> Unit)? = null) {
         if (message.isBlank()) return
 
-        val errorPrefixes = listOf(
-            "No se", "Error", "Falta", "Completa", "Escribe", "Selecciona", "Elige",
-            "Revisa", "Confirma", "La contraseña", "El ", "Sin conexión", "Ocurrió", "❌", "⚠"
-        )
         val confirmations = listOf(
-            "creado", "actualizado", "actualizada", "actualizadas", "publicado", "eliminado",
+            "creada", "creado", "actualizado", "actualizada", "actualizadas", "publicado", "eliminado",
             "enviada", "enviado", "guardada", "guardado", "registrado", "registrada",
             "entregado", "restaurado", "restablecida", "revocado", "autorizado",
-            "aprobada", "vinculado", "papelera"
+            "aprobada", "vinculado", "papelera", "archivada", "exitosamente"
         )
-        val isSuccess = errorPrefixes.none { message.startsWith(it, ignoreCase = true) } &&
-            confirmations.any { message.contains(it, ignoreCase = true) }
+        val isSuccess = confirmations.any { message.contains(it, ignoreCase = true) }
         val background = if (isSuccess) Color(0xFF052E16) else Color(0xFF450A0A)
         val foreground = if (isSuccess) Color(0xFF34D399) else Color(0xFFF87171)
         val outline = if (isSuccess) Color(0xFF10B981) else Color(0xFFEF4444)
@@ -410,8 +408,13 @@ fun DomuxResidentSearchField(
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, Color(0xFF1E334D))
                     ) {
-                        Column(modifier = Modifier.padding(6.dp)) {
-                            results.take(6).forEach { resident ->
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 180.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(6.dp)
+                        ) {
+                            results.take(if (searchQuery.isBlank()) 3 else 5).forEach { resident ->
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -479,10 +482,15 @@ fun DomuxScreenScaffold(
                 add("Reservas" to "reservations")
                 add("Paquetería y visitas" to "registry")
             } else if (Session.isGuard) {
-                add("Paquetería y visitas" to "registry")
+                add("Registrar Visitante" to "registry?initialTab=3")
+                add("Ver Visitas y QR" to "registry?initialTab=2")
+                add("Registrar Paquete" to "registry?initialTab=1")
+                add("Bandeja de Paquetes" to "registry?initialTab=0")
             }
         }
-        val currentRoute = navController.currentBackStackEntry?.destination?.route?.substringBefore("?")
+        val currentEntry = navController.currentBackStackEntry
+        val currentRoute = currentEntry?.destination?.route?.substringBefore("?")
+        val currentRegistryTab = currentEntry?.arguments?.getInt("initialTab") ?: 0
 
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -533,13 +541,20 @@ fun DomuxScreenScaffold(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         destinations.forEach { (label, route) ->
+                            val destinationRoute = route.substringBefore("?")
+                            val destinationTab = route
+                                .substringAfter("initialTab=", "")
+                                .toIntOrNull()
                             NavigationDrawerItem(
                                 label = { Text(label) },
-                                selected = currentRoute == route,
+                                selected = currentRoute == destinationRoute &&
+                                    (destinationTab == null || destinationTab == currentRegistryTab),
                                 onClick = {
                                     scope.launch {
                                         drawerState.close()
-                                        if (currentRoute != route) {
+                                        if (currentRoute != destinationRoute ||
+                                            (destinationTab != null && destinationTab != currentRegistryTab)
+                                        ) {
                                             navController.navigate(route) { launchSingleTop = true }
                                         }
                                     }

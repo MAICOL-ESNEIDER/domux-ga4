@@ -71,6 +71,7 @@ SQLITE_ADDITIONS = {
         "visitor_photo_url": "TEXT",
         "visitor_photo_type": "VARCHAR(20)",
         "media_consent": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "document_refused": "BOOLEAN NOT NULL DEFAULT FALSE",
         "description": "VARCHAR(250)",
         "approval_status": "VARCHAR(20) NOT NULL DEFAULT 'pendiente'",
         "authorization_method": "VARCHAR(20)",
@@ -102,24 +103,36 @@ def migrate_sqlite_schema():
                         f'ALTER TABLE "{table_name}" ADD COLUMN '
                         f'"{column_name}" {column_type}'
                     )
-        if "reservations" in existing_tables:
-            duplicate_active_slots = connection.exec_driver_sql(
-                "SELECT 1 FROM reservations "
-                "WHERE status IN ('activa', 'aprobada') "
-                "GROUP BY common_area_id, date, time_slot "
-                "HAVING COUNT(*) > 1 LIMIT 1"
-            ).first()
-            if duplicate_active_slots:
-                logging.getLogger(__name__).warning(
-                    "Reservation uniqueness index was skipped because legacy "
-                    "active reservations already contain duplicate time slots."
-                )
-                return
-            connection.exec_driver_sql(
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_reservation_active_slot "
-                "ON reservations (common_area_id, date, time_slot) "
-                "WHERE status IN ('activa', 'aprobada')"
+def migrate_reservation_index():
+    """Keep archived reservations outside the active-slot uniqueness index."""
+    inspector = inspect(db.engine)
+    if "reservations" not in inspector.get_table_names():
+        return
+    dialect = db.engine.dialect.name
+    if dialect not in ("sqlite", "postgresql"):
+        return
+    false_value = "FALSE" if dialect == "postgresql" else "0"
+    with db.engine.begin() as connection:
+        duplicate_active_slots = connection.exec_driver_sql(
+            "SELECT 1 FROM reservations "
+            f"WHERE status IN ('activa', 'aprobada') AND is_archived = {false_value} "
+            "GROUP BY common_area_id, date, time_slot "
+            "HAVING COUNT(*) > 1 LIMIT 1"
+        ).first()
+        if duplicate_active_slots:
+            logging.getLogger(__name__).warning(
+                "Reservation uniqueness index was skipped because legacy "
+                "active reservations already contain duplicate time slots."
             )
+            return
+        connection.exec_driver_sql(
+            "DROP INDEX IF EXISTS uq_reservation_active_slot"
+        )
+        connection.exec_driver_sql(
+            "CREATE UNIQUE INDEX uq_reservation_active_slot "
+            "ON reservations (common_area_id, date, time_slot) "
+            f"WHERE status IN ('activa', 'aprobada') AND is_archived = {false_value}"
+        )
 
 
 def migrate_profile_columns():
@@ -191,6 +204,10 @@ def migrate_security_columns():
             "visitor_photo_url": "TEXT",
             "visitor_photo_type": "VARCHAR(20)",
             "media_consent": (
+                "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+                else "BOOLEAN NOT NULL DEFAULT 0"
+            ),
+            "document_refused": (
                 "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
                 else "BOOLEAN NOT NULL DEFAULT 0"
             ),
@@ -311,6 +328,11 @@ def create_app():
         if not request.is_json:
             return error_response(400, "El cuerpo de la solicitud debe usar JSON.")
         data = request.get_json(silent=True)
+        if request.path == "/api/visits" and isinstance(data, dict):
+            data = dict(data)
+            document = data.get("visitorDocument")
+            if isinstance(document, str) and not document.strip():
+                data.pop("visitorDocument")
         validation_error = validate_no_empty_strings(data)
         if validation_error:
             return error_response(400, validation_error)
@@ -319,6 +341,7 @@ def create_app():
     with app.app_context():
         db.create_all()
         migrate_sqlite_schema()
+        migrate_reservation_index()
         migrate_profile_columns()
         migrate_admin_action_columns()
         migrate_security_columns()
