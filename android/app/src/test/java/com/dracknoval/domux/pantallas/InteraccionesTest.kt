@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.dracknoval.domux.data.AppPreferences
 import com.dracknoval.domux.data.ComplexInfoStore
@@ -148,7 +149,8 @@ class InteraccionesTest : BaseDeFotos() {
         compose.waitForIdle()
         // Una petición usa el plazo general de la unidad; un daño, el suyo propio.
         compose.onNodeWithText("tiene 20 días hábiles para ser respondida", substring = true).assertExists()
-        compose.onAllNodesWithText("Daño").onLast().performClick()
+        // El chip «Daño» queda al final de una fila que se mueve de lado y no cabe en la pantalla: se acerca antes de tocarlo.
+        compose.onAllNodesWithText("Daño").onLast().performScrollTo().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("tiene 5 días hábiles para ser respondida", substring = true).assertExists()
         sacarFoto("interaccion-09-plazo-de-pqrs-por-tipo")
