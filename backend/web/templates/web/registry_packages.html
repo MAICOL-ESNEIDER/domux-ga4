@@ -50,7 +50,7 @@
             <span class="inbox-meta">{% if item.carrier %}{{ item.carrier }}{% endif %}{% if item.carrier and item.trackingNumber %} · {% endif %}{% if item.trackingNumber %}guía {{ item.trackingNumber }}{% endif %}</span>
             {% endif %}
             <span class="inbox-deadline">
-              {% if item.claimAlert %}{{ status_badge("package_alert", item.claimAlert) }}{% endif %}
+              {% if item.claimAlert %}{{ status_badge("package_alert", item.claimAlert, package_alert_hours(item.claimAlert)) }}{% endif %}
               {% if item.hoursWaiting is not none %}
               <span>{% if item.hoursWaiting >= 1 %}Lleva {{ duration_text(item.hoursWaiting * 60) }} en portería{% else %}Llegó hace menos de 1 hora{% endif %}</span>
               {% elif item.status == "entregado" %}
@@ -80,7 +80,7 @@
       <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.description or "Paquete sin descripción" }}</h2>
       <p class="badges">
         {{ status_badge("package", selected.status) }}
-        {% if selected.claimAlert %}{{ status_badge("package_alert", selected.claimAlert) }}{% endif %}
+        {% if selected.claimAlert %}{{ status_badge("package_alert", selected.claimAlert, package_alert_hours(selected.claimAlert)) }}{% endif %}
         {% if selected.isDeleted %}{{ badge("Archivado") }}{% endif %}
       </p>
 

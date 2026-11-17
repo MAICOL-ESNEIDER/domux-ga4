@@ -653,6 +653,7 @@ data class AdminSummaryCounts(
     val pqrsOverdue: Int = 0,
     val pqrsDueSoon: Int = 0,
     val reservationsPending: Int = 0,
+    // Pasaron las horas del aviso naranja y del rojo de la unidad (48 y 72 por defecto, ver UnitRules).
     val packagesOver48: Int = 0,
     val packagesOver72: Int = 0,
     val unreadNotifications: Int = 0

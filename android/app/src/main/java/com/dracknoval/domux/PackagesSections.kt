@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.dracknoval.domux.data.ComplexInfoStore
 import com.dracknoval.domux.data.PackageItem
 import com.dracknoval.domux.data.PickupCodeData
 import com.dracknoval.domux.data.RegisterPackageRequest
@@ -79,7 +80,8 @@ fun PackageListSection(
         add("Entregados" to "entregado")
         if (canRegister) add("Archivados" to "archivados")
     }
-    // Paquetes que llevan más de 48 horas esperando en la portería (HU-049, RN-018).
+    // Paquetes que llevan más de 48 horas (o las que fije la unidad) esperando en la portería (HU-049, RN-018).
+    val rules = ComplexInfoStore.rules
     val unclaimed = state.packages.filter { !it.isDeleted && it.claimAlert != null }
     val unclaimedRed = unclaimed.count { it.claimAlert == "rojo" }
     val filtering = state.statusFilter != null || searchText.isNotBlank()
@@ -113,10 +115,10 @@ fun PackageListSection(
         if (unclaimed.isNotEmpty()) {
             DomuxMessageBanner(
                 message = if (canRegister) {
-                    "${unclaimed.size} paquete(s) llevan más de 48 horas sin reclamar" +
-                        if (unclaimedRed > 0) " ($unclaimedRed con más de 72 horas)." else "."
+                    "${unclaimed.size} paquete(s) llevan más de ${rules.orangeHours} horas sin reclamar" +
+                        if (unclaimedRed > 0) " ($unclaimedRed con más de ${rules.redHours} horas)." else "."
                 } else {
-                    "Tienes ${unclaimed.size} paquete(s) esperando en la portería hace más de 48 horas."
+                    "Tienes ${unclaimed.size} paquete(s) esperando en la portería hace más de ${rules.orangeHours} horas."
                 },
                 isError = true
             )
@@ -222,7 +224,7 @@ private fun PackageCard(
                     )
                 }
             }
-            // Cuánto lleva esperando y la alerta de 48 y 72 horas (HU-049).
+            // Cuánto lleva esperando y la alerta naranja y roja (48 y 72 horas por defecto, HU-049).
             if (item.status == "pendiente" && !item.isDeleted) {
                 item.hoursWaiting?.let { hours ->
                     Text(
@@ -231,8 +233,8 @@ private fun PackageCard(
                     )
                 }
                 when (item.claimAlert) {
-                    "rojo" -> DomuxStatusBadge("Más de 72 h sin reclamar", DomuxBadgeTone.ALERT)
-                    "naranja" -> DomuxStatusBadge("Más de 48 h sin reclamar", DomuxBadgeTone.PROGRESS)
+                    "rojo" -> DomuxStatusBadge("Más de ${ComplexInfoStore.rules.redHours} h sin reclamar", DomuxBadgeTone.ALERT)
+                    "naranja" -> DomuxStatusBadge("Más de ${ComplexInfoStore.rules.orangeHours} h sin reclamar", DomuxBadgeTone.PROGRESS)
                 }
                 if (item.hasPickupCode) {
                     DomuxStatusBadge("Código de entrega generado", DomuxBadgeTone.SUCCESS)

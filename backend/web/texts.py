@@ -7,7 +7,7 @@ siempre van acompañados de una palabra, para que el color no sea lo único que 
 
 from datetime import date, datetime
 
-from models import UNCLAIMED_ORANGE_HOURS, UNCLAIMED_RED_HOURS
+from services.unit_rules import DEFAULT_PACKAGE_ORANGE_HOURS, DEFAULT_PACKAGE_RED_HOURS
 
 #: Estado de una PQRS: texto y tono. Como en la app, «abierta» es la que más urge.
 PQRS_STATUSES = {
@@ -48,10 +48,14 @@ PACKAGE_STATUSES = {
 }
 
 #: Aviso de un paquete que lleva mucho tiempo sin reclamar (RN-018): naranja y rojo, siempre con palabras.
+#: Las horas las fija la administración en las reglas de la unidad; ``{hours}`` se completa al dibujarlo.
 PACKAGE_ALERTS = {
-    "naranja": (f"Más de {UNCLAIMED_ORANGE_HOURS} h sin reclamar", "progress"),
-    "rojo": (f"Más de {UNCLAIMED_RED_HOURS} h sin reclamar", "alert"),
+    "naranja": ("Más de {hours} h sin reclamar", "progress"),
+    "rojo": ("Más de {hours} h sin reclamar", "alert"),
 }
+
+#: Las horas de cada alerta mientras la administración no cambie las reglas.
+PACKAGE_ALERT_DEFAULT_HOURS = {"naranja": DEFAULT_PACKAGE_ORANGE_HOURS, "rojo": DEFAULT_PACKAGE_RED_HOURS}
 
 #: Autorización de una visita (HU-088): lo que decidió el residente o se confirmó por llamada.
 VISIT_APPROVALS = {
@@ -105,9 +109,15 @@ _KINDS = {
 }
 
 
-def badge_info(kind, value):
-    """El texto y el tono de un aviso de estado: ``badge_info("pqrs", "abierta")``."""
+def badge_info(kind, value, hours=None):
+    """El texto y el tono de un aviso de estado: ``badge_info("pqrs", "abierta")``.
+
+    ``hours`` solo importa en las alertas de paquetes («Más de 48 h sin reclamar»): son las horas que
+    fijó la unidad; si no se pasan, las de DOMUX.
+    """
     label, tone = _KINDS.get(kind, {}).get(value, (str(value or "—").replace("_", " ").capitalize(), "neutral"))
+    if kind == "package_alert":
+        label = label.format(hours=hours if hours is not None else PACKAGE_ALERT_DEFAULT_HOURS.get(value, ""))
     return {"label": label, "tone": tone}
 
 

@@ -22,6 +22,12 @@ import java.lang.reflect.WildcardType
  */
 object DatosDeMentira {
 
+    /**
+     * Las reglas que contesta «getComplexInfo». Por defecto son las de DOMUX (48 y 72 horas, 15 días hábiles);
+     * una prueba las cambia para comprobar que la pantalla escribe lo que fijó la administración.
+     */
+    var reglasDeLaUnidad = UnitRules()
+
     fun api(): ApiService = falso(ApiService::class.java) { metodo, argumentos -> cuerpoPara(metodo, argumentos) }
 
     fun estructura(): StructureApiService =
@@ -47,7 +53,7 @@ object DatosDeMentira {
     // --- Lo que contesta cada llamada --------------------------------------------------------
 
     private fun cuerpoPara(metodo: Method, a: Array<out Any?>): Any? = when (metodo.name) {
-        "getComplexInfo" -> ComplexInfoResponse(unidad())
+        "getComplexInfo" -> ComplexInfoResponse(unidad(), reglasDeLaUnidad)
         "getNotifications" -> NotificationsListResponse(notificaciones())
         "getAdminSummary" -> resumenDeAdministracion()
         // getVisitsSummary(auth, status, dateFrom, inside, pageSize, view)

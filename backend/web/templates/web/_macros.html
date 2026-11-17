@@ -5,9 +5,9 @@
 <span class="badge badge-{{ tone }}">{{ tone_icon(tone) }}{{ text }}</span>
 {%- endmacro %}
 
-{# Aviso de estado con el texto y el tono de la app: status_badge("pqrs", "abierta"). #}
-{% macro status_badge(kind, value) -%}
-{% set info = badge_info(kind, value) -%}
+{# Aviso de estado con el texto y el tono de la app: status_badge("pqrs", "abierta"). «hours» solo lo usan las alertas de paquetes. #}
+{% macro status_badge(kind, value, hours=None) -%}
+{% set info = badge_info(kind, value, hours) -%}
 <span class="badge badge-{{ info.tone }}">{{ tone_icon(info.tone) }}{{ info.label }}</span>
 {%- endmacro %}
 

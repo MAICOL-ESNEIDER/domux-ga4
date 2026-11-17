@@ -10,6 +10,7 @@ from markupsafe import Markup
 from extensions import db
 from models import Notification
 from services import unit_service
+from services.unit_rules import current_rules
 from web import bp, texts
 from web.security import csrf_token, current_admin, take_account_to_remember
 from web.support import filter_chips
@@ -36,6 +37,7 @@ MENU = (
     ("Configuración", (
         ("Datos de la unidad", "web.unit_data", "card", "web.unit"),
         ("Zonas comunes y reglas", "web.zones_list", "sliders", "web.zone"),
+        ("Reglas de la unidad", "web.rules_page", "settings", "web.rules"),
         # Un solo lugar para sacar información: descargas a la medida, archivo histórico y respaldos.
         ("Descargas", "web.downloads_page", "archive", ("web.downloads", "web.archive", "web.backup")),
     )),
@@ -85,6 +87,12 @@ NEW_ITEMS = (
     ("Apartamento", "web.apartment_new", "building"),
     ("PQRS a nombre de un residente", "web.pqrs_new", "chat"),
 )
+
+
+def package_alert_hours(alert):
+    """Las horas sin reclamar que fijó la unidad para esa alerta de paquete («naranja» o «rojo»), o None."""
+    rules = current_rules()
+    return {"naranja": rules.package_orange_hours, "rojo": rules.package_red_hours}.get(alert)
 
 
 def icon(name):
@@ -234,6 +242,7 @@ for _name, _function in (
     ("unit_brand", unit_brand),
     ("authorization_method_text", texts.authorization_method_text),
     ("badge_info", texts.badge_info),
+    ("package_alert_hours", package_alert_hours),
     ("deadline_text", texts.deadline_text),
     ("duration_text", texts.duration_text),
     ("notification_type", texts.notification_type),

@@ -36,6 +36,7 @@ import com.dracknoval.domux.data.AppPreferences
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.TextSize
+import com.dracknoval.domux.data.UnitRules
 import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.ui.theme.DomuxAppTheme
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -105,6 +106,7 @@ abstract class BaseDeFotos {
     @After
     fun cerrarSesion() {
         Session.clear()
+        DatosDeMentira.reglasDeLaUnidad = UnitRules()
         AppPreferences.saveTextSize(RuntimeEnvironment.getApplication(), TextSize.NORMAL)
     }
 

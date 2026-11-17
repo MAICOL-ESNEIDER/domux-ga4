@@ -1608,6 +1608,67 @@ paths:
           $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+  /api/admin/unit-rules:
+    get:
+      tags:
+      - Unidad
+      summary: Ver las reglas de la unidad
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Las reglas vigentes (plazos de PQRS, horas de alerta de los paquetes y días del parqueadero de visitantes), los valores con los que viene DOMUX, cuáles cambió la administración y quién hizo el último cambio.
+      operationId: unitGetUnitRules
+      x-endpoint: unit.get_unit_rules
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Las reglas de la unidad
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitRulesView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags:
+      - Unidad
+      summary: Cambiar las reglas de la unidad
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        Solo cambia lo que se envía. Una regla enviada como `null` vuelve al valor de DOMUX. Se revisa cada valor (con su mínimo y su máximo) y que las reglas tengan sentido juntas: los días del aviso amarillo no pueden ser más que el plazo general y el aviso rojo de un paquete debe llegar después del naranja. Los cambios rigen desde que se guardan, también para lo que ya existe (por ejemplo, el semáforo de las PQRS abiertas se calcula de nuevo). Queda anotado en la auditoría con los valores de antes y de después.
+      operationId: unitUpdateUnitRules
+      x-endpoint: unit.update_unit_rules
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitRulesInput'
+      responses:
+        '200':
+          description: Reglas guardadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitRulesView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/admin/units:
     get:
       tags:
@@ -5857,7 +5918,7 @@ paths:
       description: |-
         **Quién puede usarla:** Cualquier persona con sesión (administración, portería o residente).
 
-        Nombre, NIT, dirección, teléfono de portería y si tiene logo.
+        Nombre, NIT, dirección, teléfono de portería y si tiene logo, y las reglas vigentes de la unidad (plazos de PQRS, horas de alerta de los paquetes y días del parqueadero) para escribirlas en pantalla.
       operationId: unitGetUnitInfo
       x-endpoint: unit.get_unit_info
       x-roles:
@@ -5868,16 +5929,19 @@ paths:
       - bearerAuth: []
       responses:
         '200':
-          description: Los datos de la unidad
+          description: Los datos de la unidad y sus reglas
           content:
             application/json:
               schema:
                 type: object
                 required:
                 - unit
+                - rules
                 properties:
                   unit:
                     $ref: '#/components/schemas/UnitInfo'
+                  rules:
+                    $ref: '#/components/schemas/UnitRules'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -8048,6 +8112,127 @@ components:
         apartment:
           type: string
           nullable: true
+    UnitRules:
+      type: object
+      description: Las reglas vigentes de la unidad. Donde la administración no cambió nada rige el valor de DOMUX.
+      required:
+      - pqrsTermDays
+      - pqrsWarningDays
+      - pqrsTermsByCategory
+      - packageOrangeHours
+      - packageRedHours
+      - visitorParkingMaxDays
+      properties:
+        pqrsTermDays:
+          type: integer
+          description: Días hábiles para responder una PQRS (de 1 a 90; por defecto 15)
+          minimum: 1
+          maximum: 90
+          example: 15
+        pqrsWarningDays:
+          type: integer
+          description: Con estos días hábiles o menos por vencer, el semáforo de una PQRS pasa a amarillo (de 1 a 30, sin pasar del plazo general; por defecto 5)
+          minimum: 1
+          maximum: 30
+          example: 5
+        pqrsTermsByCategory:
+          type: object
+          description: Plazo propio, en días hábiles, de los tipos de PQRS que no usan el general. Las llaves son Petición, Queja, Reclamo, Sugerencia o Daño; un tipo que no aparece usa el plazo general.
+          additionalProperties:
+            type: integer
+            minimum: 1
+            maximum: 90
+          example:
+            Daño: 5
+        packageOrangeHours:
+          type: integer
+          description: Horas sin reclamar para que un paquete se ponga en naranja (de 1 a 720; por defecto 48)
+          minimum: 1
+          maximum: 720
+          example: 48
+        packageRedHours:
+          type: integer
+          description: Horas sin reclamar para que un paquete se ponga en rojo (de 2 a 1440, más que las del naranja; por defecto 72)
+          minimum: 2
+          maximum: 1440
+          example: 72
+        visitorParkingMaxDays:
+          type: integer
+          description: Días que un vehículo visitante puede quedarse en el parqueadero (de 1 a 30; por defecto 3, o el de la variable de entorno VISITOR_PARKING_MAX_DAYS)
+          minimum: 1
+          maximum: 30
+          example: 3
+    UnitRulesInput:
+      type: object
+      description: Al menos una regla. Una regla enviada como `null` vuelve al valor de DOMUX; `pqrsTermsByCategory` reemplaza la lista completa (con `null` o `{}` se quitan todos los plazos propios).
+      properties:
+        pqrsTermDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 90
+        pqrsWarningDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 30
+        pqrsTermsByCategory:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: integer
+            minimum: 1
+            maximum: 90
+          example:
+            Daño: 5
+        packageOrangeHours:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 720
+        packageRedHours:
+          type: integer
+          nullable: true
+          minimum: 2
+          maximum: 1440
+        visitorParkingMaxDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 30
+    UnitRulesView:
+      type: object
+      description: Lo que ve la administración al revisar las reglas de la unidad.
+      required:
+      - rules
+      - defaults
+      - customized
+      - updatedAt
+      - updatedByName
+      properties:
+        message:
+          type: string
+          description: Solo al guardar. Mensaje para mostrarle a la persona, en español
+        rules:
+          $ref: '#/components/schemas/UnitRules'
+        defaults:
+          $ref: '#/components/schemas/UnitRules'
+        customized:
+          type: object
+          description: Por cada regla, si la administración la cambió (verdadero) o si rige el valor de DOMUX (falso)
+          additionalProperties:
+            type: boolean
+          example:
+            pqrsTermDays: true
+            pqrsWarningDays: false
+        updatedAt:
+          type: string
+          description: Hora de Colombia del último cambio, AAAA-MM-DD HH:MM
+          nullable: true
+        updatedByName:
+          type: string
+          description: Quién hizo el último cambio
+          nullable: true
     UnitInfo:
       type: object
       description: Datos de la unidad residencial. Mientras no se guarden, todos vienen vacíos.
@@ -9176,7 +9361,7 @@ components:
           nullable: true
         claimAlert:
           type: string
-          description: Naranja con más de 48 horas, rojo con más de 72
+          description: Naranja cuando pasa las horas del aviso naranja de la unidad (48 por defecto), rojo cuando pasa las del rojo (72 por defecto)
           nullable: true
           enum:
           - naranja
@@ -10086,10 +10271,10 @@ components:
               description: Reservas por aprobar
             packagesOver48:
               type: integer
-              description: Paquetes con más de 48 horas sin reclamar
+              description: Paquetes que pasaron las horas del aviso naranja sin reclamar (48 por defecto; el nombre viene de ese valor)
             packagesOver72:
               type: integer
-              description: Paquetes con más de 72 horas sin reclamar
+              description: Paquetes que pasaron las horas del aviso rojo sin reclamar (72 por defecto; el nombre viene de ese valor)
             unreadNotifications:
               type: integer
         urgentPqrs:

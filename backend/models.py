@@ -7,9 +7,9 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, deferred
 from sqlalchemy.orm.attributes import set_committed_value
 
-from config import visitor_parking_max_days
 from extensions import db
 from services.pqrs_rules import make_radicado, running_semaphore
+from services.unit_rules import current_rules, forget_rules
 from services.zone_rules import (
     DEFAULT_ALLOW_FULL_DAY,
     DEFAULT_CANCEL_DEADLINE_DAYS,
@@ -40,10 +40,6 @@ ANNOUNCEMENT_CATEGORIES = {
 #: Tipos de parqueadero de la unidad (HU-015).
 PARKING_KINDS = ("residente", "visitante")
 
-#: Horas sin reclamar para resaltar un paquete en naranja y en rojo (RN-018, HU-049).
-UNCLAIMED_ORANGE_HOURS = 48
-UNCLAIMED_RED_HOURS = 72
-
 #: Movimientos de un vehículo de residente por la portería (HU-040).
 MOVEMENT_TYPES = ("entrada", "salida")
 
@@ -52,15 +48,18 @@ def package_wait(status, is_deleted, arrived_at, now=None):
     """Cuánto lleva un paquete sin reclamar y su color de alerta: ``(minutos, alerta)`` (RN-018).
 
     Un paquete que no espera a su dueño (no está «pendiente», está archivado o no tiene hora de
-    llegada) da ``(None, None)``. La alerta es «rojo» con más de 72 horas, «naranja» con más de 48 o
-    None. Es la regla de ``PackageItem`` para quien tiene solo las columnas, como las listas livianas.
+    llegada) da ``(None, None)``. La alerta es «rojo» cuando pasa las horas rojas de la unidad (72 por
+    defecto), «naranja» cuando pasa las naranjas (48 por defecto) o None; la administración puede cambiar
+    las horas (reglas de la unidad). Es la regla de ``PackageItem`` para quien tiene solo las columnas,
+    como las listas livianas.
     """
     if status != "pendiente" or is_deleted or arrived_at is None:
         return None, None
+    rules = current_rules()
     minutes = max(0, int(((now or utc_now()) - arrived_at).total_seconds() // 60))
-    if minutes > UNCLAIMED_RED_HOURS * 60:
+    if minutes > rules.package_red_hours * 60:
         return minutes, "rojo"
-    if minutes > UNCLAIMED_ORANGE_HOURS * 60:
+    if minutes > rules.package_orange_hours * 60:
         return minutes, "naranja"
     return minutes, None
 
@@ -531,6 +530,42 @@ class ComplexProfile(db.Model):
             "logoVersion": self.logo_version,
             "updatedAt": _fmt(self.updated_at),
         }
+
+
+class UnitSettings(db.Model):
+    """Reglas de la unidad que la administración ajusta: plazos de PQRS, alertas de paquetes y parqueadero.
+
+    Hay una sola fila (id 1) y nace la primera vez que la administración guarda las reglas. Una columna
+    vacía (NULL) significa «usa el valor de DOMUX» (services/unit_rules.py): así, mientras la fila no
+    exista, todo se comporta como antes de que estas reglas fueran editables (DEC-032).
+
+    pqrs_terms_by_category guarda como texto JSON los plazos propios de algunos tipos de PQRS
+    (``{"Daño": 5}``); los tipos que no aparecen usan pqrs_term_days.
+    """
+
+    __tablename__ = "unit_settings"
+
+    #: La única fila que existe.
+    SINGLE_ID = 1
+
+    id = db.Column(db.Integer, primary_key=True)
+    pqrs_term_days = db.Column(db.Integer, nullable=True)
+    pqrs_warning_days = db.Column(db.Integer, nullable=True)
+    pqrs_terms_by_category = db.Column(db.String(400), nullable=True)
+    package_orange_hours = db.Column(db.Integer, nullable=True)
+    package_red_hours = db.Column(db.Integer, nullable=True)
+    visitor_parking_max_days = db.Column(db.Integer, nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_unit_settings_updated_by_id_users"),
+        nullable=True,
+    )
+
+
+# Cualquier cambio en la fila hace que las reglas se lean de nuevo en esa misma solicitud.
+for _event in ("after_insert", "after_update", "after_delete"):
+    event.listen(UnitSettings, _event, lambda *_args: forget_rules())
 
 
 class ResidentialUnit(db.Model):
@@ -1265,7 +1300,7 @@ class PackageItem(db.Model):
         return package_wait(self.status, self.is_deleted, self.arrived_at, now)[0]
 
     def claim_alert(self, now=None):
-        """«rojo» con más de 72 horas sin reclamar, «naranja» con más de 48, o None (RN-018)."""
+        """«rojo» o «naranja» cuando lleva más horas sin reclamar que las de la unidad (72 y 48 por defecto), o None (RN-018)."""
         return package_wait(self.status, self.is_deleted, self.arrived_at, now)[1]
 
     def to_dict(self):
@@ -1603,7 +1638,7 @@ class VisitorVehicleEntry(db.Model):
 
     def deadline(self):
         """Cuándo vence el tiempo máximo de parqueo (RN-015): 3 días o el plazo de la unidad."""
-        return self.entered_at + timedelta(days=visitor_parking_max_days())
+        return self.entered_at + timedelta(days=current_rules().visitor_parking_max_days)
 
     def is_overdue(self, now=None):
         """Un vehículo que sigue adentro y ya pasó el tiempo máximo (RN-015)."""
@@ -1627,7 +1662,7 @@ class VisitorVehicleEntry(db.Model):
             "exitedAt": _fmt(self.exited_at),
             "isInside": self.is_inside,
             "parkedMinutes": self.parked_minutes(now),
-            "maxDays": visitor_parking_max_days(),
+            "maxDays": current_rules().visitor_parking_max_days,
             "isOverdue": self.is_overdue(now),
             "registeredByName": self.guard.full_name if self.guard else None,
             "exitedByName": self.exited_by.full_name if self.exited_by else None,
