@@ -7,7 +7,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onRoot
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -31,8 +33,10 @@ import com.dracknoval.domux.SearchScreen
 import com.dracknoval.domux.StructureScreen
 import com.dracknoval.domux.UnitProfileScreen
 import com.dracknoval.domux.VehiclesScreen
+import com.dracknoval.domux.data.AppPreferences
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
+import com.dracknoval.domux.data.TextSize
 import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.ui.theme.DomuxAppTheme
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -102,6 +106,12 @@ abstract class BaseDeFotos {
     @After
     fun cerrarSesion() {
         Session.clear()
+        AppPreferences.saveTextSize(RuntimeEnvironment.getApplication(), TextSize.NORMAL)
+    }
+
+    /** Pone el texto de la app en el tamaño que la persona elige en Preferencias. */
+    protected fun conTamanoDeTexto(tamano: TextSize) {
+        AppPreferences.saveTextSize(RuntimeEnvironment.getApplication(), tamano)
     }
 
     protected fun entrarComo(rol: Rol) {
@@ -113,6 +123,17 @@ abstract class BaseDeFotos {
     protected fun foto(nombre: String, ruta: String) {
         compose.setContent { Marco { navegacion -> GrafoDeLaApp(navegacion, ruta) } }
         sacarFoto(nombre)
+    }
+
+    /**
+     * Para las pantallas que abren una ventana encima (un diálogo): el reloj de la prueba se avanza a
+     * mano y la foto es de la ventana de encima.
+     */
+    protected fun fotoDeVentana(nombre: String, ruta: String) {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { Marco { navegacion -> GrafoDeLaApp(navegacion, ruta) } }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onAllNodes(isRoot()).onLast().captureRoboImage("$CARPETA_DE_FOTOS/$nombre.png")
     }
 
     /** Para las pantallas que necesitan algo especial (por ejemplo, el buscador ya con un texto escrito). */

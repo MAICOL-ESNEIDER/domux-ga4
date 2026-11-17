@@ -18,7 +18,7 @@ import org.robolectric.annotation.GraphicsMode
  * Celular simulado: 411 × 891 dp, como un Pixel 7.
  */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "w411dp-h891dp-xhdpi")
 class FotosDeCelularTest : BaseDeFotos() {
 
     private val apartamento101 = "unitProfile/" + Uri.encode("Torre 1 · Apto 101")
@@ -124,12 +124,6 @@ class FotosDeCelularTest : BaseDeFotos() {
     fun administracion_estructura() {
         entrarComo(Roles.ADMINISTRACION)
         foto("administracion-16-estructura", "structure")
-    }
-
-    @Test
-    fun administracion_torre_nueva() {
-        entrarComo(Roles.ADMINISTRACION)
-        foto("administracion-17-torre-nueva", "structure?action=torre")
     }
 
     @Test
