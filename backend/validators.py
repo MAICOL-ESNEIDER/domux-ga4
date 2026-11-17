@@ -31,7 +31,7 @@ HOUSEHOLD_RELATIONSHIPS = (
     "suegra",
     "otro",
 )
-VALID_TIME_SLOTS = (
+STANDARD_TIME_SLOTS = (
     "08:00-10:00",
     "10:00-12:00",
     "12:00-14:00",
@@ -40,8 +40,50 @@ VALID_TIME_SLOTS = (
     "18:00-20:00",
     "20:00-22:00",
 )
+EXTENDED_TIME_SLOTS = ("08:00-15:00", "15:00-22:00", "08:00-22:00")
+VALID_TIME_SLOTS = STANDARD_TIME_SLOTS + EXTENDED_TIME_SLOTS
 VALID_PQRS_STATUSES = ("abierta", "en_proceso", "resuelta")
 VALID_PACKAGE_STATUSES = ("por_llegar", "pendiente", "entregado")
+
+
+class ValidationError(ValueError):
+    """A user-provided field did not satisfy its validation rule."""
+
+
+def validate_colombian_phone(value, field_name="phone", allow_empty=False) -> str:
+    """Normalize a Colombian phone number to exactly ten digits."""
+    message = "El número de teléfono debe tener exactamente 10 dígitos numéricos."
+    if not isinstance(value, str):
+        raise ValidationError(message)
+
+    phone = re.sub(r"[\s-]", "", value)
+    if not phone:
+        if allow_empty:
+            return ""
+        raise ValidationError(message)
+
+    if phone.startswith("+57"):
+        phone = phone[3:]
+    if not re.fullmatch(r"\d{10}", phone):
+        raise ValidationError(message)
+    return phone
+
+
+def parse_bool(value, default=False):
+    """Parse common JSON/form boolean representations or raise ValueError."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("true", "1", "si", "sí"):
+            return True
+        if normalized in ("false", "0", "no"):
+            return False
+    raise ValueError("El valor debe ser verdadero o falso.")
 
 
 def require_non_empty_fields(data, required_fields):

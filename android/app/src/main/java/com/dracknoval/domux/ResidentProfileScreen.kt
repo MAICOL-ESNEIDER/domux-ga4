@@ -24,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -91,7 +93,18 @@ fun ResidentProfileScreen(navController: NavController) {
             }
             Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(email, { email = it }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(phone, { phone = it }, label = { Text("Teléfono") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { input ->
+                    phone = input.filter { ch -> ch.isDigit() }.take(10)
+                },
+                label = { Text("Teléfono") },
+                isError = phone.isNotEmpty() && phone.length != 10,
+                supportingText = { Text("10 dígitos (ej. 3001234567)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             OutlinedTextField(
                 socialNetworks, { socialNetworks = it }, label = { Text("Redes sociales (opcional)") },
                 modifier = Modifier.fillMaxWidth()
@@ -99,6 +112,10 @@ fun ResidentProfileScreen(navController: NavController) {
             Button(
                 enabled = !busy,
                 onClick = {
+                    if (phone.length != 10) {
+                        message = "El teléfono debe tener exactamente 10 dígitos."
+                        return@Button
+                    }
                     busy = true
                     message = ""
                     scope.launch {

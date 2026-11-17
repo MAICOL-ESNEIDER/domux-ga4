@@ -84,6 +84,17 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual(forbidden.status_code, 400)
         self.assertEqual(self.resident.apartment, "Torre 1 · Apto 101")
 
+        invalid_phone = self.client.put(
+            "/api/profile",
+            headers=self.headers(self.resident),
+            json={"phone": "123456789"},
+        )
+        self.assertEqual(invalid_phone.status_code, 400)
+        self.assertEqual(
+            invalid_phone.json["error"],
+            "El número de teléfono debe tener exactamente 10 dígitos numéricos.",
+        )
+
         allowed = self.client.put(
             "/api/profile",
             headers=self.headers(self.resident),
@@ -119,13 +130,71 @@ class UserProfileTests(unittest.TestCase):
         )
         self.assertEqual(missing_consent.status_code, 400)
         body["dataProcessingConsent"] = True
+        body["phone"] = "300123456"
+        invalid_phone = self.client.post(
+            "/api/users", headers=self.headers(self.admin), json=body
+        )
+        self.assertEqual(invalid_phone.status_code, 400)
+        self.assertEqual(
+            invalid_phone.json["error"],
+            "El número de teléfono debe tener exactamente 10 dígitos numéricos.",
+        )
+        body["phone"] = "+57 300-123-4567"
         created = self.client.post("/api/users", headers=self.headers(self.admin), json=body)
         self.assertEqual(created.status_code, 201)
         new_user = User.query.filter_by(email="new-resident@test.local").one()
+        self.assertEqual(new_user.phone, "3001234567")
         self.assertEqual(new_user.apartment_number, 303)
         self.assertTrue(new_user.data_processing_consent)
         self.assertIsNotNone(new_user.data_processing_consent_at)
         self.assertIsNotNone(ResidentialUnit.query.filter_by(apartment=new_user.apartment).first())
+
+        invalid_update = self.client.put(
+            f"/api/users/{new_user.id}",
+            headers=self.headers(self.admin),
+            json={"phone": "123"},
+        )
+        self.assertEqual(invalid_update.status_code, 400)
+        valid_update = self.client.put(
+            f"/api/users/{new_user.id}",
+            headers=self.headers(self.admin),
+            json={"phone": "300 765 4321"},
+        )
+        self.assertEqual(valid_update.status_code, 200)
+        self.assertEqual(new_user.phone, "3007654321")
+
+    def test_household_member_phone_must_have_ten_digits(self):
+        body = {
+            "apartment": self.resident.apartment,
+            "members": [{
+                "name": "Ana",
+                "documentId": "12345",
+                "birthDate": "2000-01-01",
+                "relationship": "conyuge_pareja",
+                "phone": "300123",
+            }],
+            "pets": [],
+            "vehicles": [],
+        }
+        invalid = self.client.put(
+            "/api/admin/units",
+            headers=self.headers(self.admin),
+            json=body,
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("10 dígitos numéricos", invalid.json["error"])
+
+        body["members"][0]["phone"] = "300-123-4567"
+        accepted = self.client.put(
+            "/api/admin/units",
+            headers=self.headers(self.admin),
+            json=body,
+        )
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(
+            accepted.json["unit"]["members"][0]["phone"],
+            "3001234567",
+        )
 
     def test_promoting_account_to_resident_requires_consent(self):
         body = {"role": "RESIDENT", "apartment": "Torre 4 · Apto 404"}

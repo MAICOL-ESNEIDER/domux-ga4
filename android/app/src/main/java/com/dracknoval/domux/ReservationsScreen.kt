@@ -31,6 +31,7 @@ import com.dracknoval.domux.data.UpdateReservationStatusRequest
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -41,6 +42,19 @@ private val reservationSlots = listOf(
     "08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00",
     "16:00-18:00", "18:00-20:00", "20:00-22:00"
 )
+private val socialHallReservationSlots = listOf(
+    "08:00-22:00" to "Día completo",
+    "08:00-15:00" to "Media jornada mañana",
+    "15:00-22:00" to "Media jornada tarde/noche"
+)
+
+private fun isSocialHall(name: String?): Boolean {
+    if (name.isNullOrBlank()) return false
+    val normalized = Normalizer.normalize(name, Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .lowercase(Locale.ROOT)
+    return "salon" in normalized
+}
 
 private fun reservationDateString(date: Date): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
@@ -267,14 +281,24 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                     }
                     if (date.isNotBlank()) {
                         Text("Horarios disponibles", style = MaterialTheme.typography.titleSmall)
+                        val selectableSlots = if (isSocialHall(selectedArea?.name)) {
+                            socialHallReservationSlots + reservationSlots.map { it to null }
+                        } else {
+                            reservationSlots.map { it to null }
+                        }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            reservationSlots.forEach { time ->
+                            selectableSlots.forEach { (time, description) ->
                                 val available = availability?.availableSlots?.contains(time) ?: false
+                                val slotLabel = listOfNotNull(
+                                    time,
+                                    description?.let { "($it)" },
+                                    if (available) null else "Ocupado"
+                                ).joinToString(" · ")
                                 FilterChip(
                                     selected = slot == time,
                                     enabled = available,
                                     onClick = { slot = time },
-                                    label = { Text(if (available) time else "$time · Ocupado") }
+                                    label = { Text(slotLabel) }
                                 )
                             }
                         }
@@ -334,7 +358,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                             requestMediaType = null
                                             requestMediaName = null
                                             attemptedCreate = false
-                                            message = "Reserva creada exitosamente."
+                                            message = "Reserva registrada exitosamente."
                                             selectedTab = 0
                                             load()
                                         } else {

@@ -87,7 +87,18 @@ class MainActivity : ComponentActivity() {
                                 entry.arguments?.getInt("residentId")?.takeIf { it > 0 }
                             )
                         }
-                        composable("registry") { RegistryScreen(navController) }
+                        composable(
+                            "registry?initialTab={initialTab}",
+                            arguments = listOf(navArgument("initialTab") {
+                                type = NavType.IntType
+                                defaultValue = 0
+                            })
+                        ) { entry ->
+                            RegistryScreen(
+                                navController,
+                                entry.arguments?.getInt("initialTab") ?: 0
+                            )
+                        }
                         composable("createUser") { CreateUserScreen(navController) }
                         composable("profile") { ResidentProfileScreen(navController) }
                         composable(

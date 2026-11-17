@@ -31,6 +31,8 @@ from validators import (
     require_non_empty_fields,
     validate_no_empty_strings,
     validate_occupancy_type,
+    validate_colombian_phone,
+    ValidationError,
     validate_strong_password,
     validate_colombian_plate,
     validate_iso_date,
@@ -55,6 +57,13 @@ def _json_body():
 
 def _normalize_role(value):
     return value.strip().upper() if isinstance(value, str) else None
+
+
+def _phone_or_error(value):
+    try:
+        return validate_colombian_phone(value, allow_empty=True), None
+    except ValidationError as error:
+        return None, str(error)
 
 
 @bp.get("/admin/census-template")
@@ -307,6 +316,9 @@ def create_user():
     for field in ("lastName", "phone", "documentId"):
         if field in data and not isinstance(data[field], str):
             return error_response(400, f"El campo '{field}' debe ser texto")
+    phone, phone_error = _phone_or_error(data.get("phone", ""))
+    if phone_error:
+        return error_response(400, phone_error)
     if User.query.filter(db.func.lower(User.email) == email).first():
         return error_response(409, "Ese correo ya está registrado")
 
@@ -314,7 +326,7 @@ def create_user():
         name=data["name"].strip(),
         last_name=data.get("lastName", "").strip(),
         email=email,
-        phone=data.get("phone", "").strip(),
+        phone=phone,
         document_id=data.get("documentId", "").strip(),
         password_hash=generate_password_hash(data["password"]),
         role=role,
@@ -384,14 +396,17 @@ def update_user(user_id):
         if duplicate:
             return error_response(409, "Ese correo ya está registrado")
         user.email = email
-    for field, attribute, label in (
-        ("phone", "phone", "teléfono"),
-        ("documentId", "document_id", "documento"),
-    ):
-        if field in data:
-            if not isinstance(data[field], str):
-                return error_response(400, f"El {label} debe ser texto")
-            setattr(user, attribute, data[field].strip())
+    if "phone" in data:
+        if not isinstance(data["phone"], str):
+            return error_response(400, "El teléfono debe ser texto")
+        phone, phone_error = _phone_or_error(data["phone"])
+        if phone_error:
+            return error_response(400, phone_error)
+        user.phone = phone
+    if "documentId" in data:
+        if not isinstance(data["documentId"], str):
+            return error_response(400, "El documento debe ser texto")
+        user.document_id = data["documentId"].strip()
 
     if "role" in data:
         role = _normalize_role(data["role"])
@@ -541,12 +556,17 @@ def update_unit_profile():
         for field in ("lastName", "phone"):
             if member.get(field) is not None and not isinstance(member[field], str):
                 return error_response(400, f"El campo '{field}' del miembro debe ser texto.")
+        phone = (member.get("phone") or "").strip()
+        if phone:
+            phone, phone_error = _phone_or_error(phone)
+            if phone_error:
+                return error_response(400, f"Miembro #{index + 1}: {phone_error}")
         parsed_members.append({
             "name": member["name"].strip(),
             "last_name": (member.get("lastName") or "").strip(),
             "document_id": member["documentId"].strip(),
             "birth_date": birth_date.isoformat(),
-            "phone": (member.get("phone") or "").strip() or None,
+            "phone": phone or None,
             "relationship": relationship,
             "other_relationship": (other_relationship or "").strip() or None,
         })
@@ -679,9 +699,12 @@ def update_resident_profile():
         return error_response(400, "Indica al menos un dato permitido para actualizar.")
     user = g.current_user
     if "phone" in data:
-        if not isinstance(data["phone"], str) or len(data["phone"]) > 30:
+        if not isinstance(data["phone"], str):
             return error_response(400, "El teléfono debe ser texto.")
-        user.phone = data["phone"].strip()
+        phone, phone_error = _phone_or_error(data["phone"])
+        if phone_error:
+            return error_response(400, phone_error)
+        user.phone = phone
     if "socialNetworks" in data:
         if not isinstance(data["socialNetworks"], str) or len(data["socialNetworks"]) > 500:
             return error_response(400, "Las redes sociales deben ser texto de máximo 500 caracteres.")

@@ -132,6 +132,22 @@ class ExcelServiceTests(unittest.TestCase):
         self.assertEqual(Vehicle.query.filter_by(plate="ABC123").count(), 1)
         self.assertEqual(AuditLog.query.filter_by(entity_type="census").count(), 1)
 
+    def test_census_import_normalizes_and_rejects_phone_numbers(self):
+        csv_content = (
+            "Apartamento,Nombre,Correo,Telefono\n"
+            "Torre 1 Apto 101,Válido,valid-phone@test.local,+57 300-123-4567\n"
+            "Torre 2 Apto 202,Inválido,invalid-phone@test.local,123456\n"
+        ).encode("utf-8")
+
+        result = import_census_from_bytes(csv_content, "censo.csv", self.admin)
+
+        valid_user = User.query.filter_by(email="valid-phone@test.local").one()
+        self.assertEqual(valid_user.phone, "3001234567")
+        self.assertIsNone(User.query.filter_by(email="invalid-phone@test.local").first())
+        self.assertEqual(result["errors"], [
+            "Fila 3: El número de teléfono debe tener exactamente 10 dígitos numéricos."
+        ])
+
     def test_census_csv_aliases_update_by_identity_without_clearing_missing_fields(self):
         self.resident.parental_consent = True
         unit = ResidentialUnit.query.filter_by(apartment=self.resident.apartment).first()

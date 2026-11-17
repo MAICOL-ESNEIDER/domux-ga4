@@ -41,7 +41,7 @@ fun DatePickerField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    allowPastDates: Boolean = true
+    allowPastDates: Boolean = false
 ) {
     val context = LocalContext.current
     OutlinedButton(
@@ -56,7 +56,15 @@ fun DatePickerField(
                 calendar.get(Calendar.MONTH),
                 calendar.get(Calendar.DAY_OF_MONTH)
             ).apply {
-                if (!allowPastDates) datePicker.minDate = System.currentTimeMillis()
+                if (!allowPastDates) {
+                    val today = Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    datePicker.minDate = today.timeInMillis
+                }
             }.show()
         },
         modifier = Modifier.fillMaxWidth()

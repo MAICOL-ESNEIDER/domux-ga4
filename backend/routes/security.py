@@ -18,6 +18,7 @@ from models import (
 from services.notification_service import notify_user
 from validators import (
     VALID_PACKAGE_STATUSES,
+    parse_bool,
     require_non_empty_fields,
     validate_iso_date,
     validate_media_fields,
@@ -33,6 +34,10 @@ def _json_body():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return None, error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
+    document = data.get("visitorDocument")
+    if request.path == "/api/visits" and isinstance(document, str) and not document.strip():
+        data = dict(data)
+        data.pop("visitorDocument")
     message = validate_no_empty_strings(data)
     if message:
         return None, error_response(400, message)
@@ -45,6 +50,8 @@ def _package_metadata_error(data):
     event_date = data.get("eventDate")
     if event_date is not None and (error := validate_iso_date(event_date)):
         return error
+    if event_date is not None and event_date < date.today().isoformat():
+        return "La fecha del evento no puede ser anterior a hoy."
     event_time = data.get("eventTime")
     if event_time is not None and (error := validate_time(event_time)):
         return error
@@ -355,13 +362,26 @@ def register_visit():
     if resident is None or visit_type not in VISIT_TYPES:
         return error_response(400, "Datos incompletos para registrar el ingreso")
 
+    try:
+        document_refused = parse_bool(data.get("documentRefused"), default=False)
+    except ValueError:
+        return error_response(400, "documentRefused debe ser verdadero o falso.")
     document = data.get("visitorDocument")
     if document is not None and not isinstance(document, str):
         return error_response(400, "El documento del visitante debe ser texto")
+    if document_refused:
+        visitor_document = "NO SUMINISTRADO"
+    else:
+        visitor_document = document.strip() if document else ""
+        if not visitor_document:
+            return error_response(
+                400,
+                "El documento de identidad del visitante es obligatorio, o debes marcar que se negó a suministrarlo.",
+            )
     consent = data.get("mediaConsent", False)
     if not isinstance(consent, bool):
         return error_response(400, "El consentimiento debe ser verdadero o falso.")
-    if (document or data.get("mediaUrl")) and not consent:
+    if ((visitor_document and not document_refused) or data.get("mediaUrl")) and not consent:
         return error_response(400, "Se necesita consentimiento para guardar documento o foto.")
     if data.get("mediaUrl"):
         if error := validate_media_fields(data):
@@ -375,7 +395,8 @@ def register_visit():
         resident_id=resident.id,
         registered_by=g.current_user.id,
         visitor_name=data["visitorName"].strip(),
-        visitor_document=document.strip() if document else None,
+        visitor_document=visitor_document,
+        document_refused=document_refused,
         visitor_photo_url=data.get("mediaUrl"),
         visitor_photo_type=data.get("mediaType"),
         media_consent=consent,

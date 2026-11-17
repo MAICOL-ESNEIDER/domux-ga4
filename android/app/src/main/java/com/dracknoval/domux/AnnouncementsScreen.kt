@@ -87,7 +87,12 @@ fun AnnouncementsScreen(navController: NavController) {
                         supportingText = { if (attemptedSubmit && detail.trim().isEmpty()) Text("El mensaje es obligatorio") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    DatePickerField("Fecha del evento", eventDate, { eventDate = it })
+                    DatePickerField(
+                        "Fecha del evento",
+                        eventDate,
+                        { eventDate = it },
+                        allowPastDates = false
+                    )
                     TimePickerField("Hora del evento", eventTime, { eventTime = it })
                     MediaAttachmentPicker(mediaName, { url, type, name ->
                         mediaUrl = url; mediaType = type; mediaName = name
