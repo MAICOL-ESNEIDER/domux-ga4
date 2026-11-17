@@ -135,6 +135,13 @@ administración.
   las librerías de terceros (TT-019).
 - El pipeline también corre al subir una etiqueta de versión; con la versión final exige los
   documentos legales vigentes.
+- Pruebas de pantallas de la app (SCRUM-240): con datos de mentira, sin servidor y sin celular, la app
+  dibuja sus pantallas en el celular y en la tablet para cada rol (administración, portería y
+  residente), también con el texto muy grande y en pantallas largas, y les saca una foto. Además
+  comprueban a mano lo nuevo de la versión: el buscador, el botón «+ Nuevo», el menú de cada rol y el
+  cambio del tamaño del texto en Preferencias. Las fotos se bajan de cada ejecución del pipeline
+  (carpeta «fotos-de-pantallas») y sirven de evidencia y para comprobar que ordenar el código no
+  cambió nada de lo que se ve.
 
 ### Cambiado
 - El Excel se maneja solo en la web de administración; la app no guarda archivos en el celular.

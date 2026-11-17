@@ -11,6 +11,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      ver_fotos:
+        description: "Imprimir en el registro las fotos de las pantallas, en pequeño, para verlas sin bajarlas"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -123,8 +128,9 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:testProdDebugUnitTest -Proborazzi.test.record=true --no-daemon --stacktrace
-      - name: Vista previa de las fotos en el registro (temporal, se quita antes de entregar)
-        if: always()
+      # Solo corre si se lanza a mano con «ver_fotos»: sirve para revisar las fotos sin bajarlas.
+      - name: Vista previa de las fotos en el registro (solo si se pide al lanzar a mano)
+        if: always() && inputs.ver_fotos
         run: |
           python3 -m venv /tmp/entorno
           /tmp/entorno/bin/pip install --quiet pillow
