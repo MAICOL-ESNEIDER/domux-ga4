@@ -136,7 +136,7 @@ jobs:
               ancho, alto = im.size
               im = im.resize((ancho // 2, alto // 2), Image.LANCZOS)
               memoria = io.BytesIO()
-              im.save(memoria, "JPEG", quality=72)
+              im.save(memoria, "JPEG", quality=62)
               datos = base64.b64encode(memoria.getvalue()).decode()
               print("FOTO-INICIO " + os.path.basename(ruta) + " " + str(len(datos)))
               for i in range(0, len(datos), 2000):

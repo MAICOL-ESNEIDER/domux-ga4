@@ -101,6 +101,13 @@ android {
 tasks.withType<Test>().configureEach {
     maxHeapSize = "2g"
     systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+    // Si una prueba de pantalla falla, que el registro de GitHub diga por qué.
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
 }
 
 dependencies {
