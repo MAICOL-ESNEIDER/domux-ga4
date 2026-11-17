@@ -5,6 +5,9 @@ android/.gradle/
 android/.idea/
 android/local.properties
 android/app/google-services.json
+# Llaves de Firebase en cualquier carpeta: van como secreto en GitHub y como variable en Render.
+**/google-services.json
+*firebase-adminsdk*.json
 android/*.iml
 android/app/*.iml
 android/.cxx/
