@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import kotlinx.coroutines.CancellationException
 import com.dracknoval.domux.data.LoginRequest
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
@@ -37,6 +39,10 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
     var result by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var attemptedLogin by remember { mutableStateOf(false) }
+    var showNetworkDialog by remember { mutableStateOf(false) }
+    var serverUrl by remember { mutableStateOf(RetrofitClient.baseUrl) }
+    var checkingServer by remember { mutableStateOf(false) }
+    var serverMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -48,6 +54,22 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = {
+                serverUrl = RetrofitClient.baseUrl
+                serverMessage = null
+                showNetworkDialog = true
+            }) {
+                Icon(
+                    painter = painterResource(android.R.drawable.ic_menu_manage),
+                    contentDescription = "Configurar URL del servidor",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         DomuxBrandMark(size = 64.dp)
         Spacer(Modifier.height(14.dp))
         Text("DOMUX", fontSize = 27.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
@@ -127,6 +149,7 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
                 result = ""
                 scope.launch {
                     try {
+                        RetrofitClient.resolveBestServerUrl(RetrofitClient.fallbackUrls)
                         val response = RetrofitClient.api.login(LoginRequest(normalizedEmail, password))
                         if (response.isSuccessful) {
                             val user = response.body()?.user
@@ -151,6 +174,7 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
                             result = "❌ ${mensajeDeError(response.code(), response.errorBody()?.string())}"
                         }
                     } catch (exception: Exception) {
+                        if (exception is CancellationException) throw exception
                         result = "⚠️ No se pudo conectar con el servidor: ${exception.message}"
                     } finally {
                         loading = false
@@ -167,5 +191,66 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
             Spacer(Modifier.height(20.dp))
             Text(result)
         }
+    }
+
+    if (showNetworkDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!checkingServer) showNetworkDialog = false },
+            title = { Text("URL del servidor") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = serverUrl,
+                        onValueChange = {
+                            serverUrl = it
+                            serverMessage = null
+                        },
+                        label = { Text("URL base") },
+                        placeholder = { Text("http://192.168.1.50:5000/") },
+                        singleLine = true,
+                        enabled = !checkingServer,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    serverMessage?.let { Text(it) }
+                    if (checkingServer) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !checkingServer && serverUrl.isNotBlank(),
+                    onClick = {
+                        checkingServer = true
+                        serverMessage = null
+                        scope.launch {
+                            try {
+                                val saved = RetrofitClient.testAndSaveServerUrl(serverUrl)
+                                serverMessage = if (saved) {
+                                    "Conexión probada y URL guardada."
+                                } else {
+                                    "No hubo respuesta HTTP 200 en /api/health."
+                                }
+                            } catch (exception: Exception) {
+                                if (exception is CancellationException) throw exception
+                                serverMessage = "No se pudo guardar la URL: ${exception.message}"
+                            } finally {
+                                checkingServer = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("Probar y guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !checkingServer,
+                    onClick = { showNetworkDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }

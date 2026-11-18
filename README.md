@@ -111,7 +111,8 @@ python -m unittest discover -s tests
 3. Selecciona la variante en **Build Variants**:
    * `devDebug`: Conecta al backend local en `http://10.0.2.2:5000/`.
    * `prodDebug`: Conecta al backend en la nube desplegado en Render.
-4. Para compilar o instalar por terminal:
+4. En `android/local.properties` puedes definir `domux.dev.baseUrl` y una lista opcional de respaldo `DOMUX_FALLBACK_URLS` separada por comas. La app también prueba la URL personalizada guardada en el dispositivo y `http://127.0.0.1:5000/` (con `adb reverse tcp:5000 tcp:5000`). Desde el icono de configuración de la pantalla de inicio de sesión puedes probar y guardar una URL sin recompilar.
+5. Para compilar o instalar por terminal:
 
 ```powershell
 cd android
