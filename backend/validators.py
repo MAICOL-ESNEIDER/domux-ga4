@@ -43,7 +43,7 @@ STANDARD_TIME_SLOTS = (
 EXTENDED_TIME_SLOTS = ("08:00-15:00", "15:00-22:00", "08:00-22:00")
 VALID_TIME_SLOTS = STANDARD_TIME_SLOTS + EXTENDED_TIME_SLOTS
 VALID_PQRS_STATUSES = ("abierta", "en_proceso", "resuelta")
-VALID_PACKAGE_STATUSES = ("por_llegar", "pendiente", "entregado")
+VALID_PACKAGE_STATUSES = ("pendiente", "entregado")
 
 
 class ValidationError(ValueError):

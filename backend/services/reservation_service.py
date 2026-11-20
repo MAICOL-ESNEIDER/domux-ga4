@@ -1,11 +1,65 @@
 """Reservation schedule validation and availability queries."""
 
+import logging
 import re
+from datetime import date as calendar_date, datetime, timedelta, timezone
 
+from extensions import db
 from models import Reservation
 from validators import STANDARD_TIME_SLOTS, VALID_TIME_SLOTS
 
 ACTIVE_RESERVATION_STATUSES = ("activa", "aprobada")
+EXPIRABLE_RESERVATION_STATUSES = ACTIVE_RESERVATION_STATUSES + ("pendiente",)
+COLOMBIA_TIMEZONE = timezone(timedelta(hours=-5))
+logger = logging.getLogger(__name__)
+
+
+def finalize_expired_reservations(now=None):
+    """Finalize active reservations whose scheduled end has passed in Colombia."""
+    if now is None:
+        now = datetime.now(COLOMBIA_TIMEZONE)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=COLOMBIA_TIMEZONE)
+    else:
+        now = now.astimezone(COLOMBIA_TIMEZONE)
+
+    today = now.date()
+    current_minute = now.hour * 60 + now.minute
+    finalized_count = 0
+    reservations = Reservation.query.filter(
+        Reservation.status.in_(EXPIRABLE_RESERVATION_STATUSES)
+    ).all()
+
+    for reservation in reservations:
+        try:
+            reservation_date = calendar_date.fromisoformat(reservation.date)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Skipping reservation %s with invalid date %r.",
+                reservation.id,
+                reservation.date,
+            )
+            continue
+
+        expired = reservation_date < today
+        if reservation_date == today:
+            time_range = time_slot_to_minutes(reservation.time_slot)
+            if time_range is None:
+                logger.warning(
+                    "Skipping reservation %s with invalid time slot %r.",
+                    reservation.id,
+                    reservation.time_slot,
+                )
+                continue
+            expired = time_range[1] <= current_minute
+
+        if expired and reservation.status in ACTIVE_RESERVATION_STATUSES:
+            reservation.status = "finalizada"
+            finalized_count += 1
+
+    if finalized_count:
+        db.session.commit()
+    return finalized_count
 
 
 def time_slot_to_minutes(time_slot):

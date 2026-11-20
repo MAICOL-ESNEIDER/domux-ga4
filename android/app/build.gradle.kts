@@ -20,6 +20,10 @@ val devBaseUrl = localProperties.getProperty("domux.dev.baseUrl")
 val escapedDevBaseUrl = devBaseUrl
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
+val fallbackUrls = localProperties.getProperty("DOMUX_FALLBACK_URLS").orEmpty().trim()
+val escapedFallbackUrls = fallbackUrls
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 android {
     namespace = "com.dracknoval.domux"
@@ -35,6 +39,7 @@ android {
         // URL base del backend. Cambia aquí o sobreescribe en distintos builds si lo necesitas.
         // Por defecto apunta al servicio desplegado en Render; para desarrollo local usa 10.0.2.2:5000.
         buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
+        buildConfigField("String", "DOMUX_FALLBACK_URLS", "\"$escapedFallbackUrls\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

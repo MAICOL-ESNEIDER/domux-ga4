@@ -103,6 +103,18 @@ def migrate_sqlite_schema():
                         f'ALTER TABLE "{table_name}" ADD COLUMN '
                         f'"{column_name}" {column_type}'
                     )
+
+
+def migrate_legacy_package_statuses():
+    """Normalize package records created with the retired por_llegar status."""
+    if "packages" not in inspect(db.engine).get_table_names():
+        return
+    with db.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE packages SET status = 'pendiente' WHERE status = 'por_llegar'"
+        )
+
+
 def migrate_reservation_index():
     """Keep archived reservations outside the active-slot uniqueness index."""
     inspector = inspect(db.engine)
@@ -341,6 +353,7 @@ def create_app():
     with app.app_context():
         db.create_all()
         migrate_sqlite_schema()
+        migrate_legacy_package_statuses()
         migrate_reservation_index()
         migrate_profile_columns()
         migrate_admin_action_columns()

@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RetrofitClient.initialize(this)
         Session.restore(this)
         pendingNotificationRoute = intent.notificationRoute()
         markNotificationOpened(intent)
@@ -199,7 +200,10 @@ private fun SessionStartupScreen(
         }
     }
 
-    LaunchedEffect(Unit) { validateSession() }
+    LaunchedEffect(Unit) {
+        RetrofitClient.resolveBestServerUrl(RetrofitClient.fallbackUrls)
+        validateSession()
+    }
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,

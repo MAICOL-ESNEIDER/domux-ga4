@@ -8,7 +8,7 @@ from google.auth.exceptions import DefaultCredentialsError
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
-from app import create_app
+from app import create_app, migrate_legacy_package_statuses
 from auth import generate_token
 from extensions import db
 from models import (
@@ -260,6 +260,31 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(admin_list.status_code, 200)
         self.assertEqual(len(admin_list.get_json()["residents"]), 2)
 
+    def test_notifications_only_list_for_the_authenticated_user(self):
+        resident_notification = Notification(
+            user_id=self.resident.id,
+            title="Aviso propio",
+            message="Notificación para el residente.",
+        )
+        other_notification = Notification(
+            user_id=self.other_resident.id,
+            title="Aviso ajeno",
+            message="Notificación para otro residente.",
+        )
+        db.session.add_all([resident_notification, other_notification])
+        db.session.commit()
+
+        response = self.client.get(
+            "/api/notifications",
+            headers=self.auth(self.resident),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.get_json()["notifications"]],
+            [resident_notification.id],
+        )
+
     def test_package_registration_status_trash_restore_and_purge(self):
         registration = self.client.post(
             "/api/packages",
@@ -272,6 +297,15 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(registration.status_code, 201)
         package_id = registration.get_json()["packageItem"]["id"]
+        self.assertEqual(registration.get_json()["packageItem"]["status"], "pendiente")
+        legacy_filter = self.client.get(
+            "/api/packages?status=por_llegar",
+            headers=self.auth(self.guard),
+        )
+        self.assertEqual(
+            [item["id"] for item in legacy_filter.get_json()["packages"]],
+            [package_id],
+        )
 
         invalid_registration = self.client.post(
             "/api/packages",
@@ -287,13 +321,13 @@ class SecurityWorkflowTests(unittest.TestCase):
         status_response = self.client.put(
             f"/api/packages/{package_id}/status",
             headers=self.auth(self.guard),
-            json={"status": "pendiente"},
+            json={"status": "por_llegar"},
         )
         self.assertEqual(status_response.status_code, 200)
         self.assertEqual(status_response.get_json()["packageItem"]["status"], "pendiente")
         self.assertEqual(
             Notification.query.filter_by(user_id=self.resident.id).count(),
-            2,
+            1,
         )
 
         deleted = self.client.delete(
@@ -321,6 +355,21 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(forced_delete.status_code, 200)
         self.assertIsNone(db.session.get(PackageItem, package_id))
+
+    def test_app_migrates_legacy_package_statuses(self):
+        package = PackageItem(
+            resident_id=self.resident.id,
+            registered_by=self.guard.id,
+            description="Paquete legado",
+            status="por_llegar",
+        )
+        db.session.add(package)
+        db.session.commit()
+
+        migrate_legacy_package_statuses()
+        db.session.refresh(package)
+
+        self.assertEqual(package.status, "pendiente")
 
     def test_package_listing_automatically_trashes_and_purges_expired_items(self):
         expired_delivery = PackageItem(

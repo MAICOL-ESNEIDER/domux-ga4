@@ -7,8 +7,8 @@ os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 from app import create_app
 from auth import generate_token
 from extensions import db
-from models import CommonArea, Notification, Pqrs, Reservation, User
-from werkzeug.security import generate_password_hash
+from models import AuditLog, CommonArea, Notification, Pqrs, Reservation, User
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 class AdminResidentActionTests(unittest.TestCase):
@@ -65,6 +65,55 @@ class AdminResidentActionTests(unittest.TestCase):
 
     def headers(self, user):
         return {"Authorization": f"Bearer {generate_token(user)}"}
+
+    def test_resident_can_change_password_and_audit_the_action(self):
+        response = self.client.post(
+            "/api/auth/change-password",
+            headers=self.headers(self.resident),
+            json={
+                "currentPassword": "Resident123*",
+                "newPassword": "UpdatedResident123*",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {"message": "Contraseña actualizada exitosamente."},
+        )
+        self.assertTrue(check_password_hash(self.resident.password_hash, "UpdatedResident123*"))
+        audit = AuditLog.query.filter_by(
+            entity_type="USER",
+            entity_id=self.resident.id,
+            action="password_changed",
+        ).one()
+        self.assertEqual(audit.actor_id, self.resident.id)
+        self.assertEqual(audit.actor_role, "RESIDENT")
+        self.assertNotIn("UpdatedResident123*", audit.details or "")
+
+    def test_password_change_rejects_wrong_current_or_weak_new_password(self):
+        original_hash = self.resident.password_hash
+        wrong_current = self.client.post(
+            "/api/auth/change-password",
+            headers=self.headers(self.resident),
+            json={
+                "currentPassword": "Wrong123*",
+                "newPassword": "UpdatedResident123*",
+            },
+        )
+        weak_new = self.client.post(
+            "/api/auth/change-password",
+            headers=self.headers(self.resident),
+            json={
+                "currentPassword": "Resident123*",
+                "newPassword": "weak",
+            },
+        )
+
+        self.assertEqual(wrong_current.status_code, 401)
+        self.assertEqual(weak_new.status_code, 400)
+        self.assertEqual(self.resident.password_hash, original_hash)
+        self.assertEqual(AuditLog.query.filter_by(action="password_changed").count(), 0)
 
     def test_admin_creates_pqrs_for_resident_with_audit_and_notification(self):
         response = self.client.post(

@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
@@ -9,6 +9,10 @@ from app import create_app
 from auth import generate_token
 from extensions import db
 from models import AuditLog, CommonArea, Notification, Reservation, ReservationMessage, User
+from services.reservation_service import (
+    COLOMBIA_TIMEZONE,
+    finalize_expired_reservations,
+)
 from validators import STANDARD_TIME_SLOTS, VALID_TIME_SLOTS
 from werkzeug.security import generate_password_hash
 
@@ -105,6 +109,67 @@ class ReservationWorkflowTests(unittest.TestCase):
             ).count(),
             1,
         )
+
+    def test_expired_reservations_are_finalized_using_colombia_time(self):
+        today = datetime.now(COLOMBIA_TIMEZONE).date()
+        yesterday = (today - timedelta(days=1)).isoformat()
+        active_today = Reservation(
+            resident_id=self.resident.id,
+            common_area_id=self.area.id,
+            date=today.isoformat(),
+            time_slot="08:00-10:00",
+            status="activa",
+        )
+        approved_yesterday = Reservation(
+            resident_id=self.resident.id,
+            common_area_id=self.area.id,
+            date=yesterday,
+            time_slot="18:00-20:00",
+            status="aprobada",
+        )
+        pending_yesterday = Reservation(
+            resident_id=self.other_resident.id,
+            common_area_id=self.area.id,
+            date=yesterday,
+            time_slot="12:00-14:00",
+            status="pendiente",
+        )
+        db.session.add_all([active_today, approved_yesterday, pending_yesterday])
+        db.session.commit()
+
+        simulated_now = datetime(
+            today.year,
+            today.month,
+            today.day,
+            10,
+            1,
+            tzinfo=COLOMBIA_TIMEZONE,
+        )
+        finalized = finalize_expired_reservations(simulated_now)
+
+        self.assertEqual(finalized, 2)
+        self.assertEqual(active_today.status, "finalizada")
+        self.assertEqual(approved_yesterday.status, "finalizada")
+        self.assertEqual(pending_yesterday.status, "pendiente")
+
+    def test_reservation_listing_finalizes_past_active_reservations(self):
+        reservation = Reservation(
+            resident_id=self.resident.id,
+            common_area_id=self.area.id,
+            date=(datetime.now(COLOMBIA_TIMEZONE).date() - timedelta(days=1)).isoformat(),
+            time_slot="18:00-20:00",
+            status="activa",
+        )
+        db.session.add(reservation)
+        db.session.commit()
+
+        response = self.client.get(
+            "/api/reservations",
+            headers=self.headers(self.admin),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(reservation.status, "finalizada")
 
     def test_minor_without_parental_consent_cannot_request_reservation(self):
         today = date.today()
@@ -357,7 +422,7 @@ class ReservationWorkflowTests(unittest.TestCase):
             headers=self.headers(self.resident),
         )
         self.assertEqual(denied.status_code, 400)
-        self.assertEqual(same_day.status, "aprobada")
+        self.assertNotEqual(same_day.status, "cancelada")
 
     def test_rejecting_and_cancelling_reservation_notify_resident(self):
         created = self.create_request()

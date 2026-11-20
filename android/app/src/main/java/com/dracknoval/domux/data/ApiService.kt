@@ -15,6 +15,12 @@ interface ApiService {
     @POST("api/auth/login")
     suspend fun login(@Body body: LoginRequest): Response<LoginResponse>
 
+    @POST("api/auth/change-password")
+    suspend fun changePassword(
+        @Header("Authorization") auth: String,
+        @Body body: ChangePasswordRequest
+    ): Response<GenericMessageResponse>
+
     @GET("api/auth/session")
     suspend fun currentSession(@Header("Authorization") auth: String): Response<UserDataResponse>
 

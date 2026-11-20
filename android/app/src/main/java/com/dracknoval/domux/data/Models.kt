@@ -57,6 +57,10 @@ data class UpdateUserRequest(
     val parentalConsent: Boolean? = null
 )
 data class ResetPasswordRequest(val password: String)
+data class ChangePasswordRequest(
+    val currentPassword: String,
+    val newPassword: String
+)
 data class CreateUserResponse(val message: String?, val user: UserData?)
 data class UsersListResponse(
     val users: List<UserData>?,

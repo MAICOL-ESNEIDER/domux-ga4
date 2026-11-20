@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +70,43 @@ import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+fun String.toDomuxDisplayLabel(): String {
+    val value = trim()
+    return when (value.lowercase()) {
+        "resident", "residente" -> "Residente"
+        "admin", "administrador" -> "Administrador"
+        "guard", "guardia" -> "Guardia de seguridad"
+        "propietario" -> "Propietario"
+        "arrendatario" -> "Arrendatario"
+        "abierta" -> "Abierta"
+        "en_proceso", "en proceso" -> "En proceso"
+        "resuelta" -> "Resuelta"
+        "activa" -> "Activa"
+        "aprobada" -> "Aprobada"
+        "pendiente" -> "Pendiente"
+        "rechazada" -> "Rechazada"
+        "cancelada" -> "Cancelada"
+        "finalizada" -> "Finalizada"
+        "visitante" -> "Visitante"
+        "domiciliario" -> "Domiciliario"
+        "contratista" -> "Contratista"
+        "llamada" -> "Por llamada"
+        "entrada" -> "Entrada"
+        "salida" -> "Salida"
+        "carro" -> "Carro"
+        "moto" -> "Moto"
+        "perro" -> "Perro"
+        "gato" -> "Gato"
+        "otro" -> "Otro"
+        "package" -> "Paquetería"
+        "reservation" -> "Reservas"
+        "announcement" -> "Comunicados"
+        "pqrs" -> "PQRS"
+        "visit", "security" -> "Portería"
+        else -> value.replaceFirstChar { it.uppercase() }
+    }
+}
 
 @Composable
 fun MediaAttachmentChip(mediaUrl: String?, mediaType: String?) {
@@ -152,27 +191,36 @@ fun DomuxBentoCard(
     accentColor: Color = Color(0xFF38BDF8),
     onClick: () -> Unit
 ) {
+    val cardBackground = accentColor.copy(alpha = 0.14f).compositeOver(Color(0xFF0F1E33))
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        color = Color(0xFF0F1E33),
+        color = cardBackground,
         shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
+        border = BorderStroke(2.dp, accentColor.copy(alpha = 0.85f))
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        Column {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .background(accentColor.copy(alpha = 0.16f), RoundedCornerShape(13.dp)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .background(accentColor, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            )
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(icon, color = accentColor, fontSize = 19.sp)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelMedium)
-                Text(detail, color = Color(0xFFF8FAFC), style = MaterialTheme.typography.titleSmall)
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(accentColor.copy(alpha = 0.2f), RoundedCornerShape(13.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(icon, color = accentColor, fontSize = 26.sp)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelMedium)
+                    Text(detail, color = Color(0xFFF8FAFC), style = MaterialTheme.typography.titleSmall)
+                }
             }
         }
     }
@@ -191,7 +239,11 @@ fun DomuxStatusBadge(label: String, tone: DomuxBadgeTone = DomuxBadgeTone.SUCCES
         shape = CircleShape,
         border = BorderStroke(1.dp, outline)
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), fontSize = 11.sp)
+        Text(
+            label.toDomuxDisplayLabel(),
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+            fontSize = 11.sp
+        )
     }
 }
 

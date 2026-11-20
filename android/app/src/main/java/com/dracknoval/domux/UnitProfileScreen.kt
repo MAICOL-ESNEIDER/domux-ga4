@@ -8,12 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -43,10 +41,12 @@ import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private val householdRelationships = listOf(
-    "propietario", "conyuge_pareja", "hijo", "hija", "padre", "madre",
-    "hermano", "hermana", "abuelo", "abuela", "tio", "tia", "primo",
-    "prima", "yerno", "nuera", "suegro", "suegra", "otro"
+private val householdRelationshipOptions = listOf(
+    "hijo" to "Hijo/a",
+    "conyuge_pareja" to "Cónyuge",
+    "padre" to "Padre/Madre",
+    "hermano" to "Hermano/a",
+    "otro" to "Otro"
 )
 
 @Composable
@@ -107,7 +107,10 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
         if (admin) {
             unit?.residents?.forEach { resident ->
                 Column {
-                    Text("Residente: ${resident.name} · ${resident.occupancyType ?: "residente"}")
+                    Text(
+                        "Residente: ${resident.name} · " +
+                            "${(resident.occupancyType ?: "residente").toDomuxDisplayLabel()}"
+                    )
                     Row {
                         TextButton(onClick = {
                             navController.navigate("pqrs?residentId=${resident.id}")
@@ -118,18 +121,26 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                     }
                 }
             }
-            OutlinedTextField(parking, { parking = it }, label = { Text("Parqueadero (identificador)") }, modifier = Modifier.fillMaxWidth())
+            DomuxCard(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Celda de parqueadero asignada",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    OutlinedTextField(
+                        value = parking,
+                        onValueChange = { parking = it },
+                        label = { Text("Identificador de la celda") },
+                        supportingText = { Text("Número asignado por la administración") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
             OutlinedTextField(storage, { storage = it }, label = { Text("Cuarto útil (identificador)") }, modifier = Modifier.fillMaxWidth())
-            Row {
-                Checkbox(petInsurance, { petInsurance = it })
-                Text("Tiene seguro de mascotas", Modifier.padding(top = 12.dp))
-            }
-            if (petInsurance) OutlinedTextField(petInsurer, { petInsurer = it }, label = { Text("Aseguradora (opcional)") }, modifier = Modifier.fillMaxWidth())
-            Row {
-                Checkbox(funeralPlan, { funeralPlan = it })
-                Text("Tiene plan funerario", Modifier.padding(top = 12.dp))
-            }
-            if (funeralPlan) OutlinedTextField(funeralProvider, { funeralProvider = it }, label = { Text("Entidad (opcional)") }, modifier = Modifier.fillMaxWidth())
 
             Text("Integrantes del hogar", style = MaterialTheme.typography.titleMedium)
             var memberName by remember { mutableStateOf("") }
@@ -139,7 +150,6 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             var memberPhone by remember { mutableStateOf("") }
             var memberRelationship by remember { mutableStateOf("hijo") }
             var otherRelationship by remember { mutableStateOf("") }
-            var relationshipMenu by remember { mutableStateOf(false) }
             OutlinedTextField(memberName, { memberName = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberLastName, { memberLastName = it }, label = { Text("Apellido") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberDocument, { memberDocument = it }, label = { Text("Documento") }, modifier = Modifier.fillMaxWidth())
@@ -156,12 +166,16 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            TextButton(onClick = { relationshipMenu = true }) { Text("Parentesco: $memberRelationship") }
-            DropdownMenu(relationshipMenu, { relationshipMenu = false }) {
-                householdRelationships.forEach { relationship ->
-                    DropdownMenuItem(
-                        text = { Text(relationship) },
-                        onClick = { memberRelationship = relationship; relationshipMenu = false }
+            Text("Parentesco")
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                householdRelationshipOptions.forEach { (value, label) ->
+                    androidx.compose.material3.FilterChip(
+                        selected = memberRelationship == value,
+                        onClick = { memberRelationship = value },
+                        label = { Text(label) }
                     )
                 }
             }
@@ -191,7 +205,10 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             }, modifier = Modifier.fillMaxWidth()) { Text("Agregar integrante") }
             members.forEachIndexed { index, member ->
                 TextButton(onClick = { members.removeAt(index) }) {
-                    Text("Quitar ${member.name} ${member.lastName} · ${member.relationship}")
+                    Text(
+                        "Quitar ${member.name} ${member.lastName} · " +
+                            member.relationship.toDomuxDisplayLabel()
+                    )
                 }
             }
 
@@ -218,7 +235,9 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text("Agregar mascota") }
             pets.forEachIndexed { index, pet ->
-                TextButton(onClick = { pets.removeAt(index) }) { Text("Quitar ${pet.name} · ${pet.species}") }
+                TextButton(onClick = { pets.removeAt(index) }) {
+                    Text("Quitar ${pet.name} · ${pet.species.toDomuxDisplayLabel()}")
+                }
             }
 
             Text("Vehículos", style = MaterialTheme.typography.titleMedium)
@@ -228,10 +247,15 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             var vehicleYear by remember { mutableStateOf("") }
             var registeredOwner by remember { mutableStateOf("") }
             var color by remember { mutableStateOf("") }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 listOf("carro", "moto").forEach { type ->
                     androidx.compose.material3.FilterChip(
-                        selected = vehicleType == type, onClick = { vehicleType = type }, label = { Text(type) }
+                        selected = vehicleType == type,
+                        onClick = { vehicleType = type },
+                        label = { Text(type.toDomuxDisplayLabel()) }
                     )
                 }
             }
@@ -302,14 +326,68 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             ) { Text(if (busy) "Guardando..." else "Guardar ficha del apartamento") }
         } else {
             unit?.let { profile ->
-                profile.residents.forEach { Text("${it.name} · ${it.occupancyType ?: "residente"}") }
-                Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
-                Text("Cuarto útil: ${profile.storageIdentifier ?: "No registrado"}")
-                Text("Seguro de mascotas: ${if (profile.petInsurance) profile.petInsurer ?: "Sí" else "No"}")
-                Text("Plan funerario: ${if (profile.funeralPlan) profile.funeralProvider ?: "Sí" else "No"}")
-                profile.members.forEach { Text("${it.name} ${it.lastName} · ${it.relationship} · ${it.birthDate}") }
-                profile.pets.forEach { Text("${it.name}: ${it.species}, ${it.breed}, ${it.ageYears} años") }
-                profile.vehicles.forEach { Text("${it.type}: ${it.plate} · ${it.makeModel} · ${it.year}") }
+                Text("Residentes", style = MaterialTheme.typography.titleMedium)
+                profile.residents.forEach {
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(it.name, style = MaterialTheme.typography.titleSmall)
+                            Text((it.occupancyType ?: "residente").toDomuxDisplayLabel())
+                        }
+                    }
+                }
+                Text("Celda de parqueadero asignada", style = MaterialTheme.typography.titleMedium)
+                DomuxCard(Modifier.fillMaxWidth()) {
+                    Text(
+                        profile.parkingIdentifier ?: "No hay una celda asignada",
+                        Modifier.padding(12.dp)
+                    )
+                }
+                Text("Cuarto útil", style = MaterialTheme.typography.titleMedium)
+                DomuxCard(Modifier.fillMaxWidth()) {
+                    Text(profile.storageIdentifier ?: "No registrado", Modifier.padding(12.dp))
+                }
+                Text("Integrantes del hogar", style = MaterialTheme.typography.titleMedium)
+                profile.members.forEach {
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        Column(
+                            Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text("${it.name} ${it.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleSmall)
+                            Text("Parentesco: ${(it.otherRelationship ?: it.relationship).toDomuxDisplayLabel()}")
+                            Text("Documento: ${it.documentId}")
+                            Text("Fecha de nacimiento: ${it.birthDate}")
+                            it.phone?.takeIf(String::isNotBlank)?.let { phone -> Text("Teléfono: $phone") }
+                        }
+                    }
+                }
+                Text("Mascotas", style = MaterialTheme.typography.titleMedium)
+                profile.pets.forEach {
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        Column(
+                            Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(it.name, style = MaterialTheme.typography.titleSmall)
+                            Text("Especie: ${it.species.toDomuxDisplayLabel()}")
+                            Text("Raza: ${it.breed} · Edad: ${it.ageYears} años")
+                        }
+                    }
+                }
+                Text("Vehículos", style = MaterialTheme.typography.titleMedium)
+                profile.vehicles.forEach {
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        Column(
+                            Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text("${it.type.toDomuxDisplayLabel()} · ${it.plate}", style = MaterialTheme.typography.titleSmall)
+                            Text("Marca y modelo: ${it.makeModel} · Año: ${it.year}")
+                            Text("A nombre de: ${it.registeredOwner}")
+                            it.color?.takeIf(String::isNotBlank)?.let { color -> Text("Color: $color") }
+                        }
+                    }
+                }
             }
         }
         Spacer(Modifier.height(4.dp))

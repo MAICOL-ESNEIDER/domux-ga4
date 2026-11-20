@@ -193,12 +193,15 @@ fun CreateUserScreen(navController: NavController) {
             Column(Modifier.padding(16.dp)) {
                 Text("Crear usuario", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     listOf("RESIDENT", "GUARD", "ADMIN").forEach { option ->
                         FilterChip(
                             selected = role == option,
                             onClick = { role = option },
-                            label = { Text(if (option == "RESIDENT") "Residente" else if (option == "GUARD") "Guardia" else "Admin") }
+                            label = { Text(option.toDomuxDisplayLabel()) }
                         )
                     }
                 }
@@ -241,7 +244,10 @@ fun CreateUserScreen(navController: NavController) {
                         Text("Confirma la autorización del residente.", color = MaterialTheme.colorScheme.error)
                     }
                     Text("Tipo de tenencia")
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         occupancyOptions.forEach { (value, label) ->
                             FilterChip(
                                 selected = occupancyType == value,
@@ -442,17 +448,19 @@ fun CreateUserScreen(navController: NavController) {
                                 }
                                 Text(user.email)
                                 Text("Teléfono: ${user.phone.orEmpty()} · Documento: ${user.documentId.orEmpty()}")
-                                Text("Rol: ${user.role} · Apto: ${user.apartment ?: "—"}")
+                                Text(
+                                    "Rol: ${user.role.toDomuxDisplayLabel()} · Apto: ${user.apartment ?: "—"}"
+                                )
                                 Text(
                                     "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
                                         if (user.isActive) "Activo" else "Inactivo"
                                 )
                                 Row {
                                     TextButton(onClick = { editUser = user }) { Text("Editar") }
-                                    TextButton(onClick = {
+                                    OutlinedButton(onClick = {
                                         resetUser = user
                                         resetPassword = ""
-                                    }) { Text("Restablecer contraseña") }
+                                    }) { Text("Asignar nueva clave") }
                                     if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
                                         TextButton(onClick = {
                                             navController.navigate("unitProfile/${Uri.encode(user.apartment)}")
@@ -462,19 +470,21 @@ fun CreateUserScreen(navController: NavController) {
                             }
                         }
                     }
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            TextButton(
-                                enabled = currentPage > 1 && !loading,
-                                onClick = { scope.launch { loadUsers(currentPage - 1) } }
-                            ) { Text("Anterior") }
-                            TextButton(
-                                enabled = currentPage < totalPages && !loading,
-                                onClick = { scope.launch { loadUsers(currentPage + 1) } }
-                            ) { Text("Siguiente") }
+                    if (totalPages > 1) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                TextButton(
+                                    enabled = currentPage > 1 && !loading,
+                                    onClick = { scope.launch { loadUsers(currentPage - 1) } }
+                                ) { Text("Anterior") }
+                                TextButton(
+                                    enabled = currentPage < totalPages && !loading,
+                                    onClick = { scope.launch { loadUsers(currentPage + 1) } }
+                                ) { Text("Siguiente") }
+                            }
                         }
                     }
 
@@ -516,9 +526,16 @@ fun CreateUserScreen(navController: NavController) {
                     UserInput(eEmail, { eEmail = it }, "Correo", true, showMissingError = attemptedEdit)
                     UserInput(ePhone, { ePhone = it }, "Teléfono", true, showMissingError = attemptedEdit)
                     UserInput(eDocument, { eDocument = it }, "Documento", true, showMissingError = attemptedEdit)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         listOf("RESIDENT", "GUARD", "ADMIN").forEach { option ->
-                            FilterChip(selected = eRole == option, onClick = { eRole = option }, label = { Text(option) })
+                            FilterChip(
+                                selected = eRole == option,
+                                onClick = { eRole = option },
+                                label = { Text(option.toDomuxDisplayLabel()) }
+                            )
                         }
                     }
                     if (eRole == "RESIDENT") {
@@ -548,7 +565,10 @@ fun CreateUserScreen(navController: NavController) {
                                 Text("El residente autorizó el tratamiento de sus datos.")
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             occupancyOptions.forEach { (value, label) ->
                                 FilterChip(selected = eOccupancy == value, onClick = { eOccupancy = value }, label = { Text(label) })
                             }

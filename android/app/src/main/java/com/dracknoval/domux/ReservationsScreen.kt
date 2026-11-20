@@ -2,6 +2,7 @@ package com.dracknoval.domux
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -157,6 +158,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var includeArchived by remember { mutableStateOf(false) }
     var legalSuccessMessage by remember { mutableStateOf("") }
     var legalBusy by remember { mutableStateOf(false) }
+    var showLegalOptions by remember { mutableStateOf(false) }
     var selectedTab by remember {
         mutableIntStateOf(if (targetResidentId != null) 1 else 0)
     }
@@ -254,7 +256,9 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                     }
                     Text(if (Session.isAdmin) "Crear reserva para un residente" else "Nueva reserva", style = MaterialTheme.typography.titleMedium)
                     Text("Zona común")
-                    Row {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
                         areas.forEach { area ->
                             FilterChip(
                                 selected = selectedArea?.id == area.id,
@@ -379,9 +383,18 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             }
             }
         }
-
         if (selectedTab == 0) {
         if (Session.isAdmin) {
+            TextButton(
+                onClick = { showLegalOptions = !showLegalOptions },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (showLegalOptions) "Ocultar opciones de archivo y Excel legal"
+                    else "Opciones de archivo y Excel legal"
+                )
+            }
+            if (showLegalOptions) {
             DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Column(
                     Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -470,6 +483,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                 }
             }
         }
+        }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f)) {
             items(reservations, key = { it.id }) { reservation ->
@@ -490,7 +504,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                             MediaAttachmentChip(item.mediaUrl, item.mediaType)
                         }
                         DomuxStatusBadge(
-                            reservation.status.replaceFirstChar(Char::uppercase).replace('_', ' '),
+                            reservation.status.toDomuxDisplayLabel(),
                             when (reservation.status) {
                                 "aprobada", "activa" -> DomuxBadgeTone.SUCCESS
                                 "rechazada", "cancelada" -> DomuxBadgeTone.ALERT
@@ -506,76 +520,90 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                         if (reservation.isArchived) {
                             DomuxStatusBadge("Archivada en Excel", DomuxBadgeTone.ALERT)
                         }
-                        if (Session.isAdmin && reservation.status in listOf("pendiente", "activa")) {
-                            Row {
-                                TextButton(onClick = {
-                                    confirmation = "¿Estás seguro de aprobar la reserva?" to {
-                                        scope.launch {
-                                            try {
-                                                val response = RetrofitClient.api.updateReservationStatus(
-                                                    Session.bearer(), reservation.id,
-                                                    UpdateReservationStatusRequest("aprobada")
-                                                )
-                                                message = if (response.isSuccessful) "Reserva aprobada."
-                                                else mensajeDeError(response.code(), response.errorBody()?.string())
-                                                load()
-                                            } catch (exception: Exception) {
-                                                if (exception is CancellationException) throw exception
-                                                message = "No se pudo aprobar: ${exception.message}"
-                                            }
-                                        }
+                        val cancelReservation = {
+                            confirmation = "¿Estás seguro de cancelar esta reserva?" to {
+                                scope.launch {
+                                    try {
+                                        val response = RetrofitClient.api.cancelReservation(
+                                            Session.bearer(), reservation.id
+                                        )
+                                        message = if (response.isSuccessful) "Reserva cancelada."
+                                        else mensajeDeError(response.code(), response.errorBody()?.string())
+                                        load()
+                                    } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
+                                        message = "No se pudo cancelar la reserva: ${exception.message}"
                                     }
-                                }) { Text("Aprobar") }
-                                TextButton(onClick = {
-                                    confirmation = "¿Estás seguro de rechazar la reserva?" to {
-                                        scope.launch {
-                                            try {
-                                                val response = RetrofitClient.api.updateReservationStatus(
-                                                    Session.bearer(), reservation.id,
-                                                    UpdateReservationStatusRequest("rechazada")
-                                                )
-                                                message = if (response.isSuccessful) "Reserva rechazada."
-                                                else mensajeDeError(response.code(), response.errorBody()?.string())
-                                                load()
-                                            } catch (exception: Exception) {
-                                                if (exception is CancellationException) throw exception
-                                                message = "No se pudo rechazar: ${exception.message}"
-                                            }
-                                        }
-                                    }
-                                }) { Text("Rechazar") }
+                                }
                             }
                         }
                         if (
                             Session.isAdmin &&
                             reservation.status in listOf("pendiente", "activa", "aprobada")
                         ) {
-                            TextButton(onClick = {
-                                confirmation = "¿Estás seguro de cancelar esta reserva?" to {
-                                    scope.launch {
-                                        try {
-                                            val response = RetrofitClient.api.cancelReservation(
-                                                Session.bearer(), reservation.id
-                                            )
-                                            message = if (response.isSuccessful) "Reserva cancelada."
-                                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                                            load()
-                                        } catch (exception: Exception) {
-                                            if (exception is CancellationException) throw exception
-                                            message = "No se pudo cancelar la reserva: ${exception.message}"
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (reservation.status in listOf("pendiente", "activa")) {
+                                    Button(onClick = {
+                                        confirmation = "¿Estás seguro de aprobar la reserva?" to {
+                                            scope.launch {
+                                                try {
+                                                    val response = RetrofitClient.api.updateReservationStatus(
+                                                        Session.bearer(), reservation.id,
+                                                        UpdateReservationStatusRequest("aprobada")
+                                                    )
+                                                    message = if (response.isSuccessful) "Reserva aprobada."
+                                                    else mensajeDeError(response.code(), response.errorBody()?.string())
+                                                    load()
+                                                } catch (exception: Exception) {
+                                                    if (exception is CancellationException) throw exception
+                                                    message = "No se pudo aprobar: ${exception.message}"
+                                                }
+                                            }
                                         }
-                                    }
+                                    }) { Text("Aprobar") }
+                                    OutlinedButton(onClick = {
+                                        confirmation = "¿Estás seguro de rechazar la reserva?" to {
+                                            scope.launch {
+                                                try {
+                                                    val response = RetrofitClient.api.updateReservationStatus(
+                                                        Session.bearer(), reservation.id,
+                                                        UpdateReservationStatusRequest("rechazada")
+                                                    )
+                                                    message = if (response.isSuccessful) "Reserva rechazada."
+                                                    else mensajeDeError(response.code(), response.errorBody()?.string())
+                                                    load()
+                                                } catch (exception: Exception) {
+                                                    if (exception is CancellationException) throw exception
+                                                    message = "No se pudo rechazar: ${exception.message}"
+                                                }
+                                            }
+                                        }
+                                    }) { Text("Rechazar") }
                                 }
-                            }) { Text("Cancelar reserva") }
+                                OutlinedButton(onClick = cancelReservation) {
+                                    Text("Cancelar reserva")
+                                }
+                            }
                         }
                         if (
                             (Session.isResident || Session.isAdmin) &&
-                            reservation.status in listOf("pendiente", "activa", "aprobada")
+                            reservation.status !in listOf("finalizada", "cancelada")
                         ) {
+                            var showReplyFields by remember(reservation.id) { mutableStateOf(false) }
                             var reply by remember(reservation.id) { mutableStateOf("") }
                             var replyMediaUrl by remember(reservation.id) { mutableStateOf<String?>(null) }
                             var replyMediaType by remember(reservation.id) { mutableStateOf<String?>(null) }
                             var replyMediaName by remember(reservation.id) { mutableStateOf<String?>(null) }
+                            TextButton(onClick = { showReplyFields = !showReplyFields }) {
+                                Text(
+                                    if (showReplyFields) "Ocultar nota o soporte"
+                                    else "Agregar nota o soporte"
+                                )
+                            }
+                            if (showReplyFields) {
                             OutlinedTextField(
                                 value = reply,
                                 onValueChange = { reply = it },
@@ -612,27 +640,17 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                     }
                                 }
                             }) { Text("Enviar mensaje") }
+                            }
                         }
                         if (
                             Session.isResident &&
                             reservation.status in listOf("activa", "pendiente", "aprobada") &&
                             reservation.date > reservationTodayString()
                         ) {
-                            TextButton(onClick = {
-                                confirmation = "¿Estás seguro de cancelar esta reserva?" to {
-                                    scope.launch {
-                                        try {
-                                            val response = RetrofitClient.api.cancelReservation(Session.bearer(), reservation.id)
-                                            message = if (response.isSuccessful) "Reserva cancelada."
-                                            else mensajeDeError(response.code(), response.errorBody()?.string())
-                                            load()
-                                        } catch (exception: Exception) {
-                                            if (exception is CancellationException) throw exception
-                                            message = "No se pudo cancelar: ${exception.message}"
-                                        }
-                                    }
-                                }
-                            }) { Text("Cancelar") }
+                            OutlinedButton(
+                                onClick = cancelReservation,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Cancelar reserva") }
                         }
                     }
                 }

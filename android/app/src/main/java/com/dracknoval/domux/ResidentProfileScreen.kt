@@ -26,9 +26,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.dracknoval.domux.data.ChangePasswordRequest
 import com.dracknoval.domux.data.ResidentProfileUpdateRequest
 import com.dracknoval.domux.data.ResidentialUnitData
 import com.dracknoval.domux.data.RetrofitClient
@@ -37,6 +39,19 @@ import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+
+private val profilePasswordSymbols = setOf('@', '$', '!', '%', '*', '?', '&', '#', '.', '_', '-')
+
+private fun validProfilePassword(value: String): Boolean =
+    value.length >= 8 &&
+        value.any { it in 'A'..'Z' } &&
+        value.any { it in 'a'..'z' } &&
+        value.any { it in '0'..'9' } &&
+        value.any { it in profilePasswordSymbols } &&
+        value.all {
+            it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' ||
+                it in profilePasswordSymbols
+        }
 
 @Composable
 fun ResidentProfileScreen(navController: NavController) {
@@ -47,6 +62,10 @@ fun ResidentProfileScreen(navController: NavController) {
     var socialNetworks by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var passwordBusy by remember { mutableStateOf(false) }
+    var attemptedPasswordChange by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -87,8 +106,8 @@ fun ResidentProfileScreen(navController: NavController) {
                     Text(profile.fullName ?: profile.name, style = MaterialTheme.typography.titleMedium)
                     Text("Documento: ${profile.documentId.orEmpty()}")
                     Text("Apartamento: ${profile.apartment ?: "Sin asignar"}")
-                    Text("Tipo de residente: ${profile.occupancyType ?: "—"}")
-                    Text("Rol: ${profile.role}")
+                    Text("Tipo de residente: ${profile.occupancyType?.toDomuxDisplayLabel() ?: "—"}")
+                    Text("Rol: ${profile.role.toDomuxDisplayLabel()}")
                 }
             }
             Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
@@ -151,11 +170,81 @@ fun ResidentProfileScreen(navController: NavController) {
             TextButton(onClick = { navController.navigate("pqrs") }) {
                 Text("Crear PQRS para solicitar un cambio")
             }
+            DomuxCard(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Cambiar mi contraseña", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(
+                        value = currentPassword,
+                        onValueChange = { currentPassword = it },
+                        label = { Text("Contraseña actual") },
+                        isError = attemptedPasswordChange && currentPassword.isBlank(),
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = { Text("Nueva contraseña") },
+                        isError = attemptedPasswordChange && !validProfilePassword(newPassword),
+                        supportingText = {
+                            Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.")
+                        },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        enabled = !passwordBusy,
+                        onClick = {
+                            attemptedPasswordChange = true
+                            if (currentPassword.isBlank() || !validProfilePassword(newPassword)) {
+                                message = "Revisa la contraseña actual y los requisitos de la nueva contraseña."
+                                return@Button
+                            }
+                            passwordBusy = true
+                            message = ""
+                            scope.launch {
+                                try {
+                                    val response = RetrofitClient.api.changePassword(
+                                        Session.bearer(),
+                                        ChangePasswordRequest(currentPassword, newPassword)
+                                    )
+                                    if (response.isSuccessful) {
+                                        message = response.body()?.message
+                                            ?: "Contraseña actualizada exitosamente."
+                                        currentPassword = ""
+                                        newPassword = ""
+                                        attemptedPasswordChange = false
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                    }
+                                } catch (exception: Exception) {
+                                    if (exception is CancellationException) throw exception
+                                    message = "No se pudo actualizar la contraseña: ${exception.message}"
+                                } finally {
+                                    passwordBusy = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (passwordBusy) "Actualizando..." else "Actualizar contraseña")
+                    }
+                }
+            }
         }
             unit?.let { profile ->
             Text("Información del hogar", style = MaterialTheme.typography.titleLarge)
             profile.residents.forEach { resident ->
-                Text("${resident.name} · ${resident.occupancyType ?: "residente"}")
+                Text(
+                    "${resident.name} · ${(resident.occupancyType ?: "residente").toDomuxDisplayLabel()}"
+                )
             }
             Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
             Text("Cuarto útil: ${profile.storageIdentifier ?: "No registrado"}")
@@ -165,16 +254,24 @@ fun ResidentProfileScreen(navController: NavController) {
                 DomuxCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text("${member.name} ${member.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleSmall)
-                        Text("Parentesco: ${member.otherRelationship ?: member.relationship}")
+                        Text(
+                            "Parentesco: ${(member.otherRelationship ?: member.relationship).toDomuxDisplayLabel()}"
+                        )
                         Text("Fecha de nacimiento: ${member.birthDate}")
                     }
                 }
             }
             profile.pets.forEach { pet ->
-                Text("Mascota: ${pet.name} · ${pet.species} · ${pet.breed} · ${pet.ageYears} años")
+                Text(
+                    "Mascota: ${pet.name} · ${pet.species.toDomuxDisplayLabel()} · " +
+                        "${pet.breed} · ${pet.ageYears} años"
+                )
             }
             profile.vehicles.forEach { vehicle ->
-                Text("Vehículo: ${vehicle.type} ${vehicle.plate} · ${vehicle.makeModel} · ${vehicle.year}")
+                Text(
+                    "Vehículo: ${vehicle.type.toDomuxDisplayLabel()} ${vehicle.plate} · " +
+                        "${vehicle.makeModel} · ${vehicle.year}"
+                )
             }
         }
             Spacer(Modifier.height(6.dp))
