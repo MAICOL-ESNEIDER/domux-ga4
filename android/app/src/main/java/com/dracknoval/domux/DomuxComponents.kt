@@ -85,6 +85,8 @@ fun String.toDomuxDisplayLabel(): String {
         "activa" -> "Activa"
         "aprobada" -> "Aprobada"
         "pendiente" -> "Pendiente"
+        "pendiente_pago" -> "Pendiente de pago"
+        "expirada" -> "Expirada"
         "rechazada" -> "Rechazada"
         "cancelada" -> "Cancelada"
         "finalizada" -> "Finalizada"

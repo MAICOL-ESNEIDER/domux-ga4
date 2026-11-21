@@ -35,19 +35,32 @@ import androidx.compose.ui.unit.dp
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+private fun pickerDateMillis(value: String): Long? =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        isLenient = false
+    }.parse(value)?.time
 
 @Composable
 fun DatePickerField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    allowPastDates: Boolean = false
+    allowPastDates: Boolean = false,
+    minDate: String? = null,
+    maxDate: String? = null
 ) {
     val context = LocalContext.current
     OutlinedButton(
         onClick = {
-            val calendar = Calendar.getInstance()
+            val selectedDate = value.takeIf(String::isNotBlank)?.let(::pickerDateMillis)
+            val calendar = Calendar.getInstance().apply {
+                selectedDate?.let { time = Date(it) }
+            }
             DatePickerDialog(
                 context,
                 { _, year, month, day ->
@@ -57,6 +70,7 @@ fun DatePickerField(
                 calendar.get(Calendar.MONTH),
                 calendar.get(Calendar.DAY_OF_MONTH)
             ).apply {
+                minDate?.let(::pickerDateMillis)?.let { datePicker.minDate = it }
                 if (!allowPastDates) {
                     val today = Calendar.getInstance().apply {
                         set(Calendar.HOUR_OF_DAY, 0)
@@ -64,11 +78,12 @@ fun DatePickerField(
                         set(Calendar.SECOND, 0)
                         set(Calendar.MILLISECOND, 0)
                     }
-                    datePicker.minDate = today.timeInMillis
+                    datePicker.minDate = maxOf(datePicker.minDate, today.timeInMillis)
                 }
+                maxDate?.let(::pickerDateMillis)?.let { datePicker.maxDate = it }
             }.show()
         },
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
     ) {
         Text(if (value.isBlank()) label else "$label: $value")
     }

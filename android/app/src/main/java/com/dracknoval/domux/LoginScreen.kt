@@ -165,8 +165,14 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
                                 Session.updateFrom(user)
                                 Session.persist(context)
                                 PushRegistration.registerAfterAuthentication(context.applicationContext)
-                                navController.navigate("home") {
+                                val destination = if (Session.mustChangePassword) {
+                                    "force_password_change"
+                                } else {
+                                    "home"
+                                }
+                                navController.navigate(destination) {
                                     popUpTo("login") { inclusive = true }
+                                    launchSingleTop = true
                                 }
                                 onLoginComplete()
                             }

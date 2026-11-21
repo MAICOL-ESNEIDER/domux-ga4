@@ -1,7 +1,12 @@
 package com.dracknoval.domux
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -34,11 +43,20 @@ import com.dracknoval.domux.data.PushRegistration
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.ui.theme.DomuxAppTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var appNavController: NavHostController
     private var pendingNotificationRoute: String? = null
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                Log.i("DomuxNotifications", "Notification permission was not granted.")
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +65,7 @@ class MainActivity : ComponentActivity() {
         pendingNotificationRoute = intent.notificationRoute()
         markNotificationOpened(intent)
         DomuxLocalNotifications.createChannel(this)
+        DomuxNotifier.createNotificationChannel(this)
         setContent {
             DomuxAppTheme {
                 Surface(
@@ -57,10 +76,13 @@ class MainActivity : ComponentActivity() {
                     appNavController = navController
                     NavHost(navController = navController, startDestination = "session") {
                         composable("session") {
-                            SessionStartupScreen(navController, ::navigateAfterAuthentication)
+                            SessionStartupScreen(navController, ::onAuthenticationComplete)
                         }
                         composable("login") {
-                            LoginScreen(navController, ::navigateAfterAuthentication)
+                            LoginScreen(navController, ::onAuthenticationComplete)
+                        }
+                        composable("force_password_change") {
+                            ForcePasswordChangeScreen(navController)
                         }
                         composable("home") { HomeScreen(navController) }
                         composable("announcements") { AnnouncementsScreen(navController) }
@@ -116,6 +138,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    syncUnreadNotifications()
+                    delay(NOTIFICATION_SYNC_INTERVAL_MS)
+                }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -132,9 +162,44 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun navigateAfterAuthentication() {
+        if (Session.mustChangePassword) {
+            pendingNotificationRoute = null
+            return
+        }
         val route = pendingNotificationRoute
         pendingNotificationRoute = null
         if (route != null) appNavController.navigate(route)
+    }
+
+    private fun onAuthenticationComplete() {
+        requestNotificationPermission()
+        DomuxNotificationWorker.enqueuePeriodic(applicationContext)
+        lifecycleScope.launch { syncUnreadNotifications() }
+        navigateAfterAuthentication()
+    }
+
+    private fun requestNotificationPermission() {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private suspend fun syncUnreadNotifications() {
+        if (Session.token.isNullOrBlank()) return
+        try {
+            val responseCode = DomuxNotificationSync.fetchAndShow(applicationContext)
+            if (responseCode >= 500) {
+                Log.w("DomuxNotifications", "Notification sync returned HTTP $responseCode.")
+            }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            Log.w("DomuxNotifications", "Notification sync failed.", exception)
+        }
     }
 
     private fun markNotificationOpened(intent: Intent) {
@@ -152,6 +217,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_NOTIFICATION_ROUTE = "domux_notification_route"
+        private const val NOTIFICATION_SYNC_INTERVAL_MS = 60_000L
     }
 }
 
@@ -183,7 +249,15 @@ private fun SessionStartupScreen(
                         Session.updateFrom(user)
                         Session.persist(context)
                         PushRegistration.registerAfterAuthentication(context.applicationContext)
-                        navController.navigate("home") { popUpTo("session") { inclusive = true } }
+                        val destination = if (Session.mustChangePassword) {
+                            "force_password_change"
+                        } else {
+                            "home"
+                        }
+                        navController.navigate(destination) {
+                            popUpTo("session") { inclusive = true }
+                            launchSingleTop = true
+                        }
                         onAuthenticated()
                     }
                 } else if (response.code() == 401) {

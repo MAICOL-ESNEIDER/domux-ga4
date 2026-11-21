@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -38,7 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.dracknoval.domux.data.CreateVisitQrPassRequest
+import com.dracknoval.domux.data.CreateVisitQrRequest
 import com.dracknoval.domux.data.DeliverPackageRequest
 import com.dracknoval.domux.data.PackageItem
 import com.dracknoval.domux.data.QrVisitorEntryRequest
@@ -62,12 +63,23 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 private fun isCancellation(e: Throwable): Boolean =
     e is CancellationException ||
         e.message?.contains("left the composition", ignoreCase = true) == true
+
+private fun shiftQrDate(value: String, days: Int): String {
+    val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+    val parsedDate = requireNotNull(format.parse(value)) { "La fecha del QR no es válida." }
+    val calendar = Calendar.getInstance().apply {
+        time = parsedDate
+        add(Calendar.DAY_OF_MONTH, days)
+    }
+    return format.format(calendar.time)
+}
 
 private suspend fun runRegistryAction(
     onError: (String) -> Unit,
@@ -125,13 +137,15 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     var qrPasses by remember { mutableStateOf<List<VisitQrPass>>(emptyList()) }
     var activeQrPass by remember { mutableStateOf<VisitQrPass?>(null) }
     var qrBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var qrStartDate by remember {
-        mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()))
+    val initialQrStartDate = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
     }
-    var qrEndDate by remember {
-        mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()))
-    }
-    var qrMaxPeople by remember { mutableStateOf("5") }
+    var qrStartDate by remember { mutableStateOf(initialQrStartDate) }
+    var qrEndDate by remember { mutableStateOf(shiftQrDate(initialQrStartDate, 1)) }
+    var qrVisitorPreRegisteredName by remember { mutableStateOf("") }
+    var qrVisitorPreRegisteredDocument by remember { mutableStateOf("") }
+    var qrMaxGuests by remember { mutableStateOf(1) }
+    var attemptedQrCreate by remember { mutableStateOf(false) }
     var scannedQrToken by remember { mutableStateOf<String?>(null) }
     var qrInspection by remember { mutableStateOf<VisitQrInspectionResponse?>(null) }
     var qrVisitorName by remember { mutableStateOf("") }
@@ -670,27 +684,56 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     ResidentQrPassSection(
                         modifier = Modifier.weight(1f),
                         startDate = qrStartDate,
-                        onStartDateChange = { qrStartDate = it },
+                        onStartDateChange = { newStartDate ->
+                            qrStartDate = newStartDate
+                            val latestEndDate = shiftQrDate(newStartDate, 3)
+                            if (qrEndDate < newStartDate || qrEndDate > latestEndDate) {
+                                qrEndDate = shiftQrDate(newStartDate, 1)
+                            }
+                        },
                         endDate = qrEndDate,
                         onEndDateChange = { qrEndDate = it },
-                        maxPeople = qrMaxPeople,
-                        onMaxPeopleChange = { qrMaxPeople = it.filter(Char::isDigit) },
+                        visitorName = qrVisitorPreRegisteredName,
+                        onVisitorNameChange = { qrVisitorPreRegisteredName = it },
+                        visitorDocument = qrVisitorPreRegisteredDocument,
+                        onVisitorDocumentChange = { qrVisitorPreRegisteredDocument = it },
+                        maxGuests = qrMaxGuests,
+                        onMaxGuestsChange = { qrMaxGuests = it },
+                        attemptedCreate = attemptedQrCreate,
                         passes = qrPasses,
                         activePass = activeQrPass,
                         qrBitmap = qrBitmap,
                         onCreate = {
-                            val limit = qrMaxPeople.toIntOrNull()
-                            if (limit == null || limit < 1) {
-                                message = "El límite de personas debe ser mayor que cero."
+                            attemptedQrCreate = true
+                            if (qrVisitorPreRegisteredName.isBlank() ||
+                                qrVisitorPreRegisteredDocument.isBlank()
+                            ) {
+                                message = "Escribe el nombre y documento del visitante."
+                            } else if (
+                                qrEndDate < qrStartDate ||
+                                qrEndDate > shiftQrDate(qrStartDate, 3)
+                            ) {
+                                message = "La vigencia del QR no puede superar 72 horas desde el inicio."
+                            } else if (qrMaxGuests !in 1..5) {
+                                message = "La cantidad de personas debe estar entre 1 y 5."
                             } else {
                                 scope.launch {
                                     runRegistryAction({ message = "No se pudo crear el QR: $it" }) {
                                         val response = RetrofitClient.api.createVisitQrPass(
                                             Session.bearer(),
-                                            CreateVisitQrPassRequest(qrStartDate, qrEndDate, limit)
+                                            CreateVisitQrRequest(
+                                                validFrom = qrStartDate,
+                                                validUntil = qrEndDate,
+                                                visitorName = qrVisitorPreRegisteredName.trim(),
+                                                visitorDocument = qrVisitorPreRegisteredDocument.trim(),
+                                                maxGuests = qrMaxGuests
+                                            )
                                         )
                                         if (response.isSuccessful) {
                                             activeQrPass = response.body()?.qrPass
+                                            qrVisitorPreRegisteredName = ""
+                                            qrVisitorPreRegisteredDocument = ""
+                                            attemptedQrCreate = false
                                             message = "Código QR creado."
                                             load()
                                         } else {
@@ -1010,7 +1053,7 @@ private fun VisitListSection(
             item(key = "visit-qr-scan") {
                 Button(
                     onClick = { onScanQr?.invoke() },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 ) { Text("Escanear / Validar Código QR") }
             }
             qrInspection?.let { inspection ->
@@ -1086,6 +1129,12 @@ private fun VisitRegistryCard(
             visit.description?.takeIf { it.isNotBlank() }?.let { Text("Pedido: $it") }
             visit.enteredAt?.let { Text("Última entrada: $it") }
             visit.exitedAt?.let { Text("Última salida: $it") }
+            if (visit.overstayWarning) {
+                DomuxStatusBadge(
+                    "Tiempo de permanencia excedido (>${visit.maxStayHours}h)",
+                    DomuxBadgeTone.ALERT
+                )
+            }
             Text(
                 "Autorización: " + when (visit.authorizationMethod) {
                     "llamada" -> "por llamada"
@@ -1158,10 +1207,11 @@ private fun VisitQrInspectionContent(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("${inspection.residentName.orEmpty()} · ${inspection.apartment.orEmpty()}")
+        Text("Nombre pre-registrado: ${inspection.qrPass?.visitorName.orEmpty().ifBlank { "—" }}")
+        Text("Documento pre-registrado: ${inspection.qrPass?.visitorDocument.orEmpty().ifBlank { "—" }}")
         Text(
-            "Registrados: ${inspection.qrPass?.registeredPeople ?: 0}/" +
-                "${inspection.qrPass?.maxPeople ?: 0} · " +
-                "Disponibles: ${inspection.qrPass?.remainingPeople ?: 0}"
+            "Cupos usados: ${inspection.qrPass?.usedEntries ?: 0} / " +
+                "${inspection.qrPass?.maxGuests ?: 0}"
         )
         if (!inspection.canRegister) {
             Text("Este QR está vencido o revocado: solo se permite registrar la salida.")
@@ -1180,7 +1230,7 @@ private fun VisitQrInspectionContent(
                 else onEnterQr(qrVisitorName)
             },
             enabled = inspection.canRegister,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) { Text("Registrar ingreso") }
         if (inspection.linkableVisits.orEmpty().isNotEmpty()) {
             Text("O vincular un visitante ya registrado:")
@@ -1188,7 +1238,7 @@ private fun VisitQrInspectionContent(
                 OutlinedButton(
                     enabled = inspection.canRegister,
                     onClick = { onLinkVisit(visit) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 ) { Text("${visit.visitorName} · vincular e ingresar") }
             }
         }
@@ -1372,7 +1422,10 @@ private fun RegistrationAndQrSection(
                     "image/*",
                     onMessage
                 )
-                Button(onClick = onRegisterVisit, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onRegisterVisit,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
                     Text("Registrar visita")
                 }
             }
@@ -1385,15 +1438,19 @@ private fun RegistrationAndQrSection(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("Ingreso y salida por QR", style = MaterialTheme.typography.titleMedium)
-                    Button(onClick = scanner, modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = scanner,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) {
                         Text("Escanear QR")
                     }
                     qrInspection?.let { inspection ->
                         Text("${inspection.residentName.orEmpty()} · ${inspection.apartment.orEmpty()}")
+                        Text("Nombre pre-registrado: ${inspection.qrPass?.visitorName.orEmpty().ifBlank { "—" }}")
+                        Text("Documento pre-registrado: ${inspection.qrPass?.visitorDocument.orEmpty().ifBlank { "—" }}")
                         Text(
-                            "Registrados: ${inspection.qrPass?.registeredPeople ?: 0}/" +
-                                "${inspection.qrPass?.maxPeople ?: 0} · " +
-                                "Disponibles: ${inspection.qrPass?.remainingPeople ?: 0}"
+                            "Cupos usados: ${inspection.qrPass?.usedEntries ?: 0} / " +
+                                "${inspection.qrPass?.maxGuests ?: 0}"
                         )
                         if (!inspection.canRegister) {
                             Text("Este QR está vencido o revocado: solo se permite registrar la salida.")
@@ -1412,14 +1469,15 @@ private fun RegistrationAndQrSection(
                                 else onEnterQr(qrVisitorName)
                             },
                             enabled = inspection.canRegister,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         ) { Text("Registrar ingreso") }
                         if (inspection.linkableVisits.orEmpty().isNotEmpty()) {
                             Text("O vincular un visitante ya registrado:")
                             inspection.linkableVisits.orEmpty().forEach { visit ->
-                                TextButton(
+                                OutlinedButton(
                                     enabled = inspection.canRegister,
-                                    onClick = { onLinkVisit(visit) }
+                                    onClick = { onLinkVisit(visit) },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                                 ) { Text("${visit.visitorName} · vincular e ingresar") }
                             }
                         }
@@ -1455,8 +1513,13 @@ private fun ResidentQrPassSection(
     onStartDateChange: (String) -> Unit,
     endDate: String,
     onEndDateChange: (String) -> Unit,
-    maxPeople: String,
-    onMaxPeopleChange: (String) -> Unit,
+    visitorName: String,
+    onVisitorNameChange: (String) -> Unit,
+    visitorDocument: String,
+    onVisitorDocumentChange: (String) -> Unit,
+    maxGuests: Int,
+    onMaxGuestsChange: (Int) -> Unit,
+    attemptedCreate: Boolean,
     passes: List<VisitQrPass>,
     activePass: VisitQrPass?,
     qrBitmap: android.graphics.Bitmap?,
@@ -1474,40 +1537,78 @@ private fun ResidentQrPassSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Código QR para visitas", style = MaterialTheme.typography.titleMedium)
-                Text("Duración máxima: 30 días. Cada persona distinta consume un cupo.")
+                Text("Vigencia máxima: 72 horas (por defecto 24 h).")
+                OutlinedTextField(
+                    value = visitorName,
+                    onValueChange = onVisitorNameChange,
+                    label = { Text("Nombre del visitante *") },
+                    isError = attemptedCreate && visitorName.isBlank(),
+                    supportingText = {
+                        if (attemptedCreate && visitorName.isBlank()) {
+                            Text("El nombre del visitante es obligatorio.")
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = visitorDocument,
+                    onValueChange = onVisitorDocumentChange,
+                    label = { Text("Documento de identidad del visitante *") },
+                    isError = attemptedCreate && visitorDocument.isBlank(),
+                    supportingText = {
+                        if (attemptedCreate && visitorDocument.isBlank()) {
+                            Text("El documento del visitante es obligatorio.")
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 DatePickerField(
                     "Válido desde",
                     startDate,
                     onStartDateChange,
                     allowPastDates = false
                 )
-                OutlinedTextField(
+                DatePickerField(
+                    label = "Válido hasta",
                     value = endDate,
                     onValueChange = onEndDateChange,
-                    label = { Text("Válido hasta (AAAA-MM-DD)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    allowPastDates = false,
+                    minDate = startDate,
+                    maxDate = shiftQrDate(startDate, 3)
                 )
-                OutlinedTextField(
-                    value = maxPeople,
-                    onValueChange = onMaxPeopleChange,
-                    label = { Text("Límite de personas") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Button(onClick = onCreate, modifier = Modifier.fillMaxWidth()) {
+                Text("Cantidad de personas")
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    (1..5).forEach { count ->
+                        FilterChip(
+                            selected = maxGuests == count,
+                            onClick = { onMaxGuestsChange(count) },
+                            label = { Text(count.toString()) }
+                        )
+                    }
+                }
+                Button(
+                    onClick = onCreate,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
                     Text("Crear QR")
                 }
                 passes.forEach { pass ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = { onSelectPass(pass) }) {
                             Text(
                                 "${pass.validFrom} a ${pass.validUntil} · " +
-                                    "${pass.registeredPeople}/${pass.maxPeople}"
+                                    "${pass.usedEntries}/${pass.maxGuests}"
                             )
                         }
                         if (!pass.revoked) {
@@ -1516,7 +1617,7 @@ private fun ResidentQrPassSection(
                     }
                 }
                 activePass?.let { pass ->
-                    Text("Código activo · ${pass.remainingPeople} cupos disponibles")
+                    Text("Código activo · ${pass.remainingEntries} cupos disponibles")
                     qrBitmap?.let {
                         Image(
                             bitmap = it.asImageBitmap(),

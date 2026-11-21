@@ -2,6 +2,7 @@ package com.dracknoval.domux
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -104,7 +105,10 @@ private fun ReservationCalendarPicker(
         }
         onMonthChanged(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1)
     }
-    OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
+    OutlinedButton(
+        onClick = { showPicker = true },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    ) {
         Text(if (value.isBlank()) "Seleccionar fecha" else "Fecha: $value")
     }
     if (blockedDates.isNotEmpty()) {
@@ -152,6 +156,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var requestMediaName by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var submitting by remember { mutableStateOf(false) }
+    var paymentActionInProgress by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var attemptedCreate by remember { mutableStateOf(false) }
@@ -195,6 +200,25 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             message = "No se pudieron cargar las reservas: ${exception.message}"
         } finally {
             loading = false
+        }
+    }
+
+    fun runPaymentAction(
+        action: suspend () -> Pair<Boolean, String?>,
+        fallbackMessage: String
+    ) {
+        scope.launch {
+            paymentActionInProgress = true
+            try {
+                val (successful, responseMessage) = action()
+                message = responseMessage ?: fallbackMessage
+                if (successful) load()
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                message = "No se pudo actualizar el pago de la reserva: ${exception.message}"
+            } finally {
+                paymentActionInProgress = false
+            }
         }
     }
 
@@ -290,7 +314,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                         } else {
                             reservationSlots.map { it to null }
                         }
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             selectableSlots.forEach { (time, description) ->
                                 val available = availability?.availableSlots?.contains(time) ?: false
                                 val slotLabel = listOfNotNull(
@@ -314,7 +338,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                         Text("Selecciona el residente.", color = MaterialTheme.colorScheme.error)
                     }
                     Text(
-                        "Máximo 1 reserva por día y 2 reservas por semana por residente.",
+                        "La reserva quedará apartada por 4 horas mientras administración confirma el pago.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -377,7 +401,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     ) { Text(if (submitting) "Guardando..." else "Reservar") }
                 }
             }
@@ -492,6 +516,19 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                         Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
                         Text("${reservation.date} · ${reservation.timeSlot}")
                         Text("Residente: ${reservation.residentName.orEmpty()} · ${reservation.apartment.orEmpty()}")
+                        if (reservation.status == "pendiente_pago") {
+                            val minutesRemaining = reservation.minutesRemaining
+                            Text(
+                                if (minutesRemaining <= 0) {
+                                    "Expira pronto"
+                                } else {
+                                    "Pendiente de pago · Expira en ${minutesRemaining / 60} h " +
+                                        "${minutesRemaining % 60} min"
+                                },
+                                color = Color(0xFFFBBF24),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
                         if (reservation.createdByAdministration) {
                             Text("Creada por administración", style = MaterialTheme.typography.labelSmall)
                         }
@@ -537,7 +574,76 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                 }
                             }
                         }
-                        if (
+                        if (Session.isAdmin && reservation.status == "pendiente_pago") {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    enabled = !paymentActionInProgress,
+                                    onClick = {
+                                        runPaymentAction(
+                                            action = {
+                                                val response = RetrofitClient.api.confirmPayment(
+                                                    Session.bearer(), reservation.id
+                                                )
+                                                response.isSuccessful to if (response.isSuccessful) {
+                                                    response.body()?.message
+                                                } else {
+                                                    mensajeDeError(
+                                                        response.code(),
+                                                        response.errorBody()?.string()
+                                                    )
+                                                }
+                                            },
+                                            fallbackMessage = "Pago de reserva confirmado."
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                ) { Text("Confirmar pago") }
+                                OutlinedButton(
+                                    enabled = !paymentActionInProgress,
+                                    onClick = {
+                                        runPaymentAction(
+                                            action = {
+                                                val response = RetrofitClient.api.extendPayment(
+                                                    Session.bearer(), reservation.id
+                                                )
+                                                response.isSuccessful to if (response.isSuccessful) {
+                                                    response.body()?.message
+                                                } else {
+                                                    mensajeDeError(
+                                                        response.code(),
+                                                        response.errorBody()?.string()
+                                                    )
+                                                }
+                                            },
+                                            fallbackMessage = "Plazo de pago extendido 4 horas."
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                ) { Text("Extender +4h") }
+                                OutlinedButton(
+                                    enabled = !paymentActionInProgress,
+                                    onClick = {
+                                        runPaymentAction(
+                                            action = {
+                                                val response = RetrofitClient.api.releaseReservation(
+                                                    Session.bearer(), reservation.id
+                                                )
+                                                response.isSuccessful to if (response.isSuccessful) {
+                                                    response.body()?.message
+                                                } else {
+                                                    mensajeDeError(
+                                                        response.code(),
+                                                        response.errorBody()?.string()
+                                                    )
+                                                }
+                                            },
+                                            fallbackMessage = "Horario liberado."
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                ) { Text("Liberar horario") }
+                            }
+                        } else if (
                             Session.isAdmin &&
                             reservation.status in listOf("pendiente", "activa", "aprobada")
                         ) {

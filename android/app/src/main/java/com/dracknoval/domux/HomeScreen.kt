@@ -64,15 +64,9 @@ fun HomeScreen(navController: NavController) {
     var notificationError by remember { mutableStateOf<String?>(null) }
     var notificationActionMessage by remember { mutableStateOf<String?>(null) }
     var showNotifications by remember { mutableStateOf(false) }
-    var permissionRequested by remember { mutableStateOf(false) }
     val knownNotificationIds = remember(Session.userId) { mutableStateOf<Set<Int>?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) notificationError = "Activa el permiso de notificaciones para recibir avisos locales."
-    }
     val backStackEntry by navController.currentBackStackEntryFlow.collectAsState(
         initial = navController.currentBackStackEntry
     )
@@ -87,17 +81,6 @@ fun HomeScreen(navController: NavController) {
 
     LaunchedEffect(currentRoute, Session.userId) {
         if (currentRoute != "home") return@LaunchedEffect
-        if (
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            !permissionRequested
-        ) {
-            permissionRequested = true
-            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-        }
         while (isActive) {
             try {
                 val response = RetrofitClient.api.getNotifications(Session.bearer())

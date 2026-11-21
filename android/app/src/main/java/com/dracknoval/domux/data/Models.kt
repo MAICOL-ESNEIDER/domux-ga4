@@ -22,7 +22,9 @@ data class UserData(
     val birthDate: String? = null,
     val age: Int? = null,
     val isMinor: Boolean = false,
-    val parentalConsent: Boolean = false
+    val parentalConsent: Boolean = false,
+    val mustChangePassword: Boolean = false,
+    val recoveryEmail: String? = null
 )
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
@@ -59,7 +61,8 @@ data class UpdateUserRequest(
 data class ResetPasswordRequest(val password: String)
 data class ChangePasswordRequest(
     val currentPassword: String,
-    val newPassword: String
+    val newPassword: String,
+    val recoveryEmail: String? = null
 )
 data class CreateUserResponse(val message: String?, val user: UserData?)
 data class UsersListResponse(
@@ -264,7 +267,9 @@ data class Reservation(
     val messages: List<ReservationMessageItem>? = null,
     val isArchived: Boolean = false,
     val archivedAt: String? = null,
-    val requestedByMinor: Boolean = false
+    val requestedByMinor: Boolean = false,
+    val paymentDeadline: String? = null,
+    val minutesRemaining: Int = 0
 )
 data class ReservationMessageItem(
     val id: Int,
@@ -382,7 +387,9 @@ data class Visit(
     val exitedAt: String? = null,
     val exitReturning: Boolean = false,
     val qrPassId: Int? = null,
-    val events: List<VisitEvent>? = null
+    val events: List<VisitEvent>? = null,
+    val overstayWarning: Boolean = false,
+    val maxStayHours: Int = 24
 )
 data class VisitsListResponse(val visits: List<Visit>?)
 data class VisitEvent(
@@ -417,13 +424,20 @@ data class VisitQrPass(
     val remainingPeople: Int,
     val revoked: Boolean,
     val token: String? = null,
-    val qrData: String? = null
+    val qrData: String? = null,
+    val visitorName: String? = null,
+    val visitorDocument: String? = null,
+    val maxGuests: Int = 1,
+    val usedEntries: Int = 0,
+    val remainingEntries: Int = 0
 )
 data class VisitQrPassListResponse(val qrPasses: List<VisitQrPass>?)
-data class CreateVisitQrPassRequest(
+data class CreateVisitQrRequest(
     val validFrom: String,
     val validUntil: String,
-    val maxPeople: Int
+    val visitorName: String,
+    val visitorDocument: String,
+    val maxGuests: Int
 )
 data class VisitQrPassResponse(val qrPass: VisitQrPass?)
 data class VisitQrInspectionResponse(

@@ -24,7 +24,7 @@ interface ApiService {
     @GET("api/auth/session")
     suspend fun currentSession(@Header("Authorization") auth: String): Response<UserDataResponse>
 
-    @POST("api/push-tokens")
+    @POST("api/notifications/device-token")
     suspend fun registerPushToken(
         @Header("Authorization") auth: String,
         @Body body: PushTokenRequest
@@ -214,6 +214,24 @@ interface ApiService {
         @Body body: CreateReservationRequest
     ): Response<CreateReservationResponse>
 
+    @POST("api/reservations/{id}/confirm-payment")
+    suspend fun confirmPayment(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<CreateReservationResponse>
+
+    @POST("api/reservations/{id}/extend-payment")
+    suspend fun extendPayment(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<CreateReservationResponse>
+
+    @POST("api/reservations/{id}/release")
+    suspend fun releaseReservation(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<CreateReservationResponse>
+
     @PUT("api/reservations/{id}/status")
     suspend fun updateReservationStatus(
         @Header("Authorization") auth: String,
@@ -322,7 +340,7 @@ interface ApiService {
     @POST("api/visits/qr-passes")
     suspend fun createVisitQrPass(
         @Header("Authorization") auth: String,
-        @Body body: CreateVisitQrPassRequest
+        @Body body: CreateVisitQrRequest
     ): Response<VisitQrPassResponse>
 
     @PUT("api/visits/qr-passes/{id}/revoke")

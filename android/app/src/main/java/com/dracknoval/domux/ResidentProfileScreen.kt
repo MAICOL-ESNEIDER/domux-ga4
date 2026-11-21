@@ -40,19 +40,6 @@ import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private val profilePasswordSymbols = setOf('@', '$', '!', '%', '*', '?', '&', '#', '.', '_', '-')
-
-private fun validProfilePassword(value: String): Boolean =
-    value.length >= 8 &&
-        value.any { it in 'A'..'Z' } &&
-        value.any { it in 'a'..'z' } &&
-        value.any { it in '0'..'9' } &&
-        value.any { it in profilePasswordSymbols } &&
-        value.all {
-            it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' ||
-                it in profilePasswordSymbols
-        }
-
 @Composable
 fun ResidentProfileScreen(navController: NavController) {
     var user by remember { mutableStateOf<UserData?>(null) }
@@ -108,6 +95,9 @@ fun ResidentProfileScreen(navController: NavController) {
                     Text("Apartamento: ${profile.apartment ?: "Sin asignar"}")
                     Text("Tipo de residente: ${profile.occupancyType?.toDomuxDisplayLabel() ?: "—"}")
                     Text("Rol: ${profile.role.toDomuxDisplayLabel()}")
+                    profile.recoveryEmail?.takeIf { it.isNotBlank() }?.let {
+                        Text("Correo de recuperación: $it")
+                    }
                 }
             }
             Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
@@ -190,7 +180,7 @@ fun ResidentProfileScreen(navController: NavController) {
                         value = newPassword,
                         onValueChange = { newPassword = it },
                         label = { Text("Nueva contraseña") },
-                        isError = attemptedPasswordChange && !validProfilePassword(newPassword),
+                        isError = attemptedPasswordChange && !validStrongPassword(newPassword),
                         supportingText = {
                             Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.")
                         },
@@ -203,7 +193,7 @@ fun ResidentProfileScreen(navController: NavController) {
                         enabled = !passwordBusy,
                         onClick = {
                             attemptedPasswordChange = true
-                            if (currentPassword.isBlank() || !validProfilePassword(newPassword)) {
+                            if (currentPassword.isBlank() || !validStrongPassword(newPassword)) {
                                 message = "Revisa la contraseña actual y los requisitos de la nueva contraseña."
                                 return@Button
                             }

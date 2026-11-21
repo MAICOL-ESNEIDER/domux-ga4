@@ -62,7 +62,7 @@ private fun ageFromIsoDate(value: String): Int? {
     return age.takeIf { it >= 0 }
 }
 
-private fun validStrongPassword(value: String): Boolean =
+internal fun validStrongPassword(value: String): Boolean =
     value.length >= 8 &&
         value.any { it in 'A'..'Z' } &&
         value.any { it in 'a'..'z' } &&
@@ -181,7 +181,7 @@ fun CreateUserScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DomuxSectionTabs(
-                listOf("Usuarios ($totalUsers)", "Crear usuario", "Censo Excel"),
+                listOf("Usuarios ($totalUsers)", "Crear usuario", "Migración de datos"),
                 selectedTab
             ) { selectedTab = it }
             if (message.isNotBlank()) DomuxFeedbackBanner(message) { message = "" }
@@ -523,7 +523,7 @@ fun CreateUserScreen(navController: NavController) {
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                     UserInput(eName, { eName = it }, "Nombre", true, showMissingError = attemptedEdit)
                     UserInput(eLastName, { eLastName = it }, "Apellido", true, showMissingError = attemptedEdit)
-                    UserInput(eEmail, { eEmail = it }, "Correo", true, showMissingError = attemptedEdit)
+                    UserInput(eEmail, { eEmail = it }, "Correo principal", true, showMissingError = attemptedEdit)
                     UserInput(ePhone, { ePhone = it }, "Teléfono", true, showMissingError = attemptedEdit)
                     UserInput(eDocument, { eDocument = it }, "Documento", true, showMissingError = attemptedEdit)
                     Row(
@@ -735,8 +735,8 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Censo Excel", style = MaterialTheme.typography.titleMedium)
-            Text("Descarga la plantilla o importa el censo de residentes de una unidad.")
+            Text("Migración de datos", style = MaterialTheme.typography.titleMedium)
+            Text("Descarga la plantilla o importa datos de residentes y unidades.")
             Button(
                 enabled = !busy,
                 onClick = {
@@ -785,11 +785,12 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             ) {
                 Text("Descargar plantilla Excel de ejemplo")
             }
             ExcelFilePickerButton(
+                label = "Importar migración de datos (Excel)",
                 onFileSelected = { base64, fileName ->
                     busy = true
                     message = ""
@@ -803,7 +804,7 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
                                 val result = response.body()
                                     ?: error("El servidor devolvió un resumen vacío.")
                                 message = buildString {
-                                    append(result.message ?: "Importación del censo procesada.")
+                                    append(result.message ?: "Importación de datos procesada.")
                                     append("\nResidentes creados: ${result.createdUsers}")
                                     append("\nResidentes actualizados: ${result.updatedUsers}")
                                     append("\nUnidades procesadas: ${result.unitsProcessed}")
@@ -823,7 +824,7 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
                                 if (exception is CancellationException) throw exception
                                 return@launch
                             }
-                            message = "No se pudo importar el censo: ${exception.message}"
+                            message = "No se pudo importar la migración de datos: ${exception.message}"
                             messageIsError = true
                         } finally {
                             busy = false
@@ -857,7 +858,8 @@ private fun UserInput(
 ) {
     val isPhone = label == "Teléfono"
     val missing = required && showMissingError && value.trim().isEmpty()
-    val invalidEmail = label == "Correo" && value.isNotEmpty() && !value.trim().contains("@")
+    val invalidEmail = label in setOf("Correo", "Correo principal") &&
+        value.isNotEmpty() && !value.trim().contains("@")
     val invalidPassword = password && value.isNotEmpty() && !validStrongPassword(value)
     val invalidPhone = isPhone && showMissingError && value.length != 10
     OutlinedTextField(
