@@ -1,7 +1,7 @@
 import base64
 import json
 import unicodedata
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -705,43 +705,20 @@ def create_reservation():
             "Los menores de edad requieren autorización parental registrada por administración para solicitar reservas.",
         )
     finalize_expired_reservations()
-    if g.current_user.role == "RESIDENT":
-        active_statuses = ("pendiente", "activa", "aprobada")
-        daily_reservation = Reservation.query.filter(
-            Reservation.resident_id == resident.id,
-            Reservation.date == data["date"],
-            Reservation.status.in_(active_statuses),
-            Reservation.is_archived.is_(False),
-        ).first()
-        if daily_reservation is not None:
-            return error_response(
-                409,
-                "Límite diario alcanzado: solo puedes tener 1 reserva activa o pendiente por día.",
-            )
-        requested_date = date.fromisoformat(data["date"])
-        week_start = requested_date - timedelta(days=requested_date.weekday())
-        week_end = week_start + timedelta(days=6)
-        weekly_reservation_count = Reservation.query.filter(
-            Reservation.resident_id == resident.id,
-            Reservation.date.between(week_start.isoformat(), week_end.isoformat()),
-            Reservation.status.in_(active_statuses),
-            Reservation.is_archived.is_(False),
-        ).count()
-        if weekly_reservation_count >= 2:
-            return error_response(
-                409,
-                "Límite semanal alcanzado: máximo 2 reservas por semana para permitir el uso equitativo de las zonas comunes.",
-            )
     if reservation_conflicts(area.id, data["date"], data["timeSlot"]):
         return error_response(409, "Ese horario ya no está disponible")
 
+    is_admin = g.current_user.role == "ADMIN"
     reservation = Reservation(
         resident_id=resident.id,
-        created_by_admin_id=g.current_user.id if g.current_user.role == "ADMIN" else None,
+        created_by_admin_id=g.current_user.id if is_admin else None,
         common_area_id=area.id,
         date=data["date"],
         time_slot=data["timeSlot"],
-        status="pendiente",
+        status="aprobada" if is_admin else "pendiente_pago",
+        payment_deadline=(
+            None if is_admin else datetime.utcnow() + timedelta(hours=4)
+        ),
     )
     db.session.add(reservation)
     if (message and message.strip()) or data.get("mediaUrl"):
@@ -752,7 +729,7 @@ def create_reservation():
             media_url=data.get("mediaUrl"),
             media_type=data.get("mediaType"),
         ))
-    if g.current_user.role == "ADMIN":
+    if is_admin:
         notify_user(
             resident.id,
             "Reserva registrada por administración",
@@ -778,6 +755,103 @@ def create_reservation():
             return error_response(409, "Ese horario ya no está disponible")
         raise
     return jsonify({"message": "Reserva creada", "reservation": reservation.to_dict()}), 201
+
+
+@bp.post("/reservations/<int:res_id>/confirm-payment")
+@token_required
+@role_required("ADMIN")
+def confirm_reservation_payment(res_id):
+    finalize_expired_reservations()
+    reservation = db.session.get(Reservation, res_id)
+    if reservation is None:
+        return error_response(404, "Reserva no encontrada.")
+    if reservation.status != "pendiente_pago":
+        return error_response(400, "Solo se puede confirmar el pago de una reserva pendiente.")
+    if reservation_conflicts(
+        reservation.common_area_id,
+        reservation.date,
+        reservation.time_slot,
+        exclude_id=reservation.id,
+    ):
+        return error_response(409, "Ese horario ya no está disponible.")
+
+    reservation.status = "aprobada"
+    reservation.payment_deadline = None
+    reservation.payment_reminder_sent = False
+    _add_audit_log(
+        "RESERVATION",
+        reservation.id,
+        "payment_confirmed",
+        {"status": "aprobada"},
+    )
+    notify_user(
+        reservation.resident_id,
+        "Pago de reserva confirmado",
+        "Administración confirmó el pago de tu reserva.",
+        "reservation",
+    )
+    db.session.commit()
+    return jsonify({
+        "message": "Pago de reserva confirmado.",
+        "reservation": reservation.to_dict(),
+    })
+
+
+@bp.post("/reservations/<int:res_id>/extend-payment")
+@token_required
+@role_required("ADMIN")
+def extend_reservation_payment(res_id):
+    finalize_expired_reservations()
+    reservation = db.session.get(Reservation, res_id)
+    if reservation is None:
+        return error_response(404, "Reserva no encontrada.")
+    if reservation.status != "pendiente_pago":
+        return error_response(400, "Solo se puede extender el pago de una reserva pendiente.")
+
+    now = datetime.utcnow()
+    deadline = reservation.payment_deadline or now
+    if deadline.tzinfo:
+        deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
+    reservation.payment_deadline = max(now, deadline) + timedelta(hours=4)
+    reservation.payment_reminder_sent = False
+    notify_user(
+        reservation.resident_id,
+        "Plazo de pago extendido",
+        "Administración extendió 4 horas el plazo de pago de tu reserva.",
+        "reservation",
+    )
+    db.session.commit()
+    return jsonify({
+        "message": "Plazo de pago extendido 4 horas.",
+        "reservation": reservation.to_dict(),
+    })
+
+
+@bp.post("/reservations/<int:res_id>/release")
+@token_required
+@role_required("ADMIN")
+def release_reservation(res_id):
+    finalize_expired_reservations()
+    reservation = db.session.get(Reservation, res_id)
+    if reservation is None:
+        return error_response(404, "Reserva no encontrada.")
+    if reservation.status != "pendiente_pago":
+        return error_response(400, "Solo se puede liberar una reserva pendiente de pago.")
+
+    reservation.status = "cancelada"
+    reservation.payment_deadline = None
+    reservation.payment_reminder_sent = False
+    notify_user(
+        reservation.resident_id,
+        "Reserva liberada",
+        "Administración liberó el horario de tu reserva.",
+        "reservation",
+    )
+    db.session.commit()
+    return jsonify({
+        "message": "Reserva liberada.",
+        "reservation": reservation.to_dict(),
+    })
 
 
 @bp.put("/reservations/<int:res_id>/status")
@@ -906,12 +980,17 @@ def cancel_reservation(res_id):
         return error_response(404, "Reserva no encontrada")
     if g.current_user.role == "RESIDENT" and reservation.resident_id != g.current_user.id:
         return error_response(403, "Esa reserva no es tuya")
-    if reservation.status not in ("pendiente", "activa", "aprobada"):
+    if reservation.status not in (
+        "pendiente_pago", "pendiente", "activa", "aprobada"
+    ):
         return error_response(400, "Solo se pueden cancelar reservas pendientes o aprobadas.")
     if g.current_user.role == "RESIDENT" and reservation.date <= datetime.utcnow().date().isoformat():
         return error_response(400, "Solo puedes cancelar la reserva antes del día reservado.")
     previous_status = reservation.status
     reservation.status = "cancelada"
+    if previous_status == "pendiente_pago":
+        reservation.payment_deadline = None
+        reservation.payment_reminder_sent = False
     _add_audit_log(
         "RESERVATION",
         reservation.id,

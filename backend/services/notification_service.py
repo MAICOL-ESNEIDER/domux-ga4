@@ -60,18 +60,14 @@ def _dispatch_after_commit(session):
             tokens = item["tokens"][offset:offset + 500]
             message = messaging.MulticastMessage(
                 tokens=tokens,
-                notification=messaging.Notification(
-                    title=item["title"],
-                    body=item["message"],
-                ),
                 data={
+                    "title": item["title"],
+                    "message": item["message"],
                     "type": item["type"],
                     "route": item["route"],
                     "notificationId": str(item["notification"].id),
                 },
-                android=messaging.AndroidConfig(
-                    priority="high" if item["type"] == "visit" else "normal"
-                ),
+                android=messaging.AndroidConfig(priority="high"),
             )
             try:
                 result = messaging.send_each_for_multicast(message, app=app)

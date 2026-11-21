@@ -79,7 +79,10 @@ class AdminResidentActionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.get_json(),
-            {"message": "Contraseña actualizada exitosamente."},
+            {
+                "message": "Contraseña actualizada exitosamente.",
+                "user": self.resident.to_dict(),
+            },
         )
         self.assertTrue(check_password_hash(self.resident.password_hash, "UpdatedResident123*"))
         audit = AuditLog.query.filter_by(
@@ -90,6 +93,113 @@ class AdminResidentActionTests(unittest.TestCase):
         self.assertEqual(audit.actor_id, self.resident.id)
         self.assertEqual(audit.actor_role, "RESIDENT")
         self.assertNotIn("UpdatedResident123*", audit.details or "")
+
+    def test_password_change_clears_required_flag_and_saves_recovery_email(self):
+        self.resident.must_change_password = True
+        db.session.commit()
+
+        response = self.client.post(
+            "/api/auth/change-password",
+            headers=self.headers(self.resident),
+            json={
+                "currentPassword": "Resident123*",
+                "newPassword": "UpdatedResident123*",
+                "recoveryEmail": "recovery@test.local",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json["user"]["mustChangePassword"])
+        self.assertEqual(response.json["user"]["recoveryEmail"], "recovery@test.local")
+        self.assertFalse(self.resident.must_change_password)
+        self.assertEqual(self.resident.recovery_email, "recovery@test.local")
+
+    def test_password_change_rejects_invalid_or_primary_recovery_email(self):
+        for recovery_email in ("not-an-email", self.resident.email):
+            with self.subTest(recovery_email=recovery_email):
+                response = self.client.post(
+                    "/api/auth/change-password",
+                    headers=self.headers(self.resident),
+                    json={
+                        "currentPassword": "Resident123*",
+                        "newPassword": "UpdatedResident123*",
+                        "recoveryEmail": recovery_email,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+
+        self.assertTrue(
+            check_password_hash(self.resident.password_hash, "Resident123*")
+        )
+        self.assertIsNone(self.resident.recovery_email)
+        self.assertEqual(AuditLog.query.filter_by(action="password_changed").count(), 0)
+
+    def test_admin_created_user_must_change_password_and_is_audited(self):
+        response = self.client.post(
+            "/api/users",
+            headers=self.headers(self.admin),
+            json={
+                "name": "Nuevo",
+                "lastName": "Residente",
+                "email": "new-resident-actions@test.local",
+                "password": "NewUser123*",
+                "role": "RESIDENT",
+                "apartment": "Torre 3 · Apto 303",
+                "occupancyType": "residente",
+                "dataProcessingConsent": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created = User.query.filter_by(
+            email="new-resident-actions@test.local"
+        ).one()
+        self.assertTrue(response.json["user"]["mustChangePassword"])
+        self.assertTrue(created.must_change_password)
+        audit = AuditLog.query.filter_by(
+            entity_type="USER",
+            entity_id=created.id,
+            action="user_created",
+        ).one()
+        self.assertEqual(audit.actor_id, self.admin.id)
+        self.assertEqual(audit.actor_role, "ADMIN")
+
+    def test_admin_password_reset_requires_password_change_and_is_audited(self):
+        response = self.client.post(
+            f"/api/users/{self.resident.id}/reset-password",
+            headers=self.headers(self.admin),
+            json={"password": "Temporary123*"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(self.resident.must_change_password)
+        self.assertTrue(
+            check_password_hash(self.resident.password_hash, "Temporary123*")
+        )
+        audit = AuditLog.query.filter_by(
+            entity_type="USER",
+            entity_id=self.resident.id,
+            action="password_reset",
+        ).one()
+        self.assertEqual(audit.actor_id, self.admin.id)
+        self.assertEqual(audit.actor_role, "ADMIN")
+
+    def test_admin_can_replace_resident_email_without_duplicates(self):
+        updated = self.client.put(
+            f"/api/users/{self.resident.id}",
+            headers=self.headers(self.admin),
+            json={"email": "replacement@test.local"},
+        )
+        duplicate = self.client.put(
+            f"/api/users/{self.resident.id}",
+            headers=self.headers(self.admin),
+            json={"email": self.other_resident.email},
+        )
+
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json["user"]["email"], "replacement@test.local")
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(self.resident.email, "replacement@test.local")
 
     def test_password_change_rejects_wrong_current_or_weak_new_password(self):
         original_hash = self.resident.password_hash

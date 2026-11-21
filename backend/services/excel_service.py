@@ -1,4 +1,4 @@
-"""Census import and legal Excel report generation."""
+"""Data migration import and legal Excel report generation."""
 
 import csv
 import io
@@ -146,7 +146,17 @@ def _read_rows(file_bytes, filename):
     if extension == "xlsx":
         try:
             workbook = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-            worksheet = workbook["Censo_Residentes"] if "Censo_Residentes" in workbook.sheetnames else workbook.active
+            worksheet_name = next(
+                (
+                    name for name in (
+                        "Migracion_Datos_Residentes",
+                        "Censo_Residentes",
+                    )
+                    if name in workbook.sheetnames
+                ),
+                None,
+            )
+            worksheet = workbook[worksheet_name] if worksheet_name else workbook.active
             rows = worksheet.iter_rows(values_only=True)
             headers = next(rows, None)
             if headers is None:
@@ -428,10 +438,10 @@ def _append_sheet(workbook, name, headers, rows):
 
 
 def generate_census_template_xlsx() -> bytes:
-    """Generate an example census workbook with a styled header row."""
+    """Generate an example data migration workbook with a styled header row."""
     workbook = Workbook()
     worksheet = workbook.active
-    worksheet.title = "Censo_Residentes"
+    worksheet.title = "Migracion_Datos_Residentes"
     worksheet.append(CENSUS_HEADERS)
     worksheet.append((
         "Torre 1 Apto 101", "María", "Pérez", "maria.perez@example.com",

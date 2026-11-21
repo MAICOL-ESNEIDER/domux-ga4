@@ -79,7 +79,7 @@ class ExcelServiceTests(unittest.TestCase):
 
     def test_census_template_has_expected_columns_and_examples(self):
         workbook = load_workbook(io.BytesIO(generate_census_template_xlsx()), data_only=True)
-        worksheet = workbook["Censo_Residentes"]
+        worksheet = workbook["Migracion_Datos_Residentes"]
 
         self.assertEqual(tuple(cell.value for cell in worksheet[1]), CENSUS_HEADERS)
         self.assertEqual(worksheet.max_row, 3)
@@ -92,7 +92,10 @@ class ExcelServiceTests(unittest.TestCase):
             headers=self.headers(),
         )
         self.assertEqual(template_response.status_code, 200)
-        self.assertEqual(template_response.json["fileName"], "Plantilla_Censo_DOMUX.xlsx")
+        self.assertEqual(
+            template_response.json["fileName"],
+            "plantilla_migracion_datos.xlsx",
+        )
         self.assertEqual(template_response.json["mimeType"], MIME_XLSX)
 
         import_response = self.client.post(

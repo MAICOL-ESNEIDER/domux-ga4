@@ -1,3 +1,5 @@
+import re
+
 from flask import Blueprint, g, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -12,6 +14,7 @@ from validators import (
 )
 
 bp = Blueprint("auth", __name__, url_prefix="/api")
+RECOVERY_EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 @bp.get("/health")
@@ -61,6 +64,11 @@ def change_password():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
+    recovery_email = data.get("recoveryEmail")
+    if isinstance(recovery_email, str):
+        recovery_email = recovery_email.strip()
+    if recovery_email == "":
+        data = {key: value for key, value in data.items() if key != "recoveryEmail"}
     validation_error = validate_no_empty_strings(data)
     if validation_error:
         return error_response(400, validation_error)
@@ -78,7 +86,24 @@ def change_password():
     if not check_password_hash(user.password_hash, data["currentPassword"]):
         return error_response(401, "La contraseña actual es incorrecta.")
 
+    if recovery_email is not None and recovery_email != "":
+        if not isinstance(recovery_email, str):
+            return error_response(400, "El correo de recuperación no es válido.")
+        recovery_email = recovery_email.strip().lower()
+        if (
+            len(recovery_email) > 120
+            or not RECOVERY_EMAIL_PATTERN.fullmatch(recovery_email)
+        ):
+            return error_response(400, "El correo de recuperación no es válido.")
+        if recovery_email == user.email.strip().lower():
+            return error_response(
+                400,
+                "El correo de recuperación debe ser distinto al correo principal.",
+            )
+        user.recovery_email = recovery_email
+
     user.password_hash = generate_password_hash(data["newPassword"])
+    user.must_change_password = False
     db.session.add(AuditLog(
         entity_type="USER",
         entity_id=user.id,
@@ -88,4 +113,7 @@ def change_password():
         details="El usuario actualizó su contraseña.",
     ))
     db.session.commit()
-    return jsonify({"message": "Contraseña actualizada exitosamente."})
+    return jsonify({
+        "message": "Contraseña actualizada exitosamente.",
+        "user": user.to_dict(),
+    })

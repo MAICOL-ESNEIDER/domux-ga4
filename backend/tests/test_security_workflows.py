@@ -87,17 +87,21 @@ class SecurityWorkflowTests(unittest.TestCase):
         data.update(fields)
         return self.client.post("/api/visits", headers=self.auth(self.guard), json=data)
 
-    def make_qr(self, max_people=1):
+    def make_qr(self, max_people=1, **fields):
         start = date.today()
-        end = start + timedelta(days=29)
+        end = start + timedelta(days=1)
+        data = {
+            "visitorName": "Visita de prueba",
+            "visitorDocument": "QR-123456",
+            "validFrom": start.isoformat(),
+            "validUntil": end.isoformat(),
+            "maxGuests": max_people,
+        }
+        data.update(fields)
         response = self.client.post(
             "/api/visits/qr-passes",
             headers=self.auth(self.resident),
-            json={
-                "validFrom": start.isoformat(),
-                "validUntil": end.isoformat(),
-                "maxPeople": max_people,
-            },
+            json=data,
         )
         self.assertEqual(response.status_code, 201)
         return response.get_json()["qrPass"]
@@ -406,12 +410,12 @@ class SecurityWorkflowTests(unittest.TestCase):
 
 
     def test_qr_limits_new_people_allows_same_day_reentry_and_revokes(self):
-        qr = self.make_qr()
+        qr = self.make_qr(max_people=2)
         token = qr["token"]
         first = self.client.post(
             f"/api/visits/qr/{token}/entry",
             headers=self.auth(self.guard),
-            json={"visitorName": "Visitante Uno"},
+            json={},
         )
         self.assertEqual(first.status_code, 201)
         visit_id = first.get_json()["visit"]["id"]
@@ -431,7 +435,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         full = self.client.post(
             f"/api/visits/qr/{token}/entry",
             headers=self.auth(self.guard),
-            json={"visitorName": "Otra Persona"},
+            json={},
         )
         self.assertEqual(full.status_code, 409)
 
@@ -470,15 +474,51 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(Visit.query.count(), 1)
         self.assertEqual(VisitQrPass.query.one().to_dict()["registeredPeople"], 1)
 
-    def test_qr_rejects_invalid_duration_and_foreign_resident_cannot_revoke(self):
+    def test_qr_rejects_more_than_five_guests(self):
+        response = self.client.post(
+            "/api/visits/qr",
+            headers=self.auth(self.resident),
+            json={
+                "visitorName": "Visita",
+                "visitorDocument": "123456",
+                "validFrom": date.today().isoformat(),
+                "maxGuests": 6,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(VisitQrPass.query.count(), 0)
+
+    def test_qr_defaults_to_one_guest_and_24_hour_validity(self):
+        start = date.today()
+        response = self.client.post(
+            "/api/visits/qr",
+            headers=self.auth(self.resident),
+            json={
+                "visitorName": "Visita",
+                "visitorDocument": "123456",
+                "validFrom": start.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        qr = response.json["qrPass"]
+        self.assertEqual(qr["validUntil"], (start + timedelta(days=1)).isoformat())
+        self.assertEqual(qr["maxGuests"], 1)
+        self.assertEqual(qr["usedEntries"], 0)
+        self.assertEqual(qr["remainingEntries"], 1)
+
+    def test_qr_rejects_validity_longer_than_72_hours_and_foreign_revoke(self):
         today = date.today().isoformat()
         too_long = self.client.post(
             "/api/visits/qr-passes",
             headers=self.auth(self.resident),
             json={
+                "visitorName": "Visita",
+                "visitorDocument": "123456",
                 "validFrom": today,
-                "validUntil": (date.today() + timedelta(days=30)).isoformat(),
-                "maxPeople": 2,
+                "validUntil": (date.today() + timedelta(days=4)).isoformat(),
+                "maxGuests": 2,
             },
         )
         self.assertEqual(too_long.status_code, 400)
@@ -488,6 +528,75 @@ class SecurityWorkflowTests(unittest.TestCase):
             headers=self.auth(self.other_resident),
         )
         self.assertEqual(forbidden.status_code, 403)
+
+    def test_qr_consumes_entry_slots_and_prefills_visitor_identity(self):
+        qr = self.make_qr(max_people=2)
+        token = qr["token"]
+
+        first = self.client.post(
+            f"/api/visits/qr/{token}/entry",
+            headers=self.auth(self.guard),
+            json={},
+        )
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(first.json["visit"]["visitorName"], "Visita de prueba")
+        self.assertEqual(first.json["visit"]["visitorDocument"], "QR-123456")
+
+        second = self.client.post(
+            f"/api/visits/qr/{token}/entry",
+            headers=self.auth(self.guard),
+            json={},
+        )
+        self.assertEqual(second.status_code, 201)
+        full = self.client.post(
+            f"/api/visits/qr/{token}/entry",
+            headers=self.auth(self.guard),
+            json={},
+        )
+        self.assertEqual(full.status_code, 409)
+
+        qr_response = self.client.get(
+            f"/api/visits/qr/{token}",
+            headers=self.auth(self.guard),
+        )
+        qr_data = qr_response.json["qrPass"]
+        self.assertEqual(qr_data["visitorName"], "Visita de prueba")
+        self.assertEqual(qr_data["visitorDocument"], "QR-123456")
+        self.assertEqual(qr_data["maxGuests"], 2)
+        self.assertEqual(qr_data["usedEntries"], 2)
+        self.assertEqual(qr_data["remainingEntries"], 0)
+        self.assertFalse(qr_response.json["canRegister"])
+        self.assertEqual(
+            Notification.query.filter_by(user_id=self.resident.id).count(),
+            2,
+        )
+
+    def test_visit_to_dict_reports_overstay_limits_by_visitor_type(self):
+        stay_limits = {
+            "domiciliario": 2,
+            "contratista": 10,
+            "visitante": 24,
+        }
+        visits = [
+            Visit(
+                resident_id=self.resident.id,
+                registered_by=self.guard.id,
+                visitor_name=f"Visita {visitor_type}",
+                type=visitor_type,
+                entered_at=datetime.utcnow() - timedelta(hours=hours, minutes=1),
+            )
+            for visitor_type, hours in stay_limits.items()
+        ]
+        db.session.add_all(visits)
+        db.session.commit()
+
+        for visit in visits:
+            result = visit.to_dict()
+            self.assertEqual(result["maxStayHours"], stay_limits[visit.type])
+            self.assertTrue(result["overstayWarning"])
+
+        visits[0].exited_at = datetime.utcnow()
+        self.assertFalse(visits[0].to_dict()["overstayWarning"])
 
     def test_admin_cannot_create_a_resident_owned_qr_pass(self):
         today = date.today().isoformat()
@@ -512,7 +621,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(unauthenticated.status_code, 401)
         registered = self.client.post(
-            "/api/push-tokens",
+            "/api/notifications/device-token",
             headers=self.auth(self.resident),
             json={"token": "fcm-token", "deviceId": "device-1"},
         )
@@ -566,6 +675,9 @@ class SecurityWorkflowTests(unittest.TestCase):
 
         self.assertEqual(send.call_count, 1)
         fcm_message = send.call_args.args[0]
+        self.assertIsNone(fcm_message.notification)
+        self.assertEqual(fcm_message.data["title"], "Visitante esperando")
+        self.assertEqual(fcm_message.data["message"], "Autoriza su ingreso.")
         self.assertEqual(
             {key: fcm_message.data[key] for key in ("type", "route")},
             {"type": "visit", "route": "registry"},

@@ -1,6 +1,6 @@
 """SQLAlchemy models and Android-compatible JSON serializers."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import Index, text
 
@@ -24,6 +24,8 @@ class User(db.Model):
     document_id = db.Column(db.String(40), nullable=True, default="")
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False)
+    recovery_email = db.Column(db.String(120), nullable=True)
     apartment = db.Column(db.String(60), nullable=True)
     apartment_number = db.Column(db.Integer, nullable=True, index=True)
     occupancy_type = db.Column(db.String(30), nullable=True, default="propietario")
@@ -68,6 +70,8 @@ class User(db.Model):
             "lastName": self.last_name or "",
             "fullName": self.full_name,
             "email": self.email or "",
+            "mustChangePassword": bool(self.must_change_password),
+            "recoveryEmail": self.recovery_email or "",
             "phone": self.phone or "",
             "documentId": self.document_id or "",
             "role": self.role or "",
@@ -400,8 +404,14 @@ class Reservation(db.Model):
             "date",
             "time_slot",
             unique=True,
-            sqlite_where=text("status IN ('activa', 'aprobada') AND is_archived = false"),
-            postgresql_where=text("status IN ('activa', 'aprobada') AND is_archived = false"),
+            sqlite_where=text(
+                "status IN ('pendiente_pago', 'activa', 'aprobada') "
+                "AND is_archived = false"
+            ),
+            postgresql_where=text(
+                "status IN ('pendiente_pago', 'activa', 'aprobada') "
+                "AND is_archived = false"
+            ),
         ),
     )
 
@@ -414,6 +424,8 @@ class Reservation(db.Model):
     status = db.Column(db.String(20), default="pendiente")
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
     archived_at = db.Column(db.DateTime, nullable=True)
+    payment_deadline = db.Column(db.DateTime, nullable=True)
+    payment_reminder_sent = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
@@ -426,6 +438,18 @@ class Reservation(db.Model):
     )
 
     def to_dict(self):
+        if self.payment_deadline is None:
+            minutes_remaining = 0
+        else:
+            current_time = (
+                datetime.now(self.payment_deadline.tzinfo)
+                if self.payment_deadline.tzinfo
+                else datetime.utcnow()
+            )
+            minutes_remaining = max(
+                0,
+                int((self.payment_deadline - current_time).total_seconds() // 60),
+            )
         return {
             "id": self.id,
             "residentId": self.resident_id,
@@ -438,6 +462,11 @@ class Reservation(db.Model):
             "status": self.status or "activa",
             "isArchived": bool(self.is_archived),
             "archivedAt": _fmt(self.archived_at),
+            "paymentDeadline": (
+                self.payment_deadline.isoformat() if self.payment_deadline else ""
+            ),
+            "minutesRemaining": minutes_remaining,
+            "paymentReminderSent": bool(self.payment_reminder_sent),
             "requestedByMinor": bool(self.resident and self.resident.is_minor),
             "createdAt": _fmt(self.created_at),
             "residentName": self.resident.full_name if self.resident else None,
@@ -556,6 +585,16 @@ class Visit(db.Model):
     )
 
     def to_dict(self):
+        max_stay_hours = {
+            "domiciliario": 2,
+            "contratista": 10,
+            "visitante": 24,
+        }.get(self.type, 24)
+        overstay_warning = bool(
+            self.entered_at
+            and self.exited_at is None
+            and datetime.utcnow() - self.entered_at > timedelta(hours=max_stay_hours)
+        )
         return {
             "id": self.id,
             "residentId": self.resident_id,
@@ -566,6 +605,8 @@ class Visit(db.Model):
             "mediaConsent": self.media_consent,
             "documentRefused": bool(self.document_refused),
             "type": self.type or "",
+            "overstayWarning": overstay_warning,
+            "maxStayHours": max_stay_hours,
             "description": self.description,
             "approvalStatus": self.approval_status,
             "authorizationMethod": self.authorization_method,
@@ -590,6 +631,10 @@ class VisitQrPass(db.Model):
     valid_from = db.Column(db.String(10), nullable=False)
     valid_until = db.Column(db.String(10), nullable=False)
     max_people = db.Column(db.Integer, nullable=False)
+    visitor_name = db.Column(db.String(120), nullable=True)
+    visitor_document = db.Column(db.String(40), nullable=True)
+    max_guests = db.Column(db.Integer, default=1, nullable=False)
+    used_entries = db.Column(db.Integer, default=0, nullable=False)
     revoked = db.Column(db.Boolean, default=False, nullable=False)
     revoked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -607,6 +652,11 @@ class VisitQrPass(db.Model):
             "maxPeople": self.max_people,
             "registeredPeople": registered_people,
             "remainingPeople": max(0, self.max_people - registered_people),
+            "visitorName": self.visitor_name or "",
+            "visitorDocument": self.visitor_document or "",
+            "maxGuests": self.max_guests,
+            "usedEntries": self.used_entries,
+            "remainingEntries": max(0, self.max_guests - self.used_entries),
             "revoked": self.revoked,
             "revokedAt": _fmt(self.revoked_at),
         }

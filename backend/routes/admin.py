@@ -10,6 +10,7 @@ from auth import role_required, token_required
 from errors import error_response
 from extensions import db
 from models import (
+    AuditLog,
     HouseholdMember,
     Pet,
     ResidentialUnit,
@@ -71,7 +72,7 @@ def _phone_or_error(value):
 @role_required("ADMIN")
 def get_census_template():
     return jsonify({
-        "fileName": "Plantilla_Censo_DOMUX.xlsx",
+        "fileName": "plantilla_migracion_datos.xlsx",
         "mimeType": MIME_XLSX,
         "base64": _encode_base64(generate_census_template_xlsx()),
     })
@@ -103,7 +104,7 @@ def post_import_census():
     except ValueError as error:
         return error_response(400, str(error))
     return jsonify({
-        "message": "Importación del censo procesada.",
+        "message": "Importación de migración de datos procesada.",
         **result,
     })
 
@@ -339,12 +340,22 @@ def create_user():
         data_processing_consent=role == "RESIDENT",
         data_processing_consent_at=datetime.utcnow() if role == "RESIDENT" else None,
         is_active=True,
+        must_change_password=True,
     )
     db.session.add(user)
     if role == "RESIDENT":
         unit = ResidentialUnit.query.filter_by(apartment=user.apartment).first()
         if unit is None:
             db.session.add(ResidentialUnit(apartment=user.apartment))
+    db.session.flush()
+    db.session.add(AuditLog(
+        entity_type="USER",
+        entity_id=user.id,
+        action="user_created",
+        actor_id=g.current_user.id,
+        actor_role=g.current_user.role,
+        details="Un administrador creó la cuenta del usuario.",
+    ))
     db.session.commit()
     return jsonify({"message": "Usuario creado", "user": user.to_dict()}), 201
 
@@ -452,6 +463,8 @@ def update_user(user_id):
 
 @bp.put("/users/<int:user_id>/password")
 @bp.put("/admin/users/<int:user_id>/password")
+@bp.post("/users/<int:user_id>/reset-password")
+@bp.post("/admin/users/<int:user_id>/reset-password")
 @token_required
 @role_required("ADMIN")
 def reset_user_password(user_id):
@@ -469,6 +482,15 @@ def reset_user_password(user_id):
     if user is None:
         return error_response(404, "Usuario no encontrado")
     user.password_hash = generate_password_hash(data["password"])
+    user.must_change_password = True
+    db.session.add(AuditLog(
+        entity_type="USER",
+        entity_id=user.id,
+        action="password_reset",
+        actor_id=g.current_user.id,
+        actor_role=g.current_user.role,
+        details="Un administrador restableció la contraseña del usuario.",
+    ))
     db.session.commit()
     return jsonify({"message": "Contraseña restablecida"})
 

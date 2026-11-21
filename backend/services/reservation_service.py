@@ -6,31 +6,55 @@ from datetime import date as calendar_date, datetime, timedelta, timezone
 
 from extensions import db
 from models import Reservation
+from services.notification_service import notify_user
 from validators import STANDARD_TIME_SLOTS, VALID_TIME_SLOTS
 
-ACTIVE_RESERVATION_STATUSES = ("activa", "aprobada")
+ACTIVE_RESERVATION_STATUSES = ("pendiente_pago", "activa", "aprobada")
 EXPIRABLE_RESERVATION_STATUSES = ACTIVE_RESERVATION_STATUSES + ("pendiente",)
 COLOMBIA_TIMEZONE = timezone(timedelta(hours=-5))
 logger = logging.getLogger(__name__)
 
 
 def finalize_expired_reservations(now=None):
-    """Finalize active reservations whose scheduled end has passed in Colombia."""
+    """Synchronize reservation payment and scheduled-expiration states."""
     if now is None:
+        now_utc = datetime.utcnow()
         now = datetime.now(COLOMBIA_TIMEZONE)
     elif now.tzinfo is None:
         now = now.replace(tzinfo=COLOMBIA_TIMEZONE)
+        now_utc = now.astimezone(timezone.utc).replace(tzinfo=None)
     else:
         now = now.astimezone(COLOMBIA_TIMEZONE)
+        now_utc = now.astimezone(timezone.utc).replace(tzinfo=None)
 
     today = now.date()
     current_minute = now.hour * 60 + now.minute
     finalized_count = 0
+    has_changes = False
     reservations = Reservation.query.filter(
         Reservation.status.in_(EXPIRABLE_RESERVATION_STATUSES)
     ).all()
 
     for reservation in reservations:
+        payment_remaining = None
+        if reservation.status == "pendiente_pago" and reservation.payment_deadline:
+            deadline = reservation.payment_deadline
+            if deadline.tzinfo:
+                deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
+            remaining = deadline - now_utc
+            if remaining.total_seconds() <= 0:
+                reservation.status = "expirada"
+                notify_user(
+                    reservation.resident_id,
+                    "Reserva expirada",
+                    "Tu reserva expiró por falta de confirmación de pago y el horario fue liberado.",
+                    "reservation",
+                )
+                finalized_count += 1
+                has_changes = True
+                continue
+            payment_remaining = remaining
+
         try:
             reservation_date = calendar_date.fromisoformat(reservation.date)
         except (TypeError, ValueError):
@@ -56,8 +80,26 @@ def finalize_expired_reservations(now=None):
         if expired and reservation.status in ACTIVE_RESERVATION_STATUSES:
             reservation.status = "finalizada"
             finalized_count += 1
+            has_changes = True
+            continue
 
-    if finalized_count:
+        if (
+            reservation.status == "pendiente_pago"
+            and payment_remaining is not None
+            and payment_remaining <= timedelta(minutes=120)
+            and not reservation.payment_reminder_sent
+        ):
+            reservation.payment_reminder_sent = True
+            notify_user(
+                reservation.resident_id,
+                "Pago de reserva próximo a expirar",
+                "Tu pago de reserva expirará en menos de 2 horas. "
+                "Confirma con administración para no perder tu horario.",
+                "reservation",
+            )
+            has_changes = True
+
+    if has_changes:
         db.session.commit()
     return finalized_count
 

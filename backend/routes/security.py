@@ -16,6 +16,7 @@ from models import (
     VisitQrPass,
 )
 from services.notification_service import notify_user
+from services.reservation_service import finalize_expired_reservations
 from validators import (
     VALID_PACKAGE_STATUSES,
     parse_bool,
@@ -78,6 +79,7 @@ def _cleanup_expired_packages():
         db.session.commit()
 
 
+@bp.post("/notifications/device-token")
 @bp.post("/push-tokens")
 @token_required
 def register_push_token():
@@ -548,6 +550,7 @@ def register_visit_exit(visit_id):
     return jsonify({"message": "Salida registrada.", "visit": visit.to_dict()})
 
 
+@bp.post("/visits/qr")
 @bp.post("/visits/qr-passes")
 @token_required
 @role_required("RESIDENT")
@@ -557,29 +560,64 @@ def create_visit_qr_pass():
     data, failure = _json_body()
     if failure:
         return failure
+    validation_error = require_non_empty_fields(
+        data,
+        (
+            ("visitorName", "nombre del visitante"),
+            ("visitorDocument", "documento del visitante"),
+            ("validFrom", "fecha de inicio"),
+        ),
+    )
+    if validation_error:
+        return error_response(400, validation_error)
+
+    visitor_name = data["visitorName"]
+    visitor_document = data["visitorDocument"]
+    if not isinstance(visitor_name, str) or len(visitor_name.strip()) > 120:
+        return error_response(400, "El nombre del visitante no puede superar 120 caracteres.")
+    if not isinstance(visitor_document, str) or len(visitor_document.strip()) > 40:
+        return error_response(400, "El documento del visitante no puede superar 40 caracteres.")
+    if error := validate_iso_date(data["validFrom"]):
+        return error_response(400, "Indica una fecha de inicio válida para el QR.")
     try:
-        valid_from = date.fromisoformat(data.get("validFrom", ""))
-        valid_until = date.fromisoformat(data.get("validUntil", ""))
+        valid_from = date.fromisoformat(data["validFrom"])
     except (TypeError, ValueError):
-        return error_response(400, "Indica fechas válidas para el QR.")
+        return error_response(400, "Indica una fecha de inicio válida para el QR.")
+
     today = date.today()
-    if valid_from < today or valid_until < valid_from:
-        return error_response(400, "El período del QR debe ser actual o futuro.")
-    if (valid_until - valid_from).days >= 30:
-        return error_response(400, "El QR puede tener una duración máxima de 30 días.")
-    max_people = data.get("maxPeople")
+    if valid_from < today:
+        return error_response(400, "La fecha de inicio del QR no puede ser anterior a hoy.")
+    valid_until_value = data.get("validUntil")
+    if valid_until_value is None:
+        valid_until = valid_from + timedelta(hours=24)
+    else:
+        if error := validate_iso_date(valid_until_value):
+            return error_response(400, "Indica una fecha de vencimiento válida para el QR.")
+        try:
+            valid_until = date.fromisoformat(valid_until_value)
+        except (TypeError, ValueError):
+            return error_response(400, "Indica una fecha de vencimiento válida para el QR.")
+    if valid_until < valid_from:
+        return error_response(400, "La fecha de vencimiento no puede ser anterior al inicio.")
+    if (valid_until - valid_from).total_seconds() > timedelta(hours=72).total_seconds():
+        return error_response(400, "La vigencia del QR no puede superar las 72 horas desde el inicio.")
+
+    max_guests = data.get("maxGuests", data.get("maxPeople", 1))
     if (
-        not isinstance(max_people, int)
-        or isinstance(max_people, bool)
-        or not 1 <= max_people <= 2_147_483_647
+        not isinstance(max_guests, int)
+        or isinstance(max_guests, bool)
+        or not 1 <= max_guests <= 5
     ):
-        return error_response(400, "El límite de personas debe ser un entero positivo válido.")
+        return error_response(400, "maxGuests debe ser un entero entre 1 y 5.")
     qr_pass = VisitQrPass(
         resident_id=g.current_user.id,
         token=secrets.token_urlsafe(32),
         valid_from=valid_from.isoformat(),
         valid_until=valid_until.isoformat(),
-        max_people=max_people,
+        max_people=max_guests,
+        visitor_name=visitor_name.strip(),
+        visitor_document=visitor_document.strip(),
+        max_guests=max_guests,
     )
     db.session.add(qr_pass)
     db.session.commit()
@@ -629,6 +667,8 @@ def _qr_pass_for_guard(token):
     today = date.today().isoformat()
     if not qr_pass.valid_from <= today <= qr_pass.valid_until:
         return None, error_response(400, "El código QR está fuera de su período de vigencia.")
+    if qr_pass.used_entries >= qr_pass.max_guests:
+        return None, error_response(409, "El QR alcanzó el límite de entradas disponibles.")
     return qr_pass, None
 
 
@@ -645,7 +685,9 @@ def inspect_visit_qr(token):
         "residentName": qr_pass.resident.full_name,
         "apartment": qr_pass.resident.apartment,
         "canRegister": (
-            not qr_pass.revoked and qr_pass.valid_from <= today <= qr_pass.valid_until
+            not qr_pass.revoked
+            and qr_pass.valid_from <= today <= qr_pass.valid_until
+            and qr_pass.used_entries < qr_pass.max_guests
         ),
         "inside": [visit.to_dict() for visit in qr_pass.visits if visit.entered_at and not visit.exited_at],
         "registeredVisits": [visit.to_dict() for visit in qr_pass.visits],
@@ -683,10 +725,22 @@ def enter_visit_qr(token):
     ):
         return error_response(400, "El registro no puede vincularse a este código QR.")
     visitor_name = data.get("visitorName")
+    visitor_document = qr_pass.visitor_document
     if visit is None:
-        if not isinstance(visitor_name, str) or not visitor_name.strip():
-            return error_response(400, "Escribe el nombre del visitante.")
-        visitor_name = visitor_name.strip()
+        visitor_name = qr_pass.visitor_name
+        if not visitor_name:
+            visitor_name = data.get("visitorName")
+            if not isinstance(visitor_name, str) or not visitor_name.strip():
+                return error_response(400, "Escribe el nombre del visitante.")
+            visitor_name = visitor_name.strip()
+        if visitor_document is None and "visitorDocument" in data:
+            visitor_document = data["visitorDocument"]
+            if (
+                not isinstance(visitor_document, str)
+                or len(visitor_document.strip()) > 40
+            ):
+                return error_response(400, "El documento del visitante no es válido.")
+            visitor_document = visitor_document.strip()
     elif visitor_name is not None and (
         not isinstance(visitor_name, str)
         or visitor_name.strip().casefold() != visit.visitor_name.casefold()
@@ -694,17 +748,12 @@ def enter_visit_qr(token):
         return error_response(400, "El nombre no coincide con el visitante seleccionado.")
     if visit and visit.entered_at and not visit.exited_at:
         return error_response(409, "Este visitante ya aparece dentro.")
-    if visit is not None and visit.qr_pass_id == qr_pass.id:
-        if len(qr_pass.visits) > qr_pass.max_people:
-            return error_response(409, "El QR alcanzó el límite de personas. Debe generarse otro código.")
-    else:
-        if len(qr_pass.visits) >= qr_pass.max_people:
-            return error_response(409, "El QR alcanzó el límite de personas. Debe generarse otro código.")
     if visit is None:
         visit = Visit(
             resident_id=qr_pass.resident_id,
             registered_by=g.current_user.id,
             visitor_name=visitor_name,
+            visitor_document=visitor_document,
             type="visitante",
             approval_status="aprobada",
             authorization_method="qr",
@@ -730,6 +779,13 @@ def enter_visit_qr(token):
         method="qr",
         actor_id=g.current_user.id,
     ))
+    qr_pass.used_entries += 1
+    notify_user(
+        visit.resident_id,
+        "Visitante ingresó por QR",
+        f"{visit.visitor_name} ingresó a la unidad con el código QR.",
+        "visit",
+    )
     db.session.commit()
     return jsonify({"message": "Entrada por QR registrada.", "visit": visit.to_dict()}), 201
 
@@ -770,6 +826,7 @@ def exit_visit_qr(token):
 @bp.get("/notifications")
 @token_required
 def get_notifications():
+    finalize_expired_reservations()
     notifications = Notification.query.filter_by(
         user_id=g.current_user.id
     ).order_by(Notification.created_at.desc()).all()
