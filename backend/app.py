@@ -69,6 +69,7 @@ SQLITE_ADDITIONS = {
         "is_deleted": "BOOLEAN NOT NULL DEFAULT 0",
         "deleted_at": "DATETIME",
         "deleted_by_id": "INTEGER REFERENCES users(id)",
+        "delivery_media_url": "TEXT",
     },
     "visits": {
         "visitor_document": "VARCHAR(40)",
@@ -89,6 +90,7 @@ SQLITE_ADDITIONS = {
         "visitor_document": "VARCHAR(40)",
         "max_guests": "INTEGER NOT NULL DEFAULT 1",
         "used_entries": "INTEGER NOT NULL DEFAULT 0",
+        "guests_json": "TEXT",
     },
 }
 
@@ -228,6 +230,7 @@ def migrate_security_columns():
             ),
             "deleted_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
             "deleted_by_id": "INTEGER REFERENCES users(id)",
+            "delivery_media_url": "TEXT",
         },
         "visits": {
             "visitor_photo_url": "TEXT",
@@ -257,6 +260,7 @@ def migrate_security_columns():
             "max_guests": "INTEGER NOT NULL DEFAULT 1",
             "used_entries": "INTEGER NOT NULL DEFAULT 0",
             "revoked_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+            "guests_json": "TEXT",
         },
         "pqrs": {
             "is_archived": (
@@ -310,6 +314,17 @@ def migrate_resident_profiles():
         if unit is None:
             db.session.add(ResidentialUnit(apartment=resident.apartment))
     db.session.commit()
+
+
+def migrate_common_area_names():
+    """Rename the retired gym area without changing its primary key."""
+    if "common_areas" not in inspect(db.engine).get_table_names():
+        return
+    with db.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE common_areas SET name = 'Salón de Juegos' "
+            "WHERE lower(name) = lower('Gimnasio')"
+        )
 
 
 def migrate_pqrs_conversations():
@@ -386,6 +401,7 @@ def create_app():
         migrate_profile_columns()
         migrate_admin_action_columns()
         migrate_security_columns()
+        migrate_common_area_names()
         migrate_resident_profiles()
         migrate_pqrs_conversations()
         seed_if_empty()

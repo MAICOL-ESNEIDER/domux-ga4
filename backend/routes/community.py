@@ -1,7 +1,7 @@
 import base64
 import json
 import unicodedata
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -20,7 +20,8 @@ from models import (
     ReservationMessage,
     User,
 )
-from services.notification_service import notify_residents, notify_user
+from time_utils import COLOMBIA_TIMEZONE, now_colombia
+from services.notification_service import notify_admins, notify_residents, notify_user
 from services.excel_service import (
     MIME_XLSX,
     generate_legal_report_xlsx,
@@ -37,6 +38,7 @@ from validators import (
     VALID_PQRS_STATUSES,
     STANDARD_TIME_SLOTS,
     parse_optional_bool,
+    parse_bool,
     require_non_empty_fields,
     validate_future_or_today_date,
     validate_iso_date,
@@ -65,7 +67,7 @@ def _add_audit_log(entity_type, entity_id, action, details=None):
 @role_required("ADMIN")
 def archive_history():
     finalize_expired_reservations()
-    today = date.today().isoformat()
+    today = now_colombia().date().isoformat()
     pqrs_items = Pqrs.query.filter(
         Pqrs.status == "resuelta",
         Pqrs.is_archived.is_(False),
@@ -77,7 +79,7 @@ def archive_history():
             Reservation.date < today,
         ),
     ).all()
-    archived_at = datetime.utcnow()
+    archived_at = now_colombia()
     for pqrs in pqrs_items:
         pqrs.is_archived = True
         pqrs.archived_at = archived_at
@@ -105,7 +107,7 @@ def archive_history():
         ),
         "archivedPqrsCount": archived_pqrs,
         "archivedReservationsCount": archived_reservations,
-        "fileName": f"Archivo_Historico_DOMUX_{date.today().isoformat()}.xlsx",
+        "fileName": f"Archivo_Historico_DOMUX_{now_colombia().date().isoformat()}.xlsx",
         "mimeType": MIME_XLSX,
         "base64": base64.b64encode(workbook_bytes).decode("ascii"),
     })
@@ -128,7 +130,7 @@ def _media_and_event_error(data, date_key, time_key):
     event_date = data.get(date_key)
     if event_date is not None and (error := validate_iso_date(event_date)):
         return error
-    if event_date is not None and event_date < date.today().isoformat():
+    if event_date is not None and event_date < now_colombia().date().isoformat():
         return "La fecha del evento no puede ser anterior a hoy."
     event_time = data.get(time_key)
     if event_time is not None and (error := validate_time(event_time)):
@@ -276,7 +278,16 @@ def create_pqrs():
     )
     if validation_error:
         return error_response(400, validation_error)
-    if error := _media_and_event_error(data, "incidentDate", "incidentTime"):
+    if error := validate_media_fields(data):
+        return error_response(400, error)
+    incident_date = data.get("incidentDate")
+    if incident_date is not None:
+        if error := validate_iso_date(incident_date):
+            return error_response(400, error)
+        if incident_date > now_colombia().date().isoformat():
+            return error_response(400, "La fecha del incidente no puede ser futura.")
+    incident_time = data.get("incidentTime")
+    if incident_time is not None and (error := validate_time(incident_time)):
         return error_response(400, error)
     if g.current_user.role not in ("RESIDENT", "ADMIN"):
         return error_response(403, "No tienes permiso para crear PQRS")
@@ -313,8 +324,8 @@ def create_pqrs():
         category=category.strip(),
         subject=data["subject"].strip(),
         message=data["message"].strip(),
-        incident_date=data.get("incidentDate"),
-        incident_time=data.get("incidentTime"),
+        incident_date=incident_date,
+        incident_time=incident_time,
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     )
@@ -327,6 +338,11 @@ def create_pqrs():
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
     ))
+    notify_admins(
+        "Nueva PQRS",
+        f"{resident.full_name} registró la PQRS '{pqrs.subject}'.",
+        "pqrs",
+    )
     if g.current_user.role == "ADMIN":
         notify_user(
             resident.id,
@@ -363,7 +379,7 @@ def respond_pqrs(pqrs_id):
     pqrs.status = data["status"]
     pqrs.admin_response = response_text.strip()
     if previous_status != pqrs.status:
-        pqrs.updated_at = datetime.utcnow()
+        pqrs.updated_at = now_colombia()
     pqrs.conversation.append(PqrsMessage(
         author_id=g.current_user.id,
         author_role="ADMIN",
@@ -418,7 +434,7 @@ def add_pqrs_message(pqrs_id):
     was_resolved = pqrs.status == "resuelta"
     if was_resolved:
         pqrs.status = "abierta"
-        pqrs.updated_at = datetime.utcnow()
+        pqrs.updated_at = now_colombia()
     pqrs.conversation.append(PqrsMessage(
         author_id=g.current_user.id,
         author_role="RESIDENT",
@@ -480,7 +496,7 @@ def rate_pqrs(pqrs_id):
         db.session.add(rated_this_cycle)
     rated_this_cycle.rating = rating
     rated_this_cycle.comment = comment.strip() if comment and comment.strip() else None
-    rated_this_cycle.created_at = datetime.utcnow()
+    rated_this_cycle.created_at = now_colombia()
     db.session.commit()
     return jsonify({"message": "Calificación guardada", "pqrs": pqrs.to_dict()})
 
@@ -530,7 +546,7 @@ def respond_pqrs_batch():
         pqrs.status = status
         pqrs.admin_response = message.strip()
         if previous_status != status:
-            pqrs.updated_at = datetime.utcnow()
+            pqrs.updated_at = now_colombia()
         pqrs.conversation.append(PqrsMessage(
             author_id=g.current_user.id,
             author_role="ADMIN",
@@ -683,6 +699,17 @@ def create_reservation():
         return error_response(400, "Selecciona una zona común válida")
     if error := validate_future_or_today_date(data["date"]):
         return error_response(400, error)
+    booking_date = date.fromisoformat(data["date"])
+    max_advance_days = 60 if _is_social_hall(area.name) else 30
+    if (
+        g.current_user.role == "RESIDENT"
+        and booking_date > now_colombia().date() + timedelta(days=max_advance_days)
+    ):
+        return error_response(
+            400,
+            f"Las reservas para esta zona solo pueden realizarse con máximo "
+            f"{max_advance_days} días de anticipación.",
+        )
     if error := validate_time_slot(data["timeSlot"]):
         return error_response(400, error)
     if error := _special_reservation_slot_error(area, data["timeSlot"]):
@@ -705,22 +732,47 @@ def create_reservation():
             "Los menores de edad requieren autorización parental registrada por administración para solicitar reservas.",
         )
     finalize_expired_reservations()
+    is_admin = g.current_user.role == "ADMIN"
+    if not is_admin:
+        pending_count = Reservation.query.filter(
+            Reservation.resident_id == resident.id,
+            Reservation.status == "pendiente_pago",
+            Reservation.is_archived.is_(False),
+        ).count()
+        if pending_count >= 2:
+            return error_response(
+                409,
+                "Ya tienes 2 reservas pendientes de pago. Confirma el pago antes de crear otra.",
+            )
     if reservation_conflicts(area.id, data["date"], data["timeSlot"]):
         return error_response(409, "Ese horario ya no está disponible")
 
-    is_admin = g.current_user.role == "ADMIN"
+    try:
+        payment_already_received = parse_bool(
+            data.get("paymentAlreadyReceived"), default=False
+        )
+    except ValueError:
+        return error_response(400, "paymentAlreadyReceived debe ser verdadero o falso.")
+    approved_immediately = is_admin and payment_already_received
     reservation = Reservation(
         resident_id=resident.id,
         created_by_admin_id=g.current_user.id if is_admin else None,
         common_area_id=area.id,
         date=data["date"],
         time_slot=data["timeSlot"],
-        status="aprobada" if is_admin else "pendiente_pago",
+        status="aprobada" if approved_immediately else "pendiente_pago",
         payment_deadline=(
-            None if is_admin else datetime.utcnow() + timedelta(hours=4)
+            None if approved_immediately else now_colombia() + timedelta(hours=4)
         ),
     )
     db.session.add(reservation)
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        if reservation_conflicts(area.id, data["date"], data["timeSlot"]):
+            return error_response(409, "Ese horario ya no está disponible")
+        raise
     if (message and message.strip()) or data.get("mediaUrl"):
         reservation.messages.append(ReservationMessage(
             author_id=g.current_user.id,
@@ -737,16 +789,25 @@ def create_reservation():
             f"de {reservation.time_slot}.",
             "reservation",
         )
-    else:
-        for admin in User.query.filter_by(role="ADMIN", is_active=True).all():
-            notify_user(
-                admin.id,
-                "Nueva solicitud de reserva",
-                f"{resident.full_name} solicitó {area.name} el {reservation.date} "
-                f"de {reservation.time_slot}.",
-                "reservation",
-            )
+    notify_admins(
+        "Nueva solicitud de reserva",
+        (
+            f"Administración registró {area.name} para {resident.full_name} "
+            f"el {reservation.date} de {reservation.time_slot}."
+            if is_admin else
+            f"{resident.full_name} solicitó {area.name} el {reservation.date} "
+            f"de {reservation.time_slot}."
+        ),
+        "reservation",
+    )
     _add_audit_log("RESERVATION", reservation.id, "created")
+    if approved_immediately:
+        _add_audit_log(
+            "RESERVATION",
+            reservation.id,
+            "payment_received",
+            {"status": "aprobada"},
+        )
     try:
         db.session.commit()
     except IntegrityError:
@@ -808,10 +869,10 @@ def extend_reservation_payment(res_id):
     if reservation.status != "pendiente_pago":
         return error_response(400, "Solo se puede extender el pago de una reserva pendiente.")
 
-    now = datetime.utcnow()
+    now = now_colombia()
     deadline = reservation.payment_deadline or now
     if deadline.tzinfo:
-        deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
+        deadline = deadline.astimezone(COLOMBIA_TIMEZONE).replace(tzinfo=None)
     reservation.payment_deadline = max(now, deadline) + timedelta(hours=4)
     reservation.payment_reminder_sent = False
     notify_user(
@@ -984,7 +1045,7 @@ def cancel_reservation(res_id):
         "pendiente_pago", "pendiente", "activa", "aprobada"
     ):
         return error_response(400, "Solo se pueden cancelar reservas pendientes o aprobadas.")
-    if g.current_user.role == "RESIDENT" and reservation.date <= datetime.utcnow().date().isoformat():
+    if g.current_user.role == "RESIDENT" and reservation.date <= now_colombia().date().isoformat():
         return error_response(400, "Solo puedes cancelar la reserva antes del día reservado.")
     previous_status = reservation.status
     reservation.status = "cancelada"

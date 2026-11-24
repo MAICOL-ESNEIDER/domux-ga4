@@ -1,14 +1,19 @@
 import os
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from google.auth.exceptions import DefaultCredentialsError
+from sqlalchemy import inspect
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
-from app import create_app, migrate_legacy_package_statuses
+from app import (
+    create_app,
+    migrate_legacy_package_statuses,
+    migrate_sqlite_schema,
+)
 from auth import generate_token
 from extensions import db
 from models import (
@@ -22,6 +27,7 @@ from models import (
 )
 from services import notification_service
 from werkzeug.security import generate_password_hash
+from time_utils import now_colombia
 
 
 class SecurityWorkflowTests(unittest.TestCase):
@@ -88,7 +94,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         return self.client.post("/api/visits", headers=self.auth(self.guard), json=data)
 
     def make_qr(self, max_people=1, **fields):
-        start = date.today()
+        start = now_colombia().date()
         end = start + timedelta(days=1)
         data = {
             "visitorName": "Visita de prueba",
@@ -113,6 +119,23 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Visit.query.count(), 0)
+
+    def test_inactive_accounts_are_blocked_from_old_tokens_and_login(self):
+        headers = self.auth(self.resident)
+        self.resident.is_active = False
+        db.session.commit()
+
+        old_token = self.client.get("/api/auth/session", headers=headers)
+        login = self.client.post(
+            "/api/auth/login",
+            json={"email": self.resident.email, "password": "Resident123*"},
+        )
+
+        self.assertEqual(old_token.status_code, 403)
+        self.assertEqual(login.status_code, 403)
+        expected = "Tu cuenta se encuentra desactivada. Contacta a administración."
+        self.assertEqual(old_token.json["error"], expected)
+        self.assertEqual(login.json["error"], expected)
 
         response = self.register_visit(
             visitorDocument="1234",
@@ -156,7 +179,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertTrue(response.json["visit"]["documentRefused"])
 
     def test_announcement_and_package_reject_past_event_dates(self):
-        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        yesterday = (now_colombia().date() - timedelta(days=1)).isoformat()
         announcement = self.client.post(
             "/api/announcements",
             headers=self.auth(self.admin),
@@ -179,6 +202,20 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(announcement.status_code, 400)
         self.assertEqual(package.status_code, 400)
         self.assertEqual(Announcement.query.count(), 0)
+        self.assertEqual(PackageItem.query.count(), 0)
+
+    def test_package_arrival_rejects_future_dates(self):
+        tomorrow = (now_colombia().date() + timedelta(days=1)).isoformat()
+        response = self.client.post(
+            "/api/packages",
+            headers=self.auth(self.guard),
+            json={
+                "residentId": self.resident.id,
+                "description": "Llegada futura",
+                "eventDate": tomorrow,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(PackageItem.query.count(), 0)
 
     def test_resident_decision_call_authorization_entry_and_exit_are_audited(self):
@@ -216,6 +253,9 @@ class SecurityWorkflowTests(unittest.TestCase):
         ])
         self.assertTrue(visit.exit_returning)
         self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 3)
+        self.assertTrue(exit_response.json["visit"]["referenceCode"].startswith(
+            f"VIS-{now_colombia().year}-"
+        ))
 
     def test_manual_visitor_cannot_return_after_definitive_exit(self):
         visit_id = self.register_visit().get_json()["visit"]["id"]
@@ -289,6 +329,42 @@ class SecurityWorkflowTests(unittest.TestCase):
             [resident_notification.id],
         )
 
+    def test_read_notification_cleanup_is_scoped_to_user_and_read_state(self):
+        read_notification = Notification(
+            user_id=self.resident.id,
+            title="Leída",
+            message="Se puede limpiar",
+            is_read=True,
+        )
+        unread_notification = Notification(
+            user_id=self.resident.id,
+            title="No leída",
+            message="Debe conservarse",
+            is_read=False,
+        )
+        foreign_notification = Notification(
+            user_id=self.other_resident.id,
+            title="Leída ajena",
+            message="No se debe eliminar",
+            is_read=True,
+        )
+        db.session.add_all([read_notification, unread_notification, foreign_notification])
+        db.session.commit()
+        read_id = read_notification.id
+        unread_id = unread_notification.id
+        foreign_id = foreign_notification.id
+
+        deleted = self.client.delete(
+            "/api/notifications/read",
+            headers=self.auth(self.resident),
+        )
+
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(deleted.json["deletedCount"], 1)
+        self.assertEqual(Notification.query.filter_by(id=read_id).count(), 0)
+        self.assertEqual(Notification.query.filter_by(id=unread_id).count(), 1)
+        self.assertEqual(Notification.query.filter_by(id=foreign_id).count(), 1)
+
     def test_package_registration_status_trash_restore_and_purge(self):
         registration = self.client.post(
             "/api/packages",
@@ -301,7 +377,18 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(registration.status_code, 201)
         package_id = registration.get_json()["packageItem"]["id"]
+        response_package = registration.get_json()["packageItem"]
         self.assertEqual(registration.get_json()["packageItem"]["status"], "pendiente")
+        self.assertEqual(
+            response_package["referenceCode"],
+            f"PAQ-{now_colombia().year}-{package_id:04d}",
+        )
+        self.assertEqual(response_package["eventDate"], now_colombia().date().isoformat())
+        self.assertRegex(response_package["eventTime"], r"^\d{2}:\d{2}$")
+        self.assertIn(
+            "Resident (Torre 1 · Apto 101)",
+            Notification.query.filter_by(user_id=self.resident.id).one().message,
+        )
         legacy_filter = self.client.get(
             "/api/packages?status=por_llegar",
             headers=self.auth(self.guard),
@@ -375,20 +462,39 @@ class SecurityWorkflowTests(unittest.TestCase):
 
         self.assertEqual(package.status, "pendiente")
 
+    def test_sqlite_migration_adds_delivery_media_and_qr_guests_columns(self):
+        with db.engine.begin() as connection:
+            connection.exec_driver_sql(
+                'ALTER TABLE "packages" DROP COLUMN "delivery_media_url"'
+            )
+            connection.exec_driver_sql(
+                'ALTER TABLE "visit_qr_passes" DROP COLUMN "guests_json"'
+            )
+
+        migrate_sqlite_schema()
+
+        inspector = inspect(db.engine)
+        package_columns = {column["name"] for column in inspector.get_columns("packages")}
+        qr_columns = {
+            column["name"] for column in inspector.get_columns("visit_qr_passes")
+        }
+        self.assertIn("delivery_media_url", package_columns)
+        self.assertIn("guests_json", qr_columns)
+
     def test_package_listing_automatically_trashes_and_purges_expired_items(self):
         expired_delivery = PackageItem(
             resident_id=self.resident.id,
             registered_by=self.guard.id,
             description="Entrega antigua",
             status="entregado",
-            delivered_at=datetime.utcnow() - timedelta(days=8),
+            delivered_at=now_colombia() - timedelta(days=8),
         )
         expired_trash = PackageItem(
             resident_id=self.other_resident.id,
             registered_by=self.guard.id,
             description="Papelera antigua",
             is_deleted=True,
-            deleted_at=datetime.utcnow() - timedelta(days=31),
+            deleted_at=now_colombia() - timedelta(days=31),
         )
         db.session.add_all([expired_delivery, expired_trash])
         db.session.commit()
@@ -481,7 +587,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             json={
                 "visitorName": "Visita",
                 "visitorDocument": "123456",
-                "validFrom": date.today().isoformat(),
+                "validFrom": now_colombia().date().isoformat(),
                 "maxGuests": 6,
             },
         )
@@ -489,8 +595,59 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(VisitQrPass.query.count(), 0)
 
+    def test_qr_accepts_pre_registered_guests_and_uses_each_identity(self):
+        qr = self.make_qr(
+            max_people=2,
+            guests=[
+                {"fullName": "Ana Invitada", "document": "DOC-1"},
+                {"fullName": "Luis Invitado", "document": "DOC-2"},
+            ],
+        )
+        created = VisitQrPass.query.one()
+        self.assertEqual(
+            created.to_dict()["guests"],
+            [
+                {"fullName": "Ana Invitada", "document": "DOC-1"},
+                {"fullName": "Luis Invitado", "document": "DOC-2"},
+            ],
+        )
+        for expected_name, expected_document in (
+            ("Ana Invitada", "DOC-1"),
+            ("Luis Invitado", "DOC-2"),
+        ):
+            response = self.client.post(
+                f"/api/visits/qr/{qr['token']}/entry",
+                headers=self.auth(self.guard),
+                json={},
+            )
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(response.json["visit"]["visitorName"], expected_name)
+            self.assertEqual(response.json["visit"]["visitorDocument"], expected_document)
+
+        inspected = self.client.get(
+            f"/api/visits/qr/{qr['token']}",
+            headers=self.auth(self.guard),
+        )
+        self.assertEqual(inspected.json["qrPass"]["guests"], created.to_dict()["guests"])
+
+    def test_qr_rejects_more_guests_than_max_guests(self):
+        response = self.client.post(
+            "/api/visits/qr",
+            headers=self.auth(self.resident),
+            json={
+                "validFrom": now_colombia().date().isoformat(),
+                "maxGuests": 1,
+                "guests": [
+                    {"fullName": "Ana", "document": "DOC-1"},
+                    {"fullName": "Luis", "document": "DOC-2"},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(VisitQrPass.query.count(), 0)
+
     def test_qr_defaults_to_one_guest_and_24_hour_validity(self):
-        start = date.today()
+        start = now_colombia().date()
         response = self.client.post(
             "/api/visits/qr",
             headers=self.auth(self.resident),
@@ -509,7 +666,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(qr["remainingEntries"], 1)
 
     def test_qr_rejects_validity_longer_than_72_hours_and_foreign_revoke(self):
-        today = date.today().isoformat()
+        today = now_colombia().date().isoformat()
         too_long = self.client.post(
             "/api/visits/qr-passes",
             headers=self.auth(self.resident),
@@ -517,7 +674,7 @@ class SecurityWorkflowTests(unittest.TestCase):
                 "visitorName": "Visita",
                 "visitorDocument": "123456",
                 "validFrom": today,
-                "validUntil": (date.today() + timedelta(days=4)).isoformat(),
+                "validUntil": (now_colombia().date() + timedelta(days=4)).isoformat(),
                 "maxGuests": 2,
             },
         )
@@ -583,7 +740,7 @@ class SecurityWorkflowTests(unittest.TestCase):
                 registered_by=self.guard.id,
                 visitor_name=f"Visita {visitor_type}",
                 type=visitor_type,
-                entered_at=datetime.utcnow() - timedelta(hours=hours, minutes=1),
+                entered_at=now_colombia() - timedelta(hours=hours, minutes=1),
             )
             for visitor_type, hours in stay_limits.items()
         ]
@@ -595,11 +752,11 @@ class SecurityWorkflowTests(unittest.TestCase):
             self.assertEqual(result["maxStayHours"], stay_limits[visit.type])
             self.assertTrue(result["overstayWarning"])
 
-        visits[0].exited_at = datetime.utcnow()
+        visits[0].exited_at = now_colombia()
         self.assertFalse(visits[0].to_dict()["overstayWarning"])
 
     def test_admin_cannot_create_a_resident_owned_qr_pass(self):
-        today = date.today().isoformat()
+        today = now_colombia().date().isoformat()
         response = self.client.post(
             "/api/visits/qr-passes",
             headers=self.auth(self.admin),
@@ -756,11 +913,18 @@ class SecurityWorkflowTests(unittest.TestCase):
         response = self.client.put(
             f"/api/packages/{package.id}/deliver",
             headers=self.auth(self.guard),
-            json={"receivedBy": "María Pérez"},
+            json={
+                "receivedBy": "María Pérez",
+                "deliveryMediaUrl": "data:image/jpeg;base64,AA==",
+            },
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["packageItem"]["deliveredTo"], "María Pérez")
         self.assertEqual(response.get_json()["packageItem"]["deliveredByName"], "Guard")
+        self.assertEqual(
+            response.get_json()["packageItem"]["deliveryMediaUrl"],
+            "data:image/jpeg;base64,AA==",
+        )
         self.assertEqual(Notification.query.filter_by(user_id=self.resident.id).count(), 1)
 
 

@@ -1,5 +1,6 @@
+import json
 import secrets
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from flask import Blueprint, g, jsonify, request
 
@@ -17,6 +18,7 @@ from models import (
 )
 from services.notification_service import notify_user
 from services.reservation_service import finalize_expired_reservations
+from time_utils import now_colombia
 from validators import (
     VALID_PACKAGE_STATUSES,
     parse_bool,
@@ -51,8 +53,10 @@ def _package_metadata_error(data):
     event_date = data.get("eventDate")
     if event_date is not None and (error := validate_iso_date(event_date)):
         return error
-    if event_date is not None and event_date < date.today().isoformat():
+    if event_date is not None and event_date < now_colombia().date().isoformat():
         return "La fecha del evento no puede ser anterior a hoy."
+    if event_date is not None and event_date > now_colombia().date().isoformat():
+        return "La fecha del evento debe ser hoy."
     event_time = data.get("eventTime")
     if event_time is not None and (error := validate_time(event_time)):
         return error
@@ -60,7 +64,7 @@ def _package_metadata_error(data):
 
 
 def _cleanup_expired_packages():
-    now = datetime.utcnow()
+    now = now_colombia()
     expired_packages = PackageItem.query.filter(
         PackageItem.status == "entregado",
         PackageItem.is_deleted.is_(False),
@@ -204,6 +208,7 @@ def register_package():
     if resident is None:
         return error_response(400, "Selecciona un residente válido")
 
+    now = now_colombia()
     package = PackageItem(
         resident_id=resident.id,
         registered_by=g.current_user.id,
@@ -211,14 +216,16 @@ def register_package():
         status=status,
         media_url=data.get("mediaUrl"),
         media_type=data.get("mediaType"),
-        event_date=data.get("eventDate"),
-        event_time=data.get("eventTime"),
+        event_date=now.date().isoformat(),
+        event_time=now.strftime("%H:%M"),
+        created_at=now,
     )
     db.session.add(package)
     notify_user(
         resident.id,
         "Paquete registrado",
-        f"Se registró un paquete para {resident.apartment or 'tu cuenta'}.",
+        f"Se registró un paquete para {resident.full_name} "
+        f"({resident.apartment or 'sin apartamento'}).",
         "package",
     )
     db.session.commit()
@@ -266,7 +273,7 @@ def delete_package(pkg_id):
         db.session.commit()
         return jsonify({"message": "Paquete eliminado permanentemente."})
     package.is_deleted = True
-    package.deleted_at = datetime.utcnow()
+    package.deleted_at = now_colombia()
     package.deleted_by_id = g.current_user.id
     db.session.commit()
     return jsonify({
@@ -304,10 +311,14 @@ def deliver_package(pkg_id):
         return error_response(400, "El nombre de quien recibe debe ser texto.")
     if not isinstance(receiver, str) or not receiver.strip():
         return error_response(400, "Escribe el nombre de quien recibe el paquete.")
+    delivery_media_url = data.get("deliveryMediaUrl")
+    if delivery_media_url is not None and not isinstance(delivery_media_url, str):
+        return error_response(400, "La foto de entrega no es válida.")
     if package.status != "entregado":
         package.status = "entregado"
-        package.delivered_at = datetime.utcnow()
+        package.delivered_at = now_colombia()
         package.delivered_to = receiver.strip()
+        package.delivery_media_url = delivery_media_url
         package.delivered_by_id = g.current_user.id
         notify_user(
             package.resident_id,
@@ -492,10 +503,10 @@ def register_visit_entry(visit_id):
     if visit.entered_at and not visit.exited_at:
         return error_response(409, "Este visitante ya aparece dentro de la unidad.")
     if visit.exited_at and (
-        not visit.exit_returning or visit.exited_at.date() < datetime.utcnow().date()
+        not visit.exit_returning or visit.exited_at.date() < now_colombia().date()
     ):
         return error_response(400, "El registro indica salida definitiva; crea una nueva solicitud de ingreso.")
-    visit.entered_at = datetime.utcnow()
+    visit.entered_at = now_colombia()
     visit.exited_at = None
     visit.exit_returning = False
     method = visit.authorization_method or "app"
@@ -530,7 +541,7 @@ def register_visit_exit(visit_id):
         return error_response(404, "Visita no encontrada.")
     if visit.entered_at is None or visit.exited_at is not None:
         return error_response(400, "El visitante no figura actualmente dentro.")
-    visit.exited_at = datetime.utcnow()
+    visit.exited_at = now_colombia()
     visit.exit_returning = returning
     method = visit.authorization_method or "app"
     visit.events.append(VisitEvent(
@@ -560,23 +571,60 @@ def create_visit_qr_pass():
     data, failure = _json_body()
     if failure:
         return failure
-    validation_error = require_non_empty_fields(
-        data,
-        (
+    required_fields = [("validFrom", "fecha de inicio")]
+    has_guests = "guests" in data
+    if not has_guests:
+        required_fields.extend((
             ("visitorName", "nombre del visitante"),
             ("visitorDocument", "documento del visitante"),
-            ("validFrom", "fecha de inicio"),
-        ),
-    )
+        ))
+    validation_error = require_non_empty_fields(data, required_fields)
     if validation_error:
         return error_response(400, validation_error)
 
-    visitor_name = data["visitorName"]
-    visitor_document = data["visitorDocument"]
-    if not isinstance(visitor_name, str) or len(visitor_name.strip()) > 120:
-        return error_response(400, "El nombre del visitante no puede superar 120 caracteres.")
-    if not isinstance(visitor_document, str) or len(visitor_document.strip()) > 40:
-        return error_response(400, "El documento del visitante no puede superar 40 caracteres.")
+    max_guests = data.get("maxGuests", data.get("maxPeople", 1))
+    if (
+        not isinstance(max_guests, int)
+        or isinstance(max_guests, bool)
+        or not 1 <= max_guests <= 5
+    ):
+        return error_response(400, "maxGuests debe ser un entero entre 1 y 5.")
+    guests = data.get("guests")
+    if has_guests:
+        if not isinstance(guests, list) or not 1 <= len(guests) <= max_guests:
+            return error_response(
+                400,
+                "guests debe contener entre 1 y maxGuests invitados.",
+            )
+        normalized_guests = []
+        for guest in guests:
+            if not isinstance(guest, dict):
+                return error_response(400, "Cada invitado debe incluir nombre y documento.")
+            full_name = guest.get("fullName")
+            document = guest.get("document")
+            if (
+                not isinstance(full_name, str)
+                or not full_name.strip()
+                or len(full_name.strip()) > 120
+                or not isinstance(document, str)
+                or not document.strip()
+                or len(document.strip()) > 40
+            ):
+                return error_response(400, "El nombre o documento de un invitado no es válido.")
+            normalized_guests.append({
+                "fullName": full_name.strip(),
+                "document": document.strip(),
+            })
+        visitor_name = normalized_guests[0]["fullName"]
+        visitor_document = normalized_guests[0]["document"]
+    else:
+        visitor_name = data["visitorName"]
+        visitor_document = data["visitorDocument"]
+        if not isinstance(visitor_name, str) or len(visitor_name.strip()) > 120:
+            return error_response(400, "El nombre del visitante no puede superar 120 caracteres.")
+        if not isinstance(visitor_document, str) or len(visitor_document.strip()) > 40:
+            return error_response(400, "El documento del visitante no puede superar 40 caracteres.")
+        normalized_guests = None
     if error := validate_iso_date(data["validFrom"]):
         return error_response(400, "Indica una fecha de inicio válida para el QR.")
     try:
@@ -584,7 +632,7 @@ def create_visit_qr_pass():
     except (TypeError, ValueError):
         return error_response(400, "Indica una fecha de inicio válida para el QR.")
 
-    today = date.today()
+    today = now_colombia().date()
     if valid_from < today:
         return error_response(400, "La fecha de inicio del QR no puede ser anterior a hoy.")
     valid_until_value = data.get("validUntil")
@@ -602,13 +650,6 @@ def create_visit_qr_pass():
     if (valid_until - valid_from).total_seconds() > timedelta(hours=72).total_seconds():
         return error_response(400, "La vigencia del QR no puede superar las 72 horas desde el inicio.")
 
-    max_guests = data.get("maxGuests", data.get("maxPeople", 1))
-    if (
-        not isinstance(max_guests, int)
-        or isinstance(max_guests, bool)
-        or not 1 <= max_guests <= 5
-    ):
-        return error_response(400, "maxGuests debe ser un entero entre 1 y 5.")
     qr_pass = VisitQrPass(
         resident_id=g.current_user.id,
         token=secrets.token_urlsafe(32),
@@ -617,6 +658,10 @@ def create_visit_qr_pass():
         max_people=max_guests,
         visitor_name=visitor_name.strip(),
         visitor_document=visitor_document.strip(),
+        guests_json=(
+            json.dumps(normalized_guests, ensure_ascii=False)
+            if normalized_guests is not None else None
+        ),
         max_guests=max_guests,
     )
     db.session.add(qr_pass)
@@ -655,7 +700,7 @@ def revoke_visit_qr_pass(pass_id):
     if qr_pass.resident_id != g.current_user.id:
         return error_response(403, "Solo puedes revocar tus propios códigos QR.")
     qr_pass.revoked = True
-    qr_pass.revoked_at = datetime.utcnow()
+    qr_pass.revoked_at = now_colombia()
     db.session.commit()
     return jsonify({"message": "Código QR revocado."})
 
@@ -664,7 +709,7 @@ def _qr_pass_for_guard(token):
     qr_pass = VisitQrPass.query.filter_by(token=token).first()
     if qr_pass is None or qr_pass.revoked:
         return None, error_response(404, "Código QR inválido o revocado.")
-    today = date.today().isoformat()
+    today = now_colombia().date().isoformat()
     if not qr_pass.valid_from <= today <= qr_pass.valid_until:
         return None, error_response(400, "El código QR está fuera de su período de vigencia.")
     if qr_pass.used_entries >= qr_pass.max_guests:
@@ -679,7 +724,7 @@ def inspect_visit_qr(token):
     qr_pass = VisitQrPass.query.filter_by(token=token).first()
     if qr_pass is None:
         return error_response(404, "Código QR no encontrado.")
-    today = date.today().isoformat()
+    today = now_colombia().date().isoformat()
     return jsonify({
         "qrPass": qr_pass.to_dict(),
         "residentName": qr_pass.resident.full_name,
@@ -727,7 +772,16 @@ def enter_visit_qr(token):
     visitor_name = data.get("visitorName")
     visitor_document = qr_pass.visitor_document
     if visit is None:
-        visitor_name = qr_pass.visitor_name
+        pre_registered_guests = (
+            json.loads(qr_pass.guests_json) if qr_pass.guests_json else None
+        )
+        if pre_registered_guests:
+            guest_index = len(qr_pass.visits)
+            if guest_index < len(pre_registered_guests):
+                visitor_name = pre_registered_guests[guest_index]["fullName"]
+                visitor_document = pre_registered_guests[guest_index]["document"]
+        else:
+            visitor_name = qr_pass.visitor_name
         if not visitor_name:
             visitor_name = data.get("visitorName")
             if not isinstance(visitor_name, str) or not visitor_name.strip():
@@ -771,7 +825,7 @@ def enter_visit_qr(token):
                 actor_id=g.current_user.id,
             ))
     visit.authorization_method = "qr"
-    visit.entered_at = datetime.utcnow()
+    visit.entered_at = now_colombia()
     visit.exited_at = None
     visit.exit_returning = False
     visit.events.append(VisitEvent(
@@ -811,7 +865,7 @@ def exit_visit_qr(token):
         return error_response(404, "El visitante no pertenece a este código QR.")
     if visit.entered_at is None or visit.exited_at is not None:
         return error_response(400, "El visitante no figura actualmente dentro.")
-    visit.exited_at = datetime.utcnow()
+    visit.exited_at = now_colombia()
     visit.exit_returning = returning
     visit.events.append(VisitEvent(
         event_type="salida",
@@ -844,3 +898,17 @@ def mark_notification_read(notification_id):
     notification.is_read = True
     db.session.commit()
     return jsonify({"message": "Notificación marcada como leída", "notification": notification.to_dict()})
+
+
+@bp.delete("/notifications/read")
+@token_required
+def delete_read_notifications():
+    deleted_count = Notification.query.filter_by(
+        user_id=g.current_user.id,
+        is_read=True,
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({
+        "message": "Notificaciones leídas eliminadas.",
+        "deletedCount": deleted_count,
+    })

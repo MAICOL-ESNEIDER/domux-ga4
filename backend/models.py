@@ -1,10 +1,12 @@
 """SQLAlchemy models and Android-compatible JSON serializers."""
 
-from datetime import date, datetime, timedelta
+import json
+from datetime import date, timedelta, timezone
 
 from sqlalchemy import Index, text
 
 from extensions import db
+from time_utils import now_colombia
 
 ROLES = ("ADMIN", "RESIDENT", "GUARD")
 
@@ -35,7 +37,7 @@ class User(db.Model):
     data_processing_consent = db.Column(db.Boolean, nullable=False, default=False)
     data_processing_consent_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_colombia)
 
     @property
     def full_name(self):
@@ -53,7 +55,7 @@ class User(db.Model):
             return None
         if birth_date.isoformat() != self.birth_date:
             return None
-        today = date.today()
+        today = now_colombia().date()
         return today.year - birth_date.year - (
             (today.month, today.day) < (birth_date.month, birth_date.day)
         )
@@ -242,7 +244,7 @@ class Announcement(db.Model):
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
     author_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_colombia)
 
     author = db.relationship("User")
 
@@ -277,8 +279,8 @@ class Pqrs(db.Model):
     media_type = db.Column(db.String(20), nullable=True)
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
     archived_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_colombia)
+    updated_at = db.Column(db.DateTime, default=now_colombia, onupdate=now_colombia)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     conversation = db.relationship(
@@ -333,7 +335,7 @@ class PqrsMessage(db.Model):
     message = db.Column(db.Text, nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_colombia, nullable=False)
 
     pqrs = db.relationship("Pqrs", back_populates="conversation")
     author = db.relationship("User")
@@ -359,7 +361,7 @@ class PqrsSatisfaction(db.Model):
     pqrs_id = db.Column(db.Integer, db.ForeignKey("pqrs.id"), nullable=False, index=True)
     rating = db.Column(db.Integer, nullable=False)
     comment = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_colombia, nullable=False)
 
     pqrs = db.relationship("Pqrs", back_populates="satisfaction_ratings")
 
@@ -380,7 +382,7 @@ class DevicePushToken(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     token = db.Column(db.String(255), nullable=False, unique=True, index=True)
     device_id = db.Column(db.String(120), nullable=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=now_colombia, onupdate=now_colombia)
 
     user = db.relationship("User")
 
@@ -426,7 +428,7 @@ class Reservation(db.Model):
     archived_at = db.Column(db.DateTime, nullable=True)
     payment_deadline = db.Column(db.DateTime, nullable=True)
     payment_reminder_sent = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_colombia)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     common_area = db.relationship("CommonArea")
@@ -441,15 +443,14 @@ class Reservation(db.Model):
         if self.payment_deadline is None:
             minutes_remaining = 0
         else:
-            current_time = (
-                datetime.now(self.payment_deadline.tzinfo)
-                if self.payment_deadline.tzinfo
-                else datetime.utcnow()
-            )
-            minutes_remaining = max(
-                0,
-                int((self.payment_deadline - current_time).total_seconds() // 60),
-            )
+            deadline = self.payment_deadline
+            if deadline.tzinfo:
+                deadline = deadline.astimezone(
+                    timezone(timedelta(hours=-5))
+                ).replace(tzinfo=None)
+            minutes_remaining = max(0, int(
+                (deadline - now_colombia()).total_seconds() // 60
+            ))
         return {
             "id": self.id,
             "residentId": self.resident_id,
@@ -487,7 +488,7 @@ class ReservationMessage(db.Model):
     message = db.Column(db.Text, nullable=True)
     media_url = db.Column(db.Text, nullable=True)
     media_type = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_colombia, nullable=False)
 
     reservation = db.relationship("Reservation", back_populates="messages")
     author = db.relationship("User")
@@ -518,9 +519,10 @@ class PackageItem(db.Model):
     media_type = db.Column(db.String(20), nullable=True)
     event_date = db.Column(db.String(20), nullable=True)
     event_time = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_colombia)
     delivered_at = db.Column(db.DateTime, nullable=True)
     delivered_to = db.Column(db.String(120), nullable=True)
+    delivery_media_url = db.Column(db.Text, nullable=True)
     delivered_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
@@ -531,8 +533,10 @@ class PackageItem(db.Model):
     delivered_by = db.relationship("User", foreign_keys=[delivered_by_id])
 
     def to_dict(self):
+        created_year = self.created_at.year if self.created_at else now_colombia().year
         return {
             "id": self.id,
+            "referenceCode": f"PAQ-{created_year}-{self.id:04d}" if self.id else None,
             "residentId": self.resident_id,
             "description": self.description or "",
             "status": self.status or "pendiente",
@@ -545,6 +549,7 @@ class PackageItem(db.Model):
             "isDeleted": bool(self.is_deleted),
             "deletedAt": _fmt(self.deleted_at),
             "deliveredTo": self.delivered_to,
+            "deliveryMediaUrl": self.delivery_media_url,
             "deliveredByName": self.delivered_by.full_name if self.delivered_by else None,
             "residentName": self.resident.full_name if self.resident else None,
             "apartment": self.resident.apartment if self.resident else None,
@@ -572,7 +577,7 @@ class Visit(db.Model):
     exited_at = db.Column(db.DateTime, nullable=True)
     exit_returning = db.Column(db.Boolean, default=False, nullable=False)
     qr_pass_id = db.Column(db.Integer, db.ForeignKey("visit_qr_passes.id"), nullable=True, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_colombia)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
@@ -593,10 +598,12 @@ class Visit(db.Model):
         overstay_warning = bool(
             self.entered_at
             and self.exited_at is None
-            and datetime.utcnow() - self.entered_at > timedelta(hours=max_stay_hours)
+            and now_colombia() - self.entered_at > timedelta(hours=max_stay_hours)
         )
+        created_year = self.created_at.year if self.created_at else now_colombia().year
         return {
             "id": self.id,
+            "referenceCode": f"VIS-{created_year}-{self.id:04d}" if self.id else None,
             "residentId": self.resident_id,
             "visitorName": self.visitor_name or "",
             "visitorDocument": self.visitor_document or "",
@@ -633,17 +640,22 @@ class VisitQrPass(db.Model):
     max_people = db.Column(db.Integer, nullable=False)
     visitor_name = db.Column(db.String(120), nullable=True)
     visitor_document = db.Column(db.String(40), nullable=True)
+    guests_json = db.Column(db.Text, nullable=True)
     max_guests = db.Column(db.Integer, default=1, nullable=False)
     used_entries = db.Column(db.Integer, default=0, nullable=False)
     revoked = db.Column(db.Boolean, default=False, nullable=False)
     revoked_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_colombia, nullable=False)
 
     resident = db.relationship("User")
     visits = db.relationship("Visit", back_populates="qr_pass")
 
     def to_dict(self, include_token=False):
         registered_people = len(self.visits)
+        guests = json.loads(self.guests_json) if self.guests_json else [{
+            "fullName": self.visitor_name or "",
+            "document": self.visitor_document or "",
+        }]
         result = {
             "id": self.id,
             "residentId": self.resident_id,
@@ -654,6 +666,7 @@ class VisitQrPass(db.Model):
             "remainingPeople": max(0, self.max_people - registered_people),
             "visitorName": self.visitor_name or "",
             "visitorDocument": self.visitor_document or "",
+            "guests": guests,
             "maxGuests": self.max_guests,
             "usedEntries": self.used_entries,
             "remainingEntries": max(0, self.max_guests - self.used_entries),
@@ -674,7 +687,7 @@ class VisitEvent(db.Model):
     method = db.Column(db.String(20), nullable=False)
     actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     returning_today = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_colombia, nullable=False)
 
     visit = db.relationship("Visit", back_populates="events")
     actor = db.relationship("User")
@@ -699,7 +712,7 @@ class Notification(db.Model):
     message = db.Column(db.Text, nullable=False)
     type = db.Column(db.String(30), default="general")
     is_read = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_colombia)
 
     user = db.relationship("User")
 
@@ -725,7 +738,7 @@ class AuditLog(db.Model):
     actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     actor_role = db.Column(db.String(20), nullable=True)
     details = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_colombia, nullable=False)
 
     actor = db.relationship("User")
 

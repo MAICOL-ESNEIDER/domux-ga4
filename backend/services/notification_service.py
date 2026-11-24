@@ -156,3 +156,15 @@ def notify_residents(title, message, notification_type):
             notification,
         )
     return notifications
+
+
+def notify_admins(title, message, notification_type):
+    """Create notifications for every active administrator."""
+    admin_ids = db.session.query(User.id).filter_by(
+        role="ADMIN",
+        is_active=True,
+    ).all()
+    return [
+        notify_user(admin_id, title, message, notification_type)
+        for (admin_id,) in admin_ids
+    ]

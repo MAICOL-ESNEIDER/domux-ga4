@@ -60,8 +60,11 @@ def token_required(f):
         user = db.session.get(User, payload.get("user_id"))
         if user is None:
             return error_response(401, "El usuario del token ya no existe")
-        if not getattr(user, "is_active", True):
-            return error_response(401, "Tu cuenta se encuentra inhabilitada")
+        if user.is_active is not True:
+            return error_response(
+                403,
+                "Tu cuenta se encuentra desactivada. Contacta a administración.",
+            )
 
         g.current_user = user
         return f(*args, **kwargs)

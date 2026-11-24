@@ -26,6 +26,7 @@ from models import (
     User,
     Vehicle,
 )
+from time_utils import now_colombia
 from validators import (
     apartment_number_from_label,
     validate_colombian_phone,
@@ -215,7 +216,7 @@ def _upsert_census_row(row):
             parsed_birth_date = date.fromisoformat(birth_date)
         except ValueError as error:
             raise ValueError("Fecha_Nacimiento debe tener formato YYYY-MM-DD.") from error
-        if parsed_birth_date.isoformat() != birth_date or parsed_birth_date > date.today():
+        if parsed_birth_date.isoformat() != birth_date or parsed_birth_date > now_colombia().date():
             raise ValueError("Fecha_Nacimiento no es válida.")
     occupancy_type = row.get("occupancy_type", "").strip().lower() or "propietario"
     if occupancy_type not in ("propietario", "arrendatario", "residente"):
@@ -266,7 +267,7 @@ def _upsert_census_row(row):
         user.parental_consent = _parse_bool(row["parental_consent"])
     user.data_processing_consent = True
     if user.data_processing_consent_at is None:
-        user.data_processing_consent_at = datetime.utcnow()
+        user.data_processing_consent_at = now_colombia()
     db.session.flush()
 
     unit = ResidentialUnit.query.filter_by(apartment=apartment).first()
@@ -327,7 +328,7 @@ def _upsert_census_row(row):
             year = int(float(vehicle_year))
         except ValueError as error:
             raise ValueError("Vehiculo_Anio debe ser un año numérico.") from error
-        if not 1900 <= year <= date.today().year + 1:
+        if not 1900 <= year <= now_colombia().year + 1:
             raise ValueError("Vehiculo_Anio está fuera de rango.")
         existing_vehicle = Vehicle.query.filter_by(plate=re.sub(r"[\s-]", "", plate)).first()
         normalized_plate = re.sub(r"[\s-]", "", plate)

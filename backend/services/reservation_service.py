@@ -2,30 +2,25 @@
 
 import logging
 import re
-from datetime import date as calendar_date, datetime, timedelta, timezone
+from datetime import date as calendar_date, timedelta
 
 from extensions import db
 from models import Reservation
 from services.notification_service import notify_user
+from time_utils import COLOMBIA_TIMEZONE, now_colombia
 from validators import STANDARD_TIME_SLOTS, VALID_TIME_SLOTS
 
 ACTIVE_RESERVATION_STATUSES = ("pendiente_pago", "activa", "aprobada")
 EXPIRABLE_RESERVATION_STATUSES = ACTIVE_RESERVATION_STATUSES + ("pendiente",)
-COLOMBIA_TIMEZONE = timezone(timedelta(hours=-5))
 logger = logging.getLogger(__name__)
 
 
 def finalize_expired_reservations(now=None):
     """Synchronize reservation payment and scheduled-expiration states."""
     if now is None:
-        now_utc = datetime.utcnow()
-        now = datetime.now(COLOMBIA_TIMEZONE)
-    elif now.tzinfo is None:
-        now = now.replace(tzinfo=COLOMBIA_TIMEZONE)
-        now_utc = now.astimezone(timezone.utc).replace(tzinfo=None)
-    else:
-        now = now.astimezone(COLOMBIA_TIMEZONE)
-        now_utc = now.astimezone(timezone.utc).replace(tzinfo=None)
+        now = now_colombia()
+    elif now.tzinfo is not None:
+        now = now.astimezone(COLOMBIA_TIMEZONE).replace(tzinfo=None)
 
     today = now.date()
     current_minute = now.hour * 60 + now.minute
@@ -40,8 +35,8 @@ def finalize_expired_reservations(now=None):
         if reservation.status == "pendiente_pago" and reservation.payment_deadline:
             deadline = reservation.payment_deadline
             if deadline.tzinfo:
-                deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
-            remaining = deadline - now_utc
+                deadline = deadline.astimezone(COLOMBIA_TIMEZONE).replace(tzinfo=None)
+            remaining = deadline - now
             if remaining.total_seconds() <= 0:
                 reservation.status = "expirada"
                 notify_user(

@@ -40,10 +40,13 @@ def login():
     email = data["email"].strip().lower()
     password = data["password"]
     user = User.query.filter(db.func.lower(User.email) == email).first()
+    if user is not None and user.is_active is not True:
+        return error_response(
+            403,
+            "Tu cuenta se encuentra desactivada. Contacta a administración.",
+        )
     if not user or not check_password_hash(user.password_hash, password):
         return error_response(401, "Credenciales inválidas")
-    if not user.is_active:
-        return error_response(401, "Tu cuenta se encuentra inhabilitada")
 
     return jsonify({
         "message": "Login exitoso",

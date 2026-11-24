@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
@@ -9,6 +10,7 @@ from auth import generate_token
 from extensions import db
 from models import AuditLog, CommonArea, Notification, Pqrs, Reservation, User
 from werkzeug.security import check_password_hash, generate_password_hash
+from time_utils import now_colombia
 
 
 class AdminResidentActionTests(unittest.TestCase):
@@ -282,7 +284,7 @@ class AdminResidentActionTests(unittest.TestCase):
             json={
                 "residentId": self.other_resident.id,
                 "commonAreaId": self.area.id,
-                "date": "2099-06-20",
+                "date": (now_colombia().date() + timedelta(days=5)).isoformat(),
                 "timeSlot": "10:00-12:00",
             },
         )

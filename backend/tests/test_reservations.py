@@ -1,11 +1,11 @@
 import os
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
-from app import create_app
+from app import create_app, migrate_common_area_names
 from auth import generate_token
 from extensions import db
 from models import AuditLog, CommonArea, Notification, Reservation, ReservationMessage, User
@@ -15,6 +15,7 @@ from services.reservation_service import (
 )
 from validators import STANDARD_TIME_SLOTS, VALID_TIME_SLOTS
 from werkzeug.security import generate_password_hash
+from time_utils import now_colombia
 
 
 class ReservationWorkflowTests(unittest.TestCase):
@@ -64,7 +65,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         ])
         db.session.commit()
         self.client = self.app.test_client()
-        self.future_date = (date.today() + timedelta(days=3)).isoformat()
+        self.future_date = (now_colombia().date() + timedelta(days=3)).isoformat()
 
     def tearDown(self):
         db.session.remove()
@@ -100,11 +101,11 @@ class ReservationWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(reservation.payment_deadline)
         self.assertGreaterEqual(
             reservation.payment_deadline,
-            datetime.utcnow() + timedelta(hours=3, minutes=59),
+            now_colombia() + timedelta(hours=3, minutes=59),
         )
         self.assertLessEqual(
             reservation.payment_deadline,
-            datetime.utcnow() + timedelta(hours=4),
+            now_colombia() + timedelta(hours=4),
         )
         self.assertFalse(reservation.payment_reminder_sent)
         self.assertTrue(response.json["reservation"]["paymentDeadline"])
@@ -122,8 +123,33 @@ class ReservationWorkflowTests(unittest.TestCase):
             1,
         )
 
+    def test_reservation_notifies_all_active_admins(self):
+        second_admin = User(
+            name="Segundo admin",
+            email="second-admin-reservations@test.local",
+            password_hash=generate_password_hash("Admin123*"),
+            role="ADMIN",
+            is_active=True,
+        )
+        inactive_admin = User(
+            name="Admin inactivo",
+            email="inactive-admin-reservations@test.local",
+            password_hash=generate_password_hash("Admin123*"),
+            role="ADMIN",
+            is_active=False,
+        )
+        db.session.add_all([second_admin, inactive_admin])
+        db.session.commit()
+
+        response = self.create_request()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Notification.query.filter_by(user_id=self.admin.id).count(), 1)
+        self.assertEqual(Notification.query.filter_by(user_id=second_admin.id).count(), 1)
+        self.assertEqual(Notification.query.filter_by(user_id=inactive_admin.id).count(), 0)
+
     def test_expired_reservations_are_finalized_using_colombia_time(self):
-        today = datetime.now(COLOMBIA_TIMEZONE).date()
+        today = now_colombia().date()
         yesterday = (today - timedelta(days=1)).isoformat()
         active_today = Reservation(
             resident_id=self.resident.id,
@@ -168,7 +194,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(datetime.now(COLOMBIA_TIMEZONE).date() - timedelta(days=1)).isoformat(),
+            date=(now_colombia().date() - timedelta(days=1)).isoformat(),
             time_slot="18:00-20:00",
             status="activa",
         )
@@ -184,7 +210,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         self.assertEqual(reservation.status, "finalizada")
 
     def test_minor_without_parental_consent_cannot_request_reservation(self):
-        today = date.today()
+        today = now_colombia().date()
         try:
             birth_date = today.replace(year=today.year - 15)
         except ValueError:
@@ -203,8 +229,9 @@ class ReservationWorkflowTests(unittest.TestCase):
         self.assertEqual(Reservation.query.count(), 0)
 
     def test_resident_can_create_multiple_reservations_per_day_and_week(self):
-        week_start = date.today() + timedelta(
-            days=(7 - date.today().weekday()) % 7
+        today = now_colombia().date()
+        week_start = today + timedelta(
+            days=(7 - today.weekday()) % 7
         )
         first = self.create_request(
             date=week_start.isoformat(),
@@ -225,9 +252,9 @@ class ReservationWorkflowTests(unittest.TestCase):
 
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 201)
-        self.assertEqual(third.status_code, 201)
-        self.assertEqual(fourth.status_code, 201)
-        self.assertEqual(Reservation.query.count(), 4)
+        self.assertEqual(third.status_code, 409)
+        self.assertEqual(fourth.status_code, 409)
+        self.assertEqual(Reservation.query.count(), 2)
 
     def test_pending_payment_reservations_block_overlapping_slots(self):
         first = self.create_request()
@@ -246,10 +273,60 @@ class ReservationWorkflowTests(unittest.TestCase):
         self.assertIn("10:00-12:00", availability.json["occupiedSlots"])
         self.assertEqual(Reservation.query.count(), 1)
 
+    def test_resident_is_limited_to_two_pending_payments_and_booking_horizon(self):
+        first = self.create_request(slot="08:00-10:00")
+        second = self.create_request(slot="12:00-14:00")
+        third = self.create_request(slot="14:00-16:00")
+        self.assertEqual([first.status_code, second.status_code, third.status_code], [201, 201, 409])
+
+        general_area = CommonArea(name="Cancha")
+        db.session.add(general_area)
+        db.session.commit()
+        too_far_for_general = self.create_request(
+            resident=self.other_resident,
+            commonAreaId=general_area.id,
+            date=(now_colombia().date() + timedelta(days=31)).isoformat(),
+        )
+        within_social_hall = self.create_request(
+            resident=self.other_resident,
+            date=(now_colombia().date() + timedelta(days=60)).isoformat(),
+            slot="12:00-14:00",
+        )
+        beyond_social_hall = self.create_request(
+            resident=self.other_resident,
+            date=(now_colombia().date() + timedelta(days=61)).isoformat(),
+            slot="14:00-16:00",
+        )
+        self.assertEqual(too_far_for_general.status_code, 400)
+        self.assertEqual(within_social_hall.status_code, 201)
+        self.assertEqual(beyond_social_hall.status_code, 400)
+
+    def test_common_area_migration_renames_gym_without_changing_id(self):
+        gym = CommonArea(name="Gimnasio")
+        db.session.add(gym)
+        db.session.commit()
+        gym_id = gym.id
+        reservation = Reservation(
+            resident_id=self.resident.id,
+            common_area_id=gym_id,
+            date=self.future_date,
+            time_slot="10:00-12:00",
+            status="aprobada",
+        )
+        db.session.add(reservation)
+        db.session.commit()
+
+        migrate_common_area_names()
+        db.session.refresh(gym)
+        db.session.refresh(reservation)
+
+        self.assertEqual(gym.name, "Salón de Juegos")
+        self.assertEqual(reservation.common_area_id, gym_id)
+
     def test_payment_reminder_is_sent_when_two_hours_or_less_remain(self):
         self.create_request()
         reservation = Reservation.query.one()
-        reservation.payment_deadline = datetime.utcnow() + timedelta(minutes=120)
+        reservation.payment_deadline = now_colombia() + timedelta(minutes=120)
         db.session.commit()
 
         response = self.client.get(
@@ -280,7 +357,7 @@ class ReservationWorkflowTests(unittest.TestCase):
     def test_expired_payment_releases_schedule_and_notifies_resident(self):
         self.create_request()
         reservation = Reservation.query.one()
-        reservation.payment_deadline = datetime.utcnow() - timedelta(seconds=1)
+        reservation.payment_deadline = now_colombia() - timedelta(seconds=1)
         db.session.commit()
 
         availability = self.client.get(
@@ -377,7 +454,7 @@ class ReservationWorkflowTests(unittest.TestCase):
             ).first()
         )
 
-    def test_admin_created_reservation_is_approved_without_payment_hold(self):
+    def test_admin_created_reservation_starts_payment_hold_unless_payment_received(self):
         response = self.client.post(
             "/api/reservations",
             headers=self.headers(self.admin),
@@ -390,8 +467,34 @@ class ReservationWorkflowTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json["reservation"]["status"], "aprobada")
-        self.assertIsNone(Reservation.query.one().payment_deadline)
+        self.assertEqual(response.json["reservation"]["status"], "pendiente_pago")
+        self.assertIsNotNone(Reservation.query.one().payment_deadline)
+
+        paid = self.client.post(
+            "/api/reservations",
+            headers=self.headers(self.admin),
+            json={
+                "residentId": self.other_resident.id,
+                "commonAreaId": self.area.id,
+                "date": self.future_date,
+                "timeSlot": "12:00-14:00",
+                "paymentAlreadyReceived": True,
+            },
+        )
+        self.assertEqual(paid.status_code, 201)
+        self.assertEqual(paid.json["reservation"]["status"], "aprobada")
+        paid_reservation = Reservation.query.filter_by(
+            resident_id=self.other_resident.id
+        ).one()
+        self.assertIsNone(paid_reservation.payment_deadline)
+        self.assertEqual(
+            AuditLog.query.filter_by(
+                entity_type="RESERVATION",
+                entity_id=paid_reservation.id,
+                action="payment_received",
+            ).count(),
+            1,
+        )
 
     def test_calendar_blocks_only_fully_occupied_days(self):
         for index, slot in enumerate(STANDARD_TIME_SLOTS):
@@ -402,7 +505,7 @@ class ReservationWorkflowTests(unittest.TestCase):
                 time_slot=slot,
                 status="aprobada",
             ))
-        partial_date = (date.today() + timedelta(days=4)).isoformat()
+        partial_date = (now_colombia().date() + timedelta(days=4)).isoformat()
         db.session.add(Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
@@ -410,7 +513,7 @@ class ReservationWorkflowTests(unittest.TestCase):
             time_slot=VALID_TIME_SLOTS[0],
             status="aprobada",
         ))
-        pending_date = (date.today() + timedelta(days=5)).isoformat()
+        pending_date = (now_colombia().date() + timedelta(days=5)).isoformat()
         db.session.add(Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
@@ -435,8 +538,8 @@ class ReservationWorkflowTests(unittest.TestCase):
             time_slot="08:00-15:00",
             status="aprobada",
         )
-        gym = CommonArea(name="GIMNASIO")
-        db.session.add_all([approved_half_day, gym])
+        general_area = CommonArea(name="Cancha múltiple")
+        db.session.add_all([approved_half_day, general_area])
         db.session.commit()
 
         overlapping = self.create_request(
@@ -449,7 +552,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         )
         invalid_zone = self.create_request(
             resident=self.other_resident,
-            commonAreaId=gym.id,
+            commonAreaId=general_area.id,
             slot="08:00-15:00",
         )
 
@@ -462,7 +565,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         )
 
     def test_invalid_legacy_reservation_can_still_be_rejected(self):
-        gym = CommonArea(name="GIMNASIO")
+        gym = CommonArea(name="Salón de Juegos")
         db.session.add(gym)
         db.session.flush()
         reservation = Reservation(
@@ -557,7 +660,7 @@ class ReservationWorkflowTests(unittest.TestCase):
         same_day = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=date.today().isoformat(),
+            date=now_colombia().date().isoformat(),
             time_slot="12:00-14:00",
             status="aprobada",
         )

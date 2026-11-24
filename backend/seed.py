@@ -1,11 +1,10 @@
 """Create demo accounts and community data for an empty database."""
 
-from datetime import datetime
-
 from werkzeug.security import generate_password_hash
 
 from extensions import db
 from models import Announcement, CommonArea, PackageItem, User
+from time_utils import now_colombia
 
 
 def seed_if_empty():
@@ -55,7 +54,7 @@ def seed_if_empty():
 
     db.session.add_all([
         CommonArea(name="Salón social"),
-        CommonArea(name="Gimnasio"),
+        CommonArea(name="Salón de Juegos"),
         CommonArea(name="Cancha múltiple"),
         CommonArea(name="Zona BBQ"),
     ])
@@ -86,7 +85,7 @@ def seed_if_empty():
             registered_by=guardia.id,
             description="Paquete de prueba entregado",
             status="entregado",
-            delivered_at=datetime.utcnow(),
+            delivered_at=now_colombia(),
             delivered_to=residente1.full_name,
             delivered_by_id=guardia.id,
         ),

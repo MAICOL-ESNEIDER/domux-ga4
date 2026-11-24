@@ -1,7 +1,9 @@
 """Shared request validation for text, credentials, dates, and reservation slots."""
 
 import re
-from datetime import date, datetime
+from datetime import datetime
+
+from time_utils import now_colombia
 
 PASSWORD_REGEX = re.compile(
     r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._-])"
@@ -136,7 +138,7 @@ def validate_future_or_today_date(date_str):
     message = validate_iso_date(date_str)
     if message:
         return message
-    if datetime.strptime(date_str, "%Y-%m-%d").date() < date.today():
+    if datetime.strptime(date_str, "%Y-%m-%d").date() < now_colombia().date():
         return "No puedes seleccionar una fecha anterior al día de hoy."
     return None
 
