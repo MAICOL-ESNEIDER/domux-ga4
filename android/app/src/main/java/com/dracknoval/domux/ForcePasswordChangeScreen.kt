@@ -30,6 +30,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +56,9 @@ fun ForcePasswordChangeScreen(navController: NavController) {
     var attemptedSubmit by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var currentPasswordVisible by remember { mutableStateOf(false) }
+    var newPasswordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -79,8 +88,14 @@ fun ForcePasswordChangeScreen(navController: NavController) {
                     Text("La contraseña actual es obligatoria")
                 }
             },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+            trailingIcon = {
+                val image = if (currentPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                    Icon(image, "Toggle password visibility")
+                }
+            },
             enabled = !saving,
             modifier = Modifier.fillMaxWidth()
         )
@@ -93,8 +108,14 @@ fun ForcePasswordChangeScreen(navController: NavController) {
             supportingText = {
                 Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.")
             },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+            trailingIcon = {
+                val image = if (newPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                    Icon(image, "Toggle password visibility")
+                }
+            },
             enabled = !saving,
             modifier = Modifier.fillMaxWidth()
         )
@@ -112,8 +133,14 @@ fun ForcePasswordChangeScreen(navController: NavController) {
                     Text("Las contraseñas no coinciden")
                 }
             },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+            trailingIcon = {
+                val image = if (confirmPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                    Icon(image, "Toggle password visibility")
+                }
+            },
             enabled = !saving,
             modifier = Modifier.fillMaxWidth()
         )

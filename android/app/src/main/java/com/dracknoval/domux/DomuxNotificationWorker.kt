@@ -26,7 +26,6 @@ class DomuxNotificationWorker(
 
         return try {
             RetrofitClient.initialize(applicationContext)
-            RetrofitClient.resolveBestServerUrl(RetrofitClient.fallbackUrls)
             when (val responseCode = DomuxNotificationSync.fetchAndShow(applicationContext)) {
                 in 200..299 -> Result.success()
                 401, 403 -> Result.success()

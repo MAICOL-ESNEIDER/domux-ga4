@@ -27,6 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -53,6 +59,8 @@ fun ResidentProfileScreen(navController: NavController) {
     var newPassword by remember { mutableStateOf("") }
     var passwordBusy by remember { mutableStateOf(false) }
     var attemptedPasswordChange by remember { mutableStateOf(false) }
+    var currentPasswordVisible by remember { mutableStateOf(false) }
+    var newPasswordVisible by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -172,8 +180,14 @@ fun ResidentProfileScreen(navController: NavController) {
                         label = { Text("Contraseña actual") },
                         isError = attemptedPasswordChange && currentPassword.isBlank(),
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        trailingIcon = {
+                            val image = if (currentPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                            IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                                Icon(image, "Toggle password visibility")
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -185,8 +199,14 @@ fun ResidentProfileScreen(navController: NavController) {
                             Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.")
                         },
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        trailingIcon = {
+                            val image = if (newPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                            IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                                Icon(image, "Toggle password visibility")
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Button(

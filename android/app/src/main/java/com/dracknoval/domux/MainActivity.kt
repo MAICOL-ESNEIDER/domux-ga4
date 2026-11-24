@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -134,6 +135,11 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("notifications") { NotificationsScreen(navController) }
+                        composable("exports_archive") { 
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Respaldo y Exportación en construcción", style = MaterialTheme.typography.titleLarge)
+                            }
+                        }
                     }
                 }
             }
@@ -275,7 +281,6 @@ private fun SessionStartupScreen(
     }
 
     LaunchedEffect(Unit) {
-        RetrofitClient.resolveBestServerUrl(RetrofitClient.fallbackUrls)
         validateSession()
     }
     Column(

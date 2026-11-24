@@ -34,6 +34,9 @@ import kotlinx.coroutines.delay
 import android.net.Uri
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -856,6 +859,7 @@ private fun UserInput(
     password: Boolean = false,
     showMissingError: Boolean = false
 ) {
+    var passwordVisible by remember { mutableStateOf(false) }
     val isPhone = label == "Teléfono"
     val missing = required && showMissingError && value.trim().isEmpty()
     val invalidEmail = label in setOf("Correo", "Correo principal") &&
@@ -872,16 +876,26 @@ private fun UserInput(
         isError = missing || invalidEmail || invalidPassword || invalidPhone,
         keyboardOptions = if (isPhone) {
             KeyboardOptions(keyboardType = KeyboardType.Number)
+        } else if (password) {
+            KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
         } else {
             KeyboardOptions.Default
         },
+        trailingIcon = if (password) {
+            {
+                val image = if (passwordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(image, "Toggle password visibility")
+                }
+            }
+        } else null,
         supportingText = {
             if (isPhone) Text("10 dígitos (ej. 3001234567)")
             else if (missing) Text("$label es obligatorio")
             else if (invalidEmail) Text("Ingresa un correo válido")
             else if (invalidPassword) Text("Usa 8 caracteres con mayúscula, minúscula, número y símbolo")
         },
-        visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation()
+        visualTransformation = if (password && !passwordVisible) androidx.compose.ui.text.input.PasswordVisualTransformation()
         else androidx.compose.ui.text.input.VisualTransformation.None,
         modifier = Modifier.fillMaxWidth()
     )
