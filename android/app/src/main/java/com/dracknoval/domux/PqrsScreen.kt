@@ -49,9 +49,6 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     var includeArchived by remember { mutableStateOf(false) }
     var showLegalOptions by remember { mutableStateOf(false) }
-    var legalSuccessMessage by remember { mutableStateOf("") }
-    var legalBusy by remember { mutableStateOf(false) }
-    var archiveDialog by remember { mutableStateOf(false) }
     var expandedId by remember { mutableStateOf<Int?>(null) }
     var selectedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -131,9 +128,6 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
             selectedTab
         ) { selectedTab = it }
         DomuxFeedbackBanner(message) { message = "" }
-        if (legalSuccessMessage.isNotBlank()) {
-            Text(legalSuccessMessage, color = Color(0xFF34D399), modifier = Modifier.padding(vertical = 4.dp))
-        }
         if (selectedTab == 0) {
         if (Session.isAdmin) {
             TextButton(
@@ -144,57 +138,6 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                     if (showLegalOptions) "Ocultar opciones de archivo y Excel legal"
                     else "Opciones de archivo y Excel legal"
                 )
-            }
-        }
-        if (Session.isAdmin && showLegalOptions) {
-            DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Column(
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("Respaldo Legal y Archivo Excel", style = MaterialTheme.typography.titleSmall)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = {
-                                legalBusy = true
-                                legalSuccessMessage = ""
-                                scope.launch {
-                                    try {
-                                        val response = RetrofitClient.api.exportLegalReport(Session.bearer())
-                                        if (response.isSuccessful) {
-                                            val file = response.body()
-                                                ?: error("El servidor devolvió un reporte vacío.")
-                                            saveBase64FileToDownloads(
-                                                context,
-                                                file.fileName,
-                                                file.base64,
-                                                file.mimeType
-                                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                            )
-                                            legalSuccessMessage =
-                                                "Reporte legal guardado exitosamente en Descargas/${file.fileName}."
-                                            message = ""
-                                        } else {
-                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                        }
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        message = "No se pudo guardar el reporte legal: ${exception.message}"
-                                    } finally {
-                                        legalBusy = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Descargar Excel Legal") }
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = { archiveDialog = true },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Archivar resueltas y limpiar") }
-                    }
-                }
             }
         }
         OutlinedTextField(
@@ -431,47 +374,6 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
         }
         }
     }
-    }
-
-    if (archiveDialog) {
-        DomuxConfirmDialog(
-            title = "Archivar y limpiar historial",
-            message = "Las PQRS resueltas y las reservas finalizadas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa.",
-            confirmLabel = "Archivar y descargar",
-            onConfirm = {
-                archiveDialog = false
-                legalBusy = true
-                legalSuccessMessage = ""
-                scope.launch {
-                    try {
-                        val response = RetrofitClient.api.archiveHistory(Session.bearer())
-                        if (response.isSuccessful) {
-                            val file = response.body()
-                                ?: error("El servidor devolvió un archivo vacío.")
-                            load()
-                            saveBase64FileToDownloads(
-                                context,
-                                file.fileName,
-                                file.base64,
-                                file.mimeType
-                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                            legalSuccessMessage =
-                                "${file.message ?: "Historial archivado."} Archivo guardado en Descargas/${file.fileName}."
-                            message = ""
-                        } else {
-                            message = mensajeDeError(response.code(), response.errorBody()?.string())
-                        }
-                    } catch (exception: Exception) {
-                        if (exception is CancellationException) throw exception
-                        message = "No se pudo archivar y guardar el historial: ${exception.message}"
-                    } finally {
-                        legalBusy = false
-                    }
-                }
-            },
-            onDismiss = { archiveDialog = false }
-        )
     }
 
     if (batchDialog) {

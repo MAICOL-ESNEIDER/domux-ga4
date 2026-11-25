@@ -377,6 +377,11 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Path("id") id: Int
     ): Response<NotificationResponse>
+
+    @DELETE("api/notifications/read")
+    suspend fun clearReadNotifications(
+        @Header("Authorization") auth: String
+    ): Response<GenericMessageResponse>
 }
 
 data class GenericMessageResponse(val message: String?)

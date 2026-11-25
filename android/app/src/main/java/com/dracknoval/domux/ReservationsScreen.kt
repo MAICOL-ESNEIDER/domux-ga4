@@ -160,9 +160,6 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var message by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var attemptedCreate by remember { mutableStateOf(false) }
-    var includeArchived by remember { mutableStateOf(false) }
-    var legalSuccessMessage by remember { mutableStateOf("") }
-    var legalBusy by remember { mutableStateOf(false) }
     var showLegalOptions by remember { mutableStateOf(false) }
     var selectedTab by remember {
         mutableIntStateOf(if (targetResidentId != null) 1 else 0)
@@ -174,8 +171,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
         loading = true
         try {
             val response = RetrofitClient.api.getReservations(
-                Session.bearer(),
-                if (includeArchived) "true" else null
+                Session.bearer()
             )
             if (response.isSuccessful) reservations = response.body()?.reservations.orEmpty()
             else message = mensajeDeError(response.code(), response.errorBody()?.string())
@@ -222,7 +218,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
         }
     }
 
-    LaunchedEffect(includeArchived) { load() }
+    LaunchedEffect(Unit) { load() }
     LaunchedEffect(selectedArea?.id, date) {
         val area = selectedArea
         if (area != null && date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
@@ -264,9 +260,6 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             selectedTab
         ) { selectedTab = it }
         DomuxFeedbackBanner(message) { message = "" }
-        if (legalSuccessMessage.isNotBlank()) {
-            Text(legalSuccessMessage, color = Color(0xFF34D399), modifier = Modifier.padding(vertical = 4.dp))
-        }
         if ((Session.isAdmin || Session.isResident) && selectedTab == 1) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -418,95 +411,6 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                     else "Opciones de archivo y Excel legal"
                 )
             }
-            if (showLegalOptions) {
-            DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Column(
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("Respaldo Legal y Archivo Excel", style = MaterialTheme.typography.titleSmall)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = {
-                                legalBusy = true
-                                legalSuccessMessage = ""
-                                scope.launch {
-                                    try {
-                                        val response = RetrofitClient.api.exportLegalReport(Session.bearer())
-                                        if (response.isSuccessful) {
-                                            val file = response.body()
-                                                ?: error("El servidor devolvió un reporte vacío.")
-                                            saveBase64FileToDownloads(
-                                                context,
-                                                file.fileName,
-                                                file.base64,
-                                                file.mimeType
-                                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                            )
-                                            legalSuccessMessage =
-                                                "Reporte legal guardado exitosamente en Descargas/${file.fileName}."
-                                            message = ""
-                                        } else {
-                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                        }
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        message = "No se pudo guardar el reporte legal: ${exception.message}"
-                                    } finally {
-                                        legalBusy = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Descargar Excel Legal") }
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = {
-                                confirmation =
-                                    "Las reservas finalizadas y las PQRS resueltas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa." to {
-                                        legalBusy = true
-                                        legalSuccessMessage = ""
-                                        scope.launch {
-                                            try {
-                                                val response = RetrofitClient.api.archiveHistory(Session.bearer())
-                                                if (response.isSuccessful) {
-                                                    val file = response.body()
-                                                        ?: error("El servidor devolvió un archivo vacío.")
-                                                    load()
-                                                    saveBase64FileToDownloads(
-                                                        context,
-                                                        file.fileName,
-                                                        file.base64,
-                                                        file.mimeType
-                                                            ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                                    )
-                                                    legalSuccessMessage =
-                                                        "${file.message ?: "Historial archivado."} Archivo guardado en Descargas/${file.fileName}."
-                                                    message = ""
-                                                } else {
-                                                    message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                                }
-                                            } catch (exception: Exception) {
-                                                if (exception is CancellationException) throw exception
-                                                message = "No se pudo archivar y guardar el historial: ${exception.message}"
-                                            } finally {
-                                                legalBusy = false
-                                            }
-                                        }
-                                    }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Archivar finalizadas y limpiar") }
-                    }
-                    FilterChip(
-                        selected = includeArchived,
-                        onClick = { includeArchived = !includeArchived },
-                        label = { Text("Ver archivadas") }
-                    )
-                }
-            }
-        }
         }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f)) {

@@ -135,11 +135,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("notifications") { NotificationsScreen(navController) }
-                        composable("exports_archive") { 
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Respaldo y Exportación en construcción", style = MaterialTheme.typography.titleLarge)
-                            }
-                        }
+                        composable("exports_archive") { ExportsArchiveScreen(navController) }
                     }
                 }
             }
