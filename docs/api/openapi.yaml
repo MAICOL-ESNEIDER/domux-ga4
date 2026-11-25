@@ -21,6 +21,9 @@ info:
     - Si la cuenta se desactivó o se cambió su contraseña, los tokens anteriores dejan de servir (401).
     - Si la persona tiene pendiente cambiar la contraseña que le puso la administración, todas las rutas responden
       **403** con `passwordChangeRequired: true`, salvo `GET /api/auth/session` y `PUT /api/auth/password`.
+    - Si la persona todavía no aceptó los textos legales (la pantalla «Acepto»), o los textos cambiaron desde que
+      aceptó, todas las rutas responden **403** con `legalAcceptanceRequired: true`, salvo `GET /api/auth/session`,
+      `GET /api/auth/legal-acceptance`, `POST /api/auth/accept-legal` y la lectura de los textos legales.
     - Si el rol de la persona no está en la lista de la ruta (`x-roles`), la respuesta es **403**.
     - Al quinto intento fallido seguido de inicio de sesión con el mismo correo (o de PIN de guardia), ese correo (o ese
       PIN) queda bloqueado 15 minutos: la respuesta es **429** con el encabezado `Retry-After` (segundos que faltan).
@@ -3216,6 +3219,64 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/auth/accept-legal:
+    post:
+      tags:
+      - Sesión
+      summary: Aceptar los textos legales (pantalla «Acepto»)
+      description: |-
+        **Quién puede usarla:** Cualquier persona con sesión (administración, portería o residente).
+
+        La persona acepta los términos de uso, la política de tratamiento de datos y la autorización para tratarlos. Se guarda cuándo aceptó y cuál versión de los textos leyó (`version`, la que entregó `GET /api/auth/legal-acceptance`). Si los textos cambiaron mientras tanto, responde **409** con la versión nueva y no guarda nada: nadie acepta algo que no vio. Queda en la auditoría.
+      operationId: authAcceptLegal
+      x-endpoint: auth.accept_legal
+      x-roles:
+      - ADMIN
+      - GUARD
+      - RESIDENT
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - accepted
+              - version
+              properties:
+                accepted:
+                  type: boolean
+                  description: Debe ser verdadero; la persona marcó que leyó y acepta
+                version:
+                  type: string
+                  description: La versión de los textos que la persona vio
+                  example: 'terminos:0.1|politica-datos:0.1|autorizacion-datos:0.1'
+      responses:
+        '200':
+          description: Aceptación registrada
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - user
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/auth/guard-shift:
     post:
       tags:
@@ -3318,6 +3379,58 @@ paths:
                           type: integer
                         name:
                           type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/auth/legal-acceptance:
+    get:
+      tags:
+      - Sesión
+      summary: Ver qué textos legales debe aceptar la persona
+      description: |-
+        **Quién puede usarla:** Cualquier persona con sesión (administración, portería o residente).
+
+        Lo que necesita la pantalla «Acepto»: si la persona debe aceptar (`required`), la versión de los textos (`version`, que se manda de vuelta al aceptar) y cuáles son, sin su texto (se leen en `GET /api/legal/{slug}`). Es una de las pocas rutas que puede usar quien aún no aceptó.
+      operationId: authLegalAcceptance
+      x-endpoint: auth.legal_acceptance_status
+      x-roles:
+      - ADMIN
+      - GUARD
+      - RESIDENT
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: El estado de la aceptación de la persona
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - required
+                - version
+                - acceptedAt
+                - documents
+                properties:
+                  required:
+                    type: boolean
+                    description: Verdadero si la persona debe aceptar (nunca aceptó o los textos cambiaron)
+                  version:
+                    type: string
+                    description: La versión actual de los textos, que se manda al aceptar
+                    example: 'terminos:0.1|politica-datos:0.1|autorizacion-datos:0.1'
+                  acceptedAt:
+                    type: string
+                    description: Hora de Colombia en que aceptó por última vez, AAAA-MM-DD HH:MM
+                    nullable: true
+                    example: 2026-11-25 18:30
+                    pattern: ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$
+                  documents:
+                    type: array
+                    description: Los textos que se aceptan, en el orden en que se muestran
+                    items:
+                      $ref: '#/components/schemas/LegalDocumentSummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -7926,8 +8039,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
-      description: 'La persona no tiene permiso para esta ruta (su rol no está en `x-roles`) o debe cambiar su contraseña
-        (`passwordChangeRequired: true`).'
+      description: 'La persona no tiene permiso para esta ruta (su rol no está en `x-roles`), debe cambiar su contraseña
+        (`passwordChangeRequired: true`) o debe aceptar los textos legales (`legalAcceptanceRequired: true`).'
       content:
         application/json:
           schema:
@@ -7965,7 +8078,8 @@ components:
     Error:
       type: object
       description: 'Así responde el servidor cuando algo sale mal. Algunos errores traen datos extra que la app
-        usa para actuar: passwordChangeRequired (403, hay que cambiar la contraseña), plates (409, placas repetidas),
+        usa para actuar: passwordChangeRequired (403, hay que cambiar la contraseña), legalAcceptanceRequired (403, hay que
+        aceptar los textos legales), version (409 al aceptar: la versión nueva de los textos), plates (409, placas repetidas),
         noFreeSpots y suggestedSpot (409 al registrar la entrada de un vehículo: si no quedan parqueaderos libres
         y cuál se sugiere), failedPqrsIds y updatedCount (respuesta por lotes).'
       required:
@@ -7983,6 +8097,12 @@ components:
         passwordChangeRequired:
           type: boolean
           description: 'Solo en 403: la persona debe cambiar su contraseña antes de seguir'
+        legalAcceptanceRequired:
+          type: boolean
+          description: 'Solo en 403: la persona debe leer y aceptar los textos legales antes de seguir'
+        version:
+          type: string
+          description: 'Solo en 409 al aceptar los textos legales: la versión nueva de los textos'
         plates:
           type: array
           items:
@@ -8174,6 +8294,8 @@ components:
       - dataProcessingConsentAt
       - isActive
       - mustChangePassword
+      - legalAcceptanceRequired
+      - legalAcceptedAt
       - createdAt
       properties:
         id:
@@ -8264,6 +8386,15 @@ components:
         mustChangePassword:
           type: boolean
           description: Verdadero si debe cambiar la contraseña que le puso el administrador
+        legalAcceptanceRequired:
+          type: boolean
+          description: Verdadero si debe leer y aceptar los textos legales (nunca aceptó, o cambiaron desde entonces)
+        legalAcceptedAt:
+          type: string
+          description: Hora de Colombia en que aceptó los textos legales, AAAA-MM-DD HH:MM; nulo si nunca aceptó
+          nullable: true
+          example: 2026-11-25 18:30
+          pattern: ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$
         createdAt:
           type: string
           description: Hora de Colombia, AAAA-MM-DD HH:MM

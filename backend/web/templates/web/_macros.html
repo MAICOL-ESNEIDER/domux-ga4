@@ -129,6 +129,22 @@
 {%- endif %}
 {%- endmacro %}
 
+{# El texto de un documento legal, armado en títulos, párrafos y listas. #}
+{% macro legal_blocks(document) -%}
+<article class="legal-text">
+  {% for block in document.blocks %}
+    {% if block.type == "heading" %}
+      {% if block.level >= 3 %}<h3>{{ block.text }}</h3>{% else %}<h2>{{ block.text }}</h2>{% endif %}
+    {% elif block.type == "list" %}
+      {% if block.ordered %}<ol>{% for item in block["items"] %}<li>{{ item }}</li>{% endfor %}</ol>
+      {% else %}<ul>{% for item in block["items"] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    {% else %}
+      <p>{{ block.text }}</p>
+    {% endif %}
+  {% endfor %}
+</article>
+{%- endmacro %}
+
 {# Los enlaces a los documentos legales: van bajo el inicio de sesión y al pie de cada página con menú. #}
 {% macro legal_links() -%}
 <nav class="legal-links" aria-label="Información legal">

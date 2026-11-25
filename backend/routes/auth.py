@@ -6,6 +6,7 @@ from errors import error_response
 from extensions import db
 from models import User
 from routes.common import json_body
+from services import legal_acceptance
 from services.audit_service import add_audit_log
 from services.login_attempt_service import (
     LOCK_MINUTES,
@@ -15,6 +16,7 @@ from services.login_attempt_service import (
     register_success,
     seconds_locked,
 )
+from time_utils import utc_now
 from validators import require_non_empty_fields, validate_pin, validate_strong_password
 
 bp = Blueprint("auth", __name__, url_prefix="/api")
@@ -99,6 +101,44 @@ def login():
 @token_required
 def current_session():
     return jsonify({"user": g.current_user.to_dict()})
+
+
+@bp.get("/auth/legal-acceptance")
+@token_required
+def legal_acceptance_status():
+    """Lo que la pantalla «Acepto» necesita: la versión de los textos y cuáles son (se leen en /api/legal/<nombre>)."""
+    user = g.current_user
+    return jsonify({
+        "required": legal_acceptance.acceptance_pending(user),
+        "version": legal_acceptance.current_version(),
+        "acceptedAt": user.to_dict()["legalAcceptedAt"],
+        "documents": legal_acceptance.acceptance_documents(),
+    })
+
+
+@bp.post("/auth/accept-legal")
+@token_required
+def accept_legal():
+    """La persona acepta los textos legales: se guarda cuándo y cuál versión leyó (Ley 1581 de 2012).
+
+    La versión que manda la app es la que la persona vio. Si los textos cambiaron mientras tanto, no se
+    guarda nada y se le pide leerlos de nuevo: nadie acepta algo que no vio.
+    """
+    data, failure = json_body()
+    if failure:
+        return failure
+    if data.get("accepted") is not True:
+        return error_response(400, "Para continuar debes marcar que leíste y aceptas los textos.")
+    version = legal_acceptance.current_version()
+    if data.get("version") != version:
+        return error_response(409, "Los textos legales cambiaron. Léelos de nuevo antes de aceptar.", version=version)
+
+    user = g.current_user
+    user.legal_accepted_at = utc_now()
+    user.legal_accepted_version = version
+    add_audit_log("user", user.id, "legal_accepted", {"version": version}, actor=user)
+    db.session.commit()
+    return jsonify({"message": "Gracias: quedó registrada tu aceptación.", "user": user.to_dict()})
 
 
 @bp.put("/auth/password")

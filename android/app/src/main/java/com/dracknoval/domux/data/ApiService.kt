@@ -19,6 +19,16 @@ interface ApiService {
     @GET("api/auth/session")
     suspend fun currentSession(@Header("Authorization") auth: String): Response<UserDataResponse>
 
+    // Pantalla «Acepto»: la persona acepta los textos legales la primera vez que entra (y cuando cambian).
+    @GET("api/auth/legal-acceptance")
+    suspend fun getLegalAcceptance(@Header("Authorization") auth: String): Response<LegalAcceptanceStatus>
+
+    @POST("api/auth/accept-legal")
+    suspend fun acceptLegal(
+        @Header("Authorization") auth: String,
+        @Body body: AcceptLegalRequest
+    ): Response<UserDataResponse>
+
     // La persona cambia su propia contraseña; la respuesta trae una sesión nueva para este celular.
     @PUT("api/auth/password")
     suspend fun changeOwnPassword(

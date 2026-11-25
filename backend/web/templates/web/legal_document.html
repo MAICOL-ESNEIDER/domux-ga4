@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% from "web/_macros.html" import legal_status %}
+{% from "web/_macros.html" import legal_status, legal_blocks %}
 {% set page_title = document.title %}
 {% set wide_card = true %}
 
@@ -10,18 +10,7 @@
 <p class="lead">{{ document.summary }}</p>
 <p class="small">{{ legal_status(document) }}</p>
 
-<article class="legal-text">
-  {% for block in document.blocks %}
-    {% if block.type == "heading" %}
-      {% if block.level >= 3 %}<h3>{{ block.text }}</h3>{% else %}<h2>{{ block.text }}</h2>{% endif %}
-    {% elif block.type == "list" %}
-      {% if block.ordered %}<ol>{% for item in block["items"] %}<li>{{ item }}</li>{% endfor %}</ol>
-      {% else %}<ul>{% for item in block["items"] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
-    {% else %}
-      <p>{{ block.text }}</p>
-    {% endif %}
-  {% endfor %}
-</article>
+{{ legal_blocks(document) }}
 
 {% if not web_user %}
 <p class="small"><a href="{{ url_for('web.login') }}">Volver al inicio de sesión</a></p>

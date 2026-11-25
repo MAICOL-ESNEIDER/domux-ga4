@@ -115,6 +115,12 @@ administración.
   `backend/legal/`; se lee sin iniciar sesión en la web (`/web/legal`), en la API (`/api/legal`) y
   en la app («Legal y privacidad» en «Más» o «Mi hogar», y un enlace en el inicio de sesión). Los
   formularios que piden la autorización de datos enlazan a su texto.
+- Pantalla «Acepto» (app y web de administración): la primera vez que una persona entra, y cada vez
+  que cambia la versión de los términos, la política de tratamiento de datos o la autorización,
+  debe leerlos y aceptarlos (Ley 1581 de 2012). Hasta entonces el servidor solo le deja ver su
+  sesión, leer los textos y aceptar (responde 403 con `legalAcceptanceRequired`). Se guarda cuándo
+  aceptó y cuál versión leyó, y queda en la auditoría. Rutas nuevas: `GET /api/auth/legal-acceptance`
+  y `POST /api/auth/accept-legal`. Si es menor de edad, acepta su representante legal.
 - Hoy los ocho están «en preparación». Un programa revisa que cada texto esté bien armado y, para la
   versión final, exige que todos estén vigentes (`python -m scripts.verificar_legal`).
 

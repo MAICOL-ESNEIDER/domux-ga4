@@ -20,6 +20,7 @@ import com.dracknoval.domux.AnnouncementsScreen
 import com.dracknoval.domux.CreateUserScreen
 import com.dracknoval.domux.DocumentsScreen
 import com.dracknoval.domux.HomeScreen
+import com.dracknoval.domux.LegalAcceptScreen
 import com.dracknoval.domux.LegalScreen
 import com.dracknoval.domux.LoginScreen
 import com.dracknoval.domux.MoreScreen
@@ -266,6 +267,8 @@ private fun GrafoDeLaApp(navegacion: NavHostController, rutaPedida: String) {
         ) { entry ->
             LegalScreen(navegacion, slug = entry.arguments?.getString("slug").orEmpty())
         }
+        // La pantalla «Acepto» en la app de verdad tapa todo lo demás; aquí es una ruta para poder fotografiarla.
+        composable("acepto") { LegalAcceptScreen(onAccepted = {}, onLoggedOut = {}) }
         composable("more") { MoreScreen(navegacion) }
         composable("search") { SearchScreen(navegacion) }
         composable("preferences") { PreferencesScreen(navegacion) }

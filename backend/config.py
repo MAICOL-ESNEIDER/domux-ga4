@@ -25,6 +25,15 @@ def is_production() -> bool:
     )
 
 
+def legal_acceptance_enforced() -> bool:
+    """Dice si el servidor exige que cada persona acepte los textos legales antes de usar la app.
+
+    Siempre se exige, salvo que ``DOMUX_REQUIRE_LEGAL_ACCEPTANCE`` valga ``0``: así se apagó en las pruebas
+    automáticas que no tratan de esto, para que no tengan que aceptar en cada usuario de prueba.
+    """
+    return os.environ.get("DOMUX_REQUIRE_LEGAL_ACCEPTANCE", "1").strip() != "0"
+
+
 #: La base que se usa si no se indica otra: un archivo SQLite en la carpeta ``instance`` (no necesita instalar nada).
 DEFAULT_DATABASE_URL = "sqlite:///domux.db"
 

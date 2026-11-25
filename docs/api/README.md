@@ -10,7 +10,7 @@ conectarse al servidor.
 
 ## Qué dice el contrato
 
-- Las **125 operaciones** de la API (92 direcciones, cada una con sus métodos GET, POST, PUT o DELETE).
+- Las **127 operaciones** de la API (94 direcciones, cada una con sus métodos GET, POST, PUT o DELETE).
 - Quién puede usar cada una (`x-roles`: `ADMIN`, `GUARD` o `RESIDENT`) y que todas piden sesión menos
   `GET /api/health`, `POST /api/auth/login` y los dos documentos legales (`GET /api/legal` y
   `GET /api/legal/{slug}`), que se leen antes de iniciar sesión.

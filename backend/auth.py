@@ -19,6 +19,7 @@ from config import MIN_JWT_SECRET_LENGTH, is_production
 from errors import error_response
 from extensions import db
 from models import User
+from services.legal_acceptance import ACCEPTANCE_ENDPOINTS, ACCEPTANCE_MESSAGE, acceptance_pending
 
 load_dotenv()
 
@@ -104,6 +105,9 @@ def token_required(f):
         # Con una contraseña que le puso el administrador solo puede entrar a cambiarla.
         if user.must_change_password and request.endpoint not in PASSWORD_CHANGE_ENDPOINTS:
             return error_response(403, PASSWORD_CHANGE_MESSAGE, passwordChangeRequired=True)
+        # Con los textos legales sin aceptar (o cambiados desde la última vez) solo puede leerlos y aceptar.
+        if request.endpoint not in ACCEPTANCE_ENDPOINTS and acceptance_pending(user):
+            return error_response(403, ACCEPTANCE_MESSAGE, legalAcceptanceRequired=True)
 
         g.current_user = user
         return f(*args, **kwargs)

@@ -176,6 +176,13 @@ class MainActivity : ComponentActivity() {
                             onChanged = { navController.navigate("home") { popUpTo(0) } },
                             onLoggedOut = { navController.navigate("login") { popUpTo(0) } }
                         )
+                    } else if (Session.legalAcceptanceRequired) {
+                        // Pantalla «Acepto»: la primera vez que entra (y cuando cambian los textos legales)
+                        // la persona lee y acepta cómo se usan sus datos. Va después de la contraseña.
+                        LegalAcceptScreen(
+                            onAccepted = { navController.navigate("home") { popUpTo(0) } },
+                            onLoggedOut = { navController.navigate("login") { popUpTo(0) } }
+                        )
                     }
                 }
             }

@@ -386,6 +386,11 @@ class ContractContentTests(unittest.TestCase):
         })
         self.call(None, "POST", "/api/auth/login", json={"email": self.resident.email, "password": "no-es-esta"}, expect=401)
         self.call(login["token"], "GET", "/api/auth/session")
+        # «Acepto»: la API del contrato corre con la exigencia apagada; igual se ve el estado y se acepta.
+        status = self.data(login["token"], "GET", "/api/auth/legal-acceptance")
+        self.assertFalse(status["required"])
+        self.assertEqual([item["slug"] for item in status["documents"]], ["terminos", "politica-datos", "autorizacion-datos"])
+        self.call(login["token"], "POST", "/api/auth/accept-legal", json={"accepted": True, "version": status["version"]})
 
         # Una cuenta nueva trae una clave temporal: hasta cambiarla, todo responde 403 menos estas dos rutas.
         temporary = "Temp" + secrets.token_hex(4) + "Zz9*"
