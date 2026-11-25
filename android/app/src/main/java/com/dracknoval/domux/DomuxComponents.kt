@@ -463,7 +463,13 @@ fun DomuxResidentSearchField(
                 searchError?.let {
                     Text(it, color = Color(0xFFF87171), style = MaterialTheme.typography.bodySmall)
                 }
-                if (results.isNotEmpty()) {
+                if (searchQuery.isBlank()) {
+                    Text(
+                        "Escribe nombre o apartamento para buscar...",
+                        color = Color(0xFF94A3B8),
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (results.isNotEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = Color(0xFF091426),
@@ -476,7 +482,7 @@ fun DomuxResidentSearchField(
                                 .verticalScroll(rememberScrollState())
                                 .padding(6.dp)
                         ) {
-                            results.take(if (searchQuery.isBlank()) 3 else 5).forEach { resident ->
+                            results.take(5).forEach { resident ->
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()

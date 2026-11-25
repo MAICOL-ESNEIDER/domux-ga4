@@ -365,7 +365,7 @@ data class RegisterPackageRequest(
     val status: String = "pendiente"
 )
 data class RegisterPackageResponse(val message: String?, val packageItem: PackageItem?)
-data class DeliverPackageRequest(val receivedBy: String)
+data class DeliverPackageRequest(val receivedBy: String, val mediaUrl: String? = null, val mediaType: String? = null)
 data class UpdatePackageStatusRequest(val status: String)
 
 data class Visit(
@@ -391,7 +391,8 @@ data class Visit(
     val qrPassId: Int? = null,
     val events: List<VisitEvent>? = null,
     val overstayWarning: Boolean = false,
-    val maxStayHours: Int = 24
+    val maxStayHours: Int = 24,
+    val residentPhone: String? = null
 )
 data class VisitsListResponse(val visits: List<Visit>?)
 data class VisitEvent(

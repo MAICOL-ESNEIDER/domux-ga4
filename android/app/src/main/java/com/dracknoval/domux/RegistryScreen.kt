@@ -1,7 +1,10 @@
 package com.dracknoval.domux
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.Image
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -37,6 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.dracknoval.domux.data.CreateVisitQrRequest
@@ -104,9 +112,28 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     var visits by remember { mutableStateOf<List<Visit>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("") }
+    var messageIsError by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf<String?>(null) }
-    var selectedTab by remember(initialTab) { mutableStateOf(initialTab) }
+    val isVisitsModule = if (Session.isResident) initialTab >= 1 else initialTab >= 2
+
+    val tabs = if (Session.isGuard) {
+        emptyList()
+    } else if (isVisitsModule) {
+        if (Session.isResident) listOf("Mis visitas", "Código QR") else listOf("Visitas", "Registrar visita / QR")
+    } else {
+        if (Session.isResident) listOf("Mis paquetes") else listOf("Paquetes", "Registrar paquete")
+    }
+
+    var selectedTab by remember(initialTab) { mutableStateOf(0) }
+
+    val currentView = if (Session.isGuard) {
+        initialTab
+    } else if (isVisitsModule) {
+        if (Session.isResident) selectedTab + 1 else selectedTab + 2
+    } else {
+        selectedTab
+    }
 
     var selectedPackageResident by remember { mutableStateOf<ResidentSummary?>(null) }
     var packageDescription by remember { mutableStateOf("") }
@@ -130,6 +157,9 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
 
     var deliveryPackage by remember { mutableStateOf<PackageItem?>(null) }
     var receiverName by remember { mutableStateOf("") }
+    var deliveryMediaUrl by remember { mutableStateOf<String?>(null) }
+    var deliveryMediaType by remember { mutableStateOf<String?>(null) }
+    var deliveryMediaName by remember { mutableStateOf<String?>(null) }
     var pendingExit by remember { mutableStateOf<Visit?>(null) }
     var pendingQrExit by remember { mutableStateOf<Visit?>(null) }
     var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
@@ -142,8 +172,8 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     }
     var qrStartDate by remember { mutableStateOf(initialQrStartDate) }
     var qrEndDate by remember { mutableStateOf(shiftQrDate(initialQrStartDate, 1)) }
-    var qrVisitorPreRegisteredName by remember { mutableStateOf("") }
-    var qrVisitorPreRegisteredDocument by remember { mutableStateOf("") }
+    var qrVisitorNames by remember { mutableStateOf(List(5) { "" }) }
+    var qrVisitorDocuments by remember { mutableStateOf(List(5) { "" }) }
     var qrMaxGuests by remember { mutableStateOf(1) }
     var attemptedQrCreate by remember { mutableStateOf(false) }
     var scannedQrToken by remember { mutableStateOf<String?>(null) }
@@ -252,6 +282,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
             ScanOptions()
                 .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
                 .setPrompt("Escanea el QR de visitas")
+                .setOrientationLocked(true)
         )
     }
 
@@ -339,11 +370,6 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
         add("Entregados" to "entregado")
         if (canRegister) add("Archivados" to "papelera")
     }
-    val tabs = if (Session.isResident) {
-        listOf("Mis paquetes", "Mis visitas", "Código QR")
-    } else {
-        listOf("Paquetes", "Registrar paquete", "Visitas", "Registrar visita / QR")
-    }
     val title = when {
         Session.isResident -> "Mis paquetes y visitas"
         Session.isGuard -> "Control de portería"
@@ -358,16 +384,18 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (!Session.isGuard) {
+            if (tabs.isNotEmpty()) {
                 DomuxSectionTabs(tabs, selectedTab.coerceIn(tabs.indices)) { selectedTab = it }
             }
             if (message.isNotBlank()) {
-                DomuxFeedbackBanner(message) { message = "" }
+                DomuxFeedbackBanner(message, isError = messageIsError) { message = "" }
             }
-            if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth().height(4.dp)) {
+                if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
 
             when {
-                canRegister && selectedTab == 0 -> {
+                canRegister && currentView == 0 -> {
                     PackageListSection(
                         modifier = Modifier.weight(1f),
                         packages = packages,
@@ -389,14 +417,18 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         onMoveToTrash = { item ->
                             confirmation = "¿Archivar este paquete?" to {
                                 scope.launch {
-                                    runRegistryAction({ message = "No se pudo mover el paquete: $it" }) {
+                                    runRegistryAction({ message = "No se pudo mover el paquete: $it"; messageIsError = true }) {
                                         val response = RetrofitClient.api.deletePackage(
                                             Session.bearer(), item.id, force = false
                                         )
-                                        message = if (response.isSuccessful) {
-                                            "Paquete archivado."
-                                        } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                        if (response.isSuccessful) load()
+                                        if (response.isSuccessful) {
+                                            message = "Paquete archivado."
+                                            messageIsError = false
+                                            load()
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            messageIsError = true
+                                        }
                                     }
                                 }
                             }
@@ -430,7 +462,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     )
                 }
 
-                canRegister && selectedTab == 1 -> {
+                canRegister && currentView == 1 -> {
                     PackageRegistrationSection(
                         modifier = Modifier.weight(1f),
                         resident = selectedPackageResident,
@@ -492,7 +524,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     )
                 }
 
-                canRegister && selectedTab == 2 -> {
+                canRegister && currentView == 2 -> {
                     VisitListSection(
                         modifier = Modifier.weight(1f),
                         visits = visits,
@@ -550,7 +582,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     )
                 }
 
-                canRegister && selectedTab == 3 -> {
+                canRegister && currentView == 3 -> {
                     RegistrationAndQrSection(
                         modifier = Modifier.weight(1f),
                         resident = selectedVisitResident,
@@ -633,7 +665,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     )
                 }
 
-                Session.isResident && selectedTab == 0 -> {
+                Session.isResident && currentView == 0 -> {
                     PackageListSection(
                         modifier = Modifier.weight(1f),
                         packages = packages,
@@ -655,7 +687,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     )
                 }
 
-                Session.isResident && selectedTab == 1 -> {
+                Session.isResident && currentView == 1 -> {
                     VisitListSection(
                         modifier = Modifier.weight(1f),
                         visits = visits,
@@ -680,7 +712,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     )
                 }
 
-                Session.isResident && selectedTab == 2 -> {
+                Session.isResident && currentView == 2 -> {
                     ResidentQrPassSection(
                         modifier = Modifier.weight(1f),
                         startDate = qrStartDate,
@@ -693,10 +725,14 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         },
                         endDate = qrEndDate,
                         onEndDateChange = { qrEndDate = it },
-                        visitorName = qrVisitorPreRegisteredName,
-                        onVisitorNameChange = { qrVisitorPreRegisteredName = it },
-                        visitorDocument = qrVisitorPreRegisteredDocument,
-                        onVisitorDocumentChange = { qrVisitorPreRegisteredDocument = it },
+                        visitorNames = qrVisitorNames,
+                        onVisitorNameChange = { index, name ->
+                            qrVisitorNames = qrVisitorNames.toMutableList().apply { set(index, name) }
+                        },
+                        visitorDocuments = qrVisitorDocuments,
+                        onVisitorDocumentChange = { index, doc ->
+                            qrVisitorDocuments = qrVisitorDocuments.toMutableList().apply { set(index, doc) }
+                        },
                         maxGuests = qrMaxGuests,
                         onMaxGuestsChange = { qrMaxGuests = it },
                         attemptedCreate = attemptedQrCreate,
@@ -705,45 +741,50 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         qrBitmap = qrBitmap,
                         onCreate = {
                             attemptedQrCreate = true
-                            if (qrVisitorPreRegisteredName.isBlank() ||
-                                qrVisitorPreRegisteredDocument.isBlank()
+                            if (qrVisitorNames.take(qrMaxGuests).any { it.isBlank() } ||
+                                qrVisitorDocuments.take(qrMaxGuests).any { it.isBlank() }
                             ) {
-                                message = "Escribe el nombre y documento del visitante."
+                                message = "Escribe el nombre y documento de todos los visitantes."
+                                messageIsError = true
                             } else if (
                                 qrEndDate < qrStartDate ||
                                 qrEndDate > shiftQrDate(qrStartDate, 3)
                             ) {
                                 message = "La vigencia del QR no puede superar 72 horas desde el inicio."
+                                messageIsError = true
                             } else if (qrMaxGuests !in 1..5) {
                                 message = "La cantidad de personas debe estar entre 1 y 5."
+                                messageIsError = true
                             } else {
                                 scope.launch {
-                                    runRegistryAction({ message = "No se pudo crear el QR: $it" }) {
+                                    runRegistryAction({ message = "No se pudo crear el QR: $it"; messageIsError = true }) {
                                         val response = RetrofitClient.api.createVisitQrPass(
                                             Session.bearer(),
                                             CreateVisitQrRequest(
                                                 validFrom = qrStartDate,
                                                 validUntil = qrEndDate,
-                                                visitorName = qrVisitorPreRegisteredName.trim(),
-                                                visitorDocument = qrVisitorPreRegisteredDocument.trim(),
+                                                visitorName = qrVisitorNames.take(qrMaxGuests).joinToString(" / "),
+                                                visitorDocument = qrVisitorDocuments.take(qrMaxGuests).joinToString(" / "),
                                                 maxGuests = qrMaxGuests
                                             )
                                         )
                                         if (response.isSuccessful) {
                                             activeQrPass = response.body()?.qrPass
-                                            qrVisitorPreRegisteredName = ""
-                                            qrVisitorPreRegisteredDocument = ""
+                                            qrVisitorNames = List(5) { "" }
+                                            qrVisitorDocuments = List(5) { "" }
                                             attemptedQrCreate = false
                                             message = "Código QR creado."
+                                            messageIsError = false
                                             load()
                                         } else {
                                             message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            messageIsError = true
                                         }
                                     }
                                 }
                             }
                         },
-                        onSelectPass = { activeQrPass = it },
+                        onSelectPass = { if (it.id == -1) activeQrPass = null else activeQrPass = it },
                         onRevokePass = { pass ->
                             scope.launch {
                                 runRegistryAction({ message = "No se pudo revocar el QR: $it" }) {
@@ -782,14 +823,25 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
             onDismissRequest = { deliveryPackage = null },
             title = { Text("Confirmar entrega") },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("¿A quién se entregó ${item.description.orEmpty()}?")
                     OutlinedTextField(
                         value = receiverName,
                         onValueChange = { receiverName = it },
-                        label = { Text("Nombre de quien recibe") },
+                        label = { Text("Nombre de quien recibe *") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
+                    )
+                    MediaAttachmentPicker(
+                        attachmentName = deliveryMediaName,
+                        onAttachment = { url, type, name ->
+                            deliveryMediaUrl = url
+                            deliveryMediaType = type
+                            deliveryMediaName = name
+                        },
+                        mimeTypeFilter = "image/*",
+                        onError = { message = it; messageIsError = true }
                     )
                 }
             },
@@ -798,17 +850,28 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     enabled = receiverName.isNotBlank(),
                     onClick = {
                         scope.launch {
-                            runRegistryAction({ message = "No se pudo entregar el paquete: $it" }) {
+                            runRegistryAction({ message = "No se pudo entregar el paquete: $it"; messageIsError = true }) {
                                 val response = RetrofitClient.api.deliverPackage(
-                                    Session.bearer(), item.id, DeliverPackageRequest(receiverName.trim())
+                                    Session.bearer(),
+                                    item.id,
+                                    DeliverPackageRequest(
+                                        receivedBy = receiverName.trim(),
+                                        mediaUrl = deliveryMediaUrl,
+                                        mediaType = deliveryMediaType
+                                    )
                                 )
-                                message = if (response.isSuccessful) {
-                                    "Paquete entregado a ${receiverName.trim()}."
-                                } else mensajeDeError(response.code(), response.errorBody()?.string())
                                 if (response.isSuccessful) {
+                                    message = "Paquete entregado a ${receiverName.trim()}."
+                                    messageIsError = false
                                     deliveryPackage = null
                                     receiverName = ""
+                                    deliveryMediaUrl = null
+                                    deliveryMediaType = null
+                                    deliveryMediaName = null
                                     load()
+                                } else {
+                                    message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                    messageIsError = true
                                 }
                             }
                         }
@@ -1109,81 +1172,121 @@ private fun VisitRegistryCard(
     onEntry: () -> Unit,
     onExit: () -> Unit
 ) {
-    DomuxCard(Modifier.fillMaxWidth()) {
+    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    
+    DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            modifier = Modifier.fillMaxWidth().animateContentSize()
         ) {
-            Text(visit.visitorName, style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${visit.type.toDomuxDisplayLabel()} · ${visit.createdAt.orEmpty()} · " +
-                    visit.approvalStatus.toDomuxDisplayLabel()
-            )
-            Text("Para: ${visit.residentName.orEmpty()} · ${visit.apartment.orEmpty()}")
-            if (visit.documentRefused || visit.visitorDocument == "NO SUMINISTRADO") {
-                DomuxStatusBadge("Sin documento (Se negó)", DomuxBadgeTone.ALERT)
-            } else if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
-                Text("Documento: ${visit.visitorDocument}")
-            }
-            MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType)
-            visit.description?.takeIf { it.isNotBlank() }?.let { Text("Pedido: $it") }
-            visit.enteredAt?.let { Text("Última entrada: $it") }
-            visit.exitedAt?.let { Text("Última salida: $it") }
-            if (visit.overstayWarning) {
-                DomuxStatusBadge(
-                    "Tiempo de permanencia excedido (>${visit.maxStayHours}h)",
-                    DomuxBadgeTone.ALERT
-                )
-            }
-            Text(
-                "Autorización: " + when (visit.authorizationMethod) {
-                    "llamada" -> "por llamada"
-                    "qr" -> "por QR"
-                    "app" -> "desde la app"
-                    else -> "pendiente"
-                }
-            )
-            visit.events.orEmpty().forEach { event ->
-                Text(
-                    "${event.type.toDomuxDisplayLabel()} · ${event.createdAt.orEmpty()} · " +
-                        "${event.method.toDomuxDisplayLabel()} · ${event.actorName.orEmpty()}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            if (isResident && visit.approvalStatus == "pendiente") {
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TextButton(onClick = { onDecision("aprobada") }) { Text("Autorizar") }
-                    TextButton(onClick = { onDecision("rechazada") }) { Text("Rechazar") }
-                }
-            }
-            if (isGuard && visit.approvalStatus == "pendiente") {
+            Column(
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                val radicado = "VIS-${visit.createdAt?.take(4) ?: "2026"}-${visit.id.toString().padStart(4, '0')}"
+                Text(radicado, style = MaterialTheme.typography.labelSmall, color = androidx.compose.ui.graphics.Color.Gray)
+                Text(visit.visitorName, style = MaterialTheme.typography.titleMedium)
+                Text("${visit.type.toDomuxDisplayLabel()} · ${visit.residentName.orEmpty()} · ${visit.apartment.orEmpty()}")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = onAuthorizeAndEnter,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Autorizar e ingresar") }
-                    OutlinedButton(
-                        onClick = onAuthorizeByCall,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Autorizar por llamada") }
+                    Text(visit.approvalStatus.toDomuxDisplayLabel())
+                    if (visit.enteredAt != null && (visit.exitedAt == null || visit.exitReturning)) {
+                        if (visit.overstayWarning) {
+                            DomuxStatusBadge("Plazo vencido (>${visit.maxStayHours}h)", DomuxBadgeTone.ALERT)
+                        } else {
+                            DomuxStatusBadge("En tiempo", DomuxBadgeTone.SUCCESS)
+                        }
+                    }
                 }
             }
-            if (isGuard && visit.approvalStatus == "aprobada") {
-                if (visit.enteredAt == null || (visit.exitedAt != null && visit.exitReturning)) {
-                    Button(onClick = onEntry, modifier = Modifier.fillMaxWidth()) {
-                        Text("Registrar entrada")
+            if (expanded) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    if (visit.documentRefused || visit.visitorDocument == "NO SUMINISTRADO") {
+                        DomuxStatusBadge("Sin documento (Se negó)", DomuxBadgeTone.ALERT)
+                    } else if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
+                        Text("Documento: ${visit.visitorDocument}")
                     }
-                } else if (visit.exitedAt != null && !visit.exitReturning) {
-                    Text("Salida definitiva. Si vuelve, registra una nueva solicitud.")
-                } else {
-                    OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) {
-                        Text("Registrar salida")
+                    MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType)
+                    visit.description?.takeIf { it.isNotBlank() }?.let { Text("Pedido: $it") }
+                    visit.enteredAt?.let { Text("Última entrada: $it") }
+                    visit.exitedAt?.let { Text("Última salida: $it") }
+                    Text(
+                        "Autorización: " + when (visit.authorizationMethod) {
+                            "llamada" -> "por llamada"
+                            "qr" -> "por QR"
+                            "app" -> "desde la app"
+                            else -> "pendiente"
+                        }
+                    )
+                    visit.events.orEmpty().forEach { event ->
+                        Text(
+                            "${event.type.toDomuxDisplayLabel()} · ${event.createdAt.orEmpty()} · " +
+                                "${event.method.toDomuxDisplayLabel()} · ${event.actorName.orEmpty()}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (isResident && visit.approvalStatus == "pendiente") {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            TextButton(onClick = { onDecision("aprobada") }) { Text("Autorizar") }
+                            TextButton(onClick = { onDecision("rechazada") }) { Text("Rechazar") }
+                        }
+                    }
+                    if (isGuard && visit.approvalStatus == "pendiente") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+                            Button(
+                                onClick = onAuthorizeAndEnter,
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            ) { Text("Autorizar e ingresar") }
+                            OutlinedButton(
+                                onClick = {
+                                    visit.residentPhone?.let { phone ->
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
+                                        context.startActivity(intent)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            ) { Text("Llamar al residente") }
+                            TextButton(
+                                onClick = onAuthorizeByCall,
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            ) { Text("Confirmar autorización por llamada") }
+                        }
+                    }
+                    if (isGuard && visit.approvalStatus == "aprobada") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+                            if (visit.overstayWarning) {
+                                OutlinedButton(
+                                    onClick = {
+                                        visit.residentPhone?.let { phone ->
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
+                                            context.startActivity(intent)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                ) { Text("Llamar al residente (vencido)") }
+                            }
+                            if (visit.enteredAt == null || (visit.exitedAt != null && visit.exitReturning)) {
+                                Button(onClick = onEntry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                    Text("Registrar entrada")
+                                }
+                            } else if (visit.exitedAt != null && !visit.exitReturning) {
+                                Text("Salida definitiva. Si vuelve, registra una nueva solicitud.")
+                            } else {
+                                OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                    Text("Registrar salida")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1302,13 +1405,11 @@ private fun PackageRegistrationSection(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                DatePickerField(
-                    "Fecha del paquete",
-                    date,
-                    onDateChange,
-                    allowPastDates = false
+                Text(
+                    "Fecha y hora de llegada: Hoy · ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())} (registro automático)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = androidx.compose.ui.graphics.Color.Gray
                 )
-                TimePickerField("Hora del paquete", time, onTimeChange)
                 MediaAttachmentPicker(
                     mediaName,
                     { url, type, name -> onMedia(url, type, name) },
@@ -1513,10 +1614,10 @@ private fun ResidentQrPassSection(
     onStartDateChange: (String) -> Unit,
     endDate: String,
     onEndDateChange: (String) -> Unit,
-    visitorName: String,
-    onVisitorNameChange: (String) -> Unit,
-    visitorDocument: String,
-    onVisitorDocumentChange: (String) -> Unit,
+    visitorNames: List<String>,
+    onVisitorNameChange: (Int, String) -> Unit,
+    visitorDocuments: List<String>,
+    onVisitorDocumentChange: (Int, String) -> Unit,
     maxGuests: Int,
     onMaxGuestsChange: (Int) -> Unit,
     attemptedCreate: Boolean,
@@ -1538,46 +1639,6 @@ private fun ResidentQrPassSection(
             ) {
                 Text("Código QR para visitas", style = MaterialTheme.typography.titleMedium)
                 Text("Vigencia máxima: 72 horas (por defecto 24 h).")
-                OutlinedTextField(
-                    value = visitorName,
-                    onValueChange = onVisitorNameChange,
-                    label = { Text("Nombre del visitante *") },
-                    isError = attemptedCreate && visitorName.isBlank(),
-                    supportingText = {
-                        if (attemptedCreate && visitorName.isBlank()) {
-                            Text("El nombre del visitante es obligatorio.")
-                        }
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = visitorDocument,
-                    onValueChange = onVisitorDocumentChange,
-                    label = { Text("Documento de identidad del visitante *") },
-                    isError = attemptedCreate && visitorDocument.isBlank(),
-                    supportingText = {
-                        if (attemptedCreate && visitorDocument.isBlank()) {
-                            Text("El documento del visitante es obligatorio.")
-                        }
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                DatePickerField(
-                    "Válido desde",
-                    startDate,
-                    onStartDateChange,
-                    allowPastDates = false
-                )
-                DatePickerField(
-                    label = "Válido hasta",
-                    value = endDate,
-                    onValueChange = onEndDateChange,
-                    allowPastDates = false,
-                    minDate = startDate,
-                    maxDate = shiftQrDate(startDate, 3)
-                )
                 Text("Cantidad de personas")
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -1591,6 +1652,26 @@ private fun ResidentQrPassSection(
                         )
                     }
                 }
+                (0 until maxGuests).forEach { index ->
+                    Text("Visitante ${index + 1}", style = MaterialTheme.typography.labelLarge)
+                    OutlinedTextField(
+                        value = visitorNames[index],
+                        onValueChange = { onVisitorNameChange(index, it) },
+                        label = { Text("Nombre completo *") },
+                        isError = attemptedCreate && visitorNames[index].isBlank(),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = visitorDocuments[index],
+                        onValueChange = { onVisitorDocumentChange(index, it) },
+                        label = { Text("Documento de identidad *") },
+                        isError = attemptedCreate && visitorDocuments[index].isBlank(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 Button(
                     onClick = onCreate,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -1598,35 +1679,83 @@ private fun ResidentQrPassSection(
                     Text("Crear QR")
                 }
                 passes.forEach { pass ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    DomuxCard(
+                        modifier = Modifier.fillMaxWidth().clickable { onSelectPass(pass) }
                     ) {
-                        TextButton(onClick = { onSelectPass(pass) }) {
-                            Text(
-                                "${pass.validFrom} a ${pass.validUntil} · " +
-                                    "${pass.usedEntries}/${pass.maxGuests}"
-                            )
-                        }
-                        if (!pass.revoked) {
-                            TextButton(onClick = { onRevokePass(pass) }) { Text("Revocar") }
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(pass.visitorName ?: "Visitantes", fontWeight = FontWeight.Bold)
+                            Text("Vigencia: ${pass.validFrom} al ${pass.validUntil}", style = MaterialTheme.typography.bodySmall)
+                            val remaining = pass.remainingEntries
+                            Text(if (remaining == 1) "1 cupo disponible" else "$remaining cupos disponibles", color = androidx.compose.ui.graphics.Color(0xFF38BDF8))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { onSelectPass(pass) }) { Text("Ver QR") }
+                                if (!pass.revoked) {
+                                    TextButton(onClick = { onRevokePass(pass) }) { Text("Revocar", color = MaterialTheme.colorScheme.error) }
+                                }
+                            }
                         }
                     }
                 }
+                val context = LocalContext.current
                 activePass?.let { pass ->
-                    Text("Código activo · ${pass.remainingEntries} cupos disponibles")
-                    qrBitmap?.let {
-                        Image(
-                            bitmap = it.asImageBitmap(),
-                            contentDescription = "Código QR de visitas",
-                            modifier = Modifier
-                                .size(220.dp)
-                                .align(Alignment.CenterHorizontally)
-                        )
-                    }
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { onSelectPass(pass.copy(id = -1)) }, // Hack to close: parent should handle it. Actually I will change parent to `onSelectPass(null)` in another chunk.
+                        confirmButton = {
+                            TextButton(onClick = { 
+                                qrBitmap?.let { bmp ->
+                                    try {
+                                        val finalBitmap = android.graphics.Bitmap.createBitmap(bmp.width, bmp.height + 180, android.graphics.Bitmap.Config.ARGB_8888)
+                                        val canvas = android.graphics.Canvas(finalBitmap)
+                                        canvas.drawColor(android.graphics.Color.WHITE)
+                                        val paint = android.graphics.Paint().apply {
+                                            color = android.graphics.Color.BLACK
+                                            textSize = 40f
+                                            textAlign = android.graphics.Paint.Align.CENTER
+                                            isAntiAlias = true
+                                            isFakeBoldText = true
+                                        }
+                                        canvas.drawText("Pase de acceso DOMUX", bmp.width / 2f, 60f, paint)
+                                        paint.textSize = 30f
+                                        paint.isFakeBoldText = false
+                                        canvas.drawText(pass.visitorName ?: "Visitante", bmp.width / 2f, 110f, paint)
+                                        paint.textSize = 24f
+                                        canvas.drawText("Válido: ${pass.validFrom} al ${pass.validUntil}", bmp.width / 2f, 150f, paint)
+                                        canvas.drawBitmap(bmp, 0f, 180f, null)
+
+                                        val newFile = java.io.File(context.cacheDir, "qr_pass.png")
+                                        val stream = java.io.FileOutputStream(newFile)
+                                        finalBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+                                        stream.close()
+
+                                        val contentUri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", newFile)
+                                        val shareIntent = android.content.Intent().apply {
+                                            action = android.content.Intent.ACTION_SEND
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            setDataAndType(contentUri, "image/png")
+                                            putExtra(android.content.Intent.EXTRA_STREAM, contentUri)
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir QR"))
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            }) { Text("Compartir QR") }
+                        },
+                        dismissButton = { TextButton(onClick = { onSelectPass(pass.copy(id = -1)) }) { Text("Cerrar") } },
+                        title = { Text("Pase de acceso") },
+                        text = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Código activo · ${pass.remainingEntries} cupos disponibles")
+                                qrBitmap?.let {
+                                    Image(
+                                        bitmap = it.asImageBitmap(),
+                                        contentDescription = "Código QR de visitas",
+                                        modifier = Modifier.size(240.dp)
+                                    )
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
