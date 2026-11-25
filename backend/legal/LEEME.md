@@ -5,8 +5,11 @@ datos, el aviso de privacidad, los términos y las demás reglas que la ley pide
 de personas. Cada documento es **un archivo de texto**. El servidor lo lee y lo muestra en la web, en la app y en la
 API, sin que haga falta tocar nada más.
 
-**Estado de hoy: los ocho archivos son un aviso de «documento en preparación».** Lo que ya está construido son los
-espacios donde cada texto se va a ver. Cuando un texto esté escrito y revisado, solo se reemplaza su archivo.
+**Estado de hoy: los ocho archivos son borradores de demostración.** Están escritos teniendo en cuenta todo lo que hace
+DOMUX, marcados como `vigente` (versión `0.1`) y cada uno empieza con el aviso «Borrador de demostración»: todavía no
+los revisó una persona con conocimiento legal ni los adoptó una unidad residencial real, y lo que depende de la unidad
+(quién es el responsable, sus datos de contacto) dice «por completar». Cuando una persona con conocimiento legal los
+revise, se reemplaza el texto, se quita el aviso y se sube la versión.
 
 Palabras que se usan aquí:
 
@@ -23,10 +26,10 @@ Palabras que se usan aquí:
 
 | Archivo | Documento | Dónde se ve hoy | Dónde falta enlazarlo cuando esté el texto |
 |---|---|---|---|
-| `politica-datos.md` | Política de tratamiento de datos personales | Web: pie de página y pantalla de ingreso. App: lista de «Legal y privacidad» | Pantalla de aceptación del primer ingreso |
+| `politica-datos.md` | Política de tratamiento de datos personales | Web: pie de página y pantalla de ingreso. App: lista de «Legal y privacidad» | Ya se acepta en la pantalla «Acepto» del primer ingreso |
 | `aviso-privacidad.md` | Aviso de privacidad | Web y app: lista de documentos | Una versión corta antes de pedir datos: ingreso y formularios de usuario y censo |
-| `autorizacion-datos.md` | Autorización para el tratamiento de datos | Web: formularios «Nuevo usuario» y «Censo». App: formulario de usuarios | Pantalla de aceptación del primer ingreso (el «Acepto» del residente) |
-| `terminos.md` | Términos y condiciones de uso | Web: pie de página y pantalla de ingreso. App: lista (desde el enlace del inicio de sesión) | Pantalla de aceptación del primer ingreso |
+| `autorizacion-datos.md` | Autorización para el tratamiento de datos | Web: formularios «Nuevo usuario» y «Censo». App: formulario de usuarios | Ya se acepta en la pantalla «Acepto» del primer ingreso |
+| `terminos.md` | Términos y condiciones de uso | Web: pie de página y pantalla de ingreso. App: lista (desde el enlace del inicio de sesión) | Ya se acepta en la pantalla «Acepto» del primer ingreso |
 | `consultas-reclamos.md` | Consultas, reclamos y eliminación de datos | Web y app: lista de documentos | Un enlace desde PQRS y desde el perfil de cada persona |
 | `cookies.md` | Política de cookies | Web: pie de página y pantalla de ingreso | Aviso de cookies de la web, si más adelante se agregan cookies que no sean de sesión |
 | `responsable.md` | Responsable y encargado del tratamiento | Web y app: lista de documentos | Pie de la web y «Datos de la unidad» |
@@ -131,4 +134,6 @@ tampoco).
 
 - Los documentos de la versión de venta, que se hacen para esa versión.
 - Datos personales reales, claves o contraseñas: estos archivos son públicos y están en el repositorio.
-- Una pantalla de «Acepto» al primer ingreso: depende de los textos finales y se construye cuando existan.
+- La pantalla «Acepto» ya existe: pide aceptar los términos, la política de datos y la autorización la primera vez que
+  alguien entra y cada vez que la `version` de alguno de esos tres cambia. Por eso subir la `version` de uno de ellos
+  hace que todas las personas deban aceptar de nuevo.

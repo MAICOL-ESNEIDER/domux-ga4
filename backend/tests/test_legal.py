@@ -1,8 +1,8 @@
 """Documentos legales (política de datos, términos, cookies...): los textos, las rutas públicas y la web.
 
-Hoy los ocho textos son un aviso de «documento en preparación»: lo que se prueba es que los espacios
-funcionan (la API, la web y la revisión de los archivos) para que, el día que cada texto esté listo, solo
-haya que reemplazar su archivo. También se prueba el programa ``scripts/verificar_legal.py``, que es la puerta de
+Hoy los ocho textos son borradores de demostración (vigentes, versión 0.1, con un aviso visible al principio):
+lo que se prueba es que los espacios funcionan (la API, la web y la revisión de los archivos) y que, el día que
+cada texto lo revise una persona con conocimiento legal, solo haya que reemplazar su archivo. También se prueba el programa ``scripts/verificar_legal.py``, que es la puerta de
 la versión final. La app Android no tiene pruebas automáticas; ver ``backend/legal/LEEME.md``.
 """
 
@@ -283,9 +283,9 @@ class LegalApiTests(unittest.TestCase):
                 set(document), {"slug", "title", "summary", "status", "version", "effectiveFrom"}, document["slug"],
             )
             self.assertTrue(document["title"] and document["summary"], document["slug"])
-            self.assertEqual(document["status"], "pendiente")
-            self.assertIsNone(document["version"])
-            self.assertIsNone(document["effectiveFrom"])
+            self.assertEqual(document["status"], "vigente")
+            self.assertEqual(document["version"], "0.1")
+            self.assertEqual(document["effectiveFrom"], "2026-11-25")
 
     def test_a_document_is_public_and_carries_its_blocks(self):
         for slug in DOCUMENT_SLUGS:
@@ -294,9 +294,12 @@ class LegalApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 document = response.get_json()
                 self.assertEqual(document["slug"], slug)
-                self.assertEqual(document["status"], "pendiente")
-                self.assertEqual(document["blocks"][0], {"type": "heading", "level": 2, "text": "Documento en preparación"})
+                self.assertEqual(document["status"], "vigente")
+                # Cada borrador dice, desde la primera línea, que todavía no lo revisó una persona con conocimiento legal.
+                self.assertEqual(document["blocks"][0], {"type": "heading", "level": 2, "text": "Borrador de demostración"})
                 self.assertEqual(document["blocks"][1]["type"], "paragraph")
+                self.assertIn("conocimiento legal", document["blocks"][1]["text"])
+                self.assertGreater(len(document["blocks"]), 4)
 
     def test_a_published_document_shows_its_version_date_and_every_kind_of_block(self):
         self.use_folder(terminos=document_text(
@@ -355,14 +358,16 @@ class LegalWebTests(WebTestCase):
         body = self.page("/web/legal")
         for slug in DOCUMENT_SLUGS:
             self.assertIn(f'href="/web/legal/{slug}"', body, slug)
-        self.assertEqual(body.count("En preparación"), len(DOCUMENT_SLUGS))
+        self.assertNotIn("En preparación", body)
+        self.assertEqual(body.count("Vigente"), len(DOCUMENT_SLUGS))
         self.assertIn("Volver al inicio de sesión", body)
 
     def test_a_document_page_shows_the_title_the_summary_and_the_notice(self):
         body = self.page("/web/legal/terminos")
         self.assertIn("<h1>Términos y condiciones de uso</h1>", body)
-        self.assertIn("Las reglas para usar la app y la web de DOMUX.", body)
-        self.assertIn("Documento en preparación", body)
+        self.assertIn("Las reglas para usar la app y la web de DOMUX", body)
+        self.assertIn("Borrador de demostración", body)
+        self.assertNotIn("Documento en preparación", body)
         self.assertIn("Todos los documentos", body)
 
     def test_a_published_document_shows_its_blocks_version_and_date(self):
@@ -459,6 +464,11 @@ class VerifyLegalScriptTests(unittest.TestCase):
         lines = []
         self.assertEqual(verificar_legal.main([], say=lines.append), 0)
         self.assertEqual(len(lines), 1)
+
+    def test_the_real_documents_pass_the_delivery_gate(self):
+        lines = []
+        self.assertEqual(verificar_legal.main(["--exigir-vigentes"], say=lines.append), 0, lines)
+        self.assertIn(f"{len(DOCUMENT_SLUGS)} documentos legales: {len(DOCUMENT_SLUGS)} vigentes y 0 en preparación", lines[0])
 
     def test_the_delivery_gate_refuses_while_documents_are_pending_and_names_each_one(self):
         write_documents(self.directory)
