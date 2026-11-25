@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date
+from datetime import timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
@@ -9,6 +9,7 @@ from app import create_app, migrate_pqrs_conversations
 from auth import generate_token
 from extensions import db
 from models import AuditLog, Notification, Pqrs, PqrsMessage, PqrsSatisfaction, User
+from time_utils import now_colombia
 from werkzeug.security import generate_password_hash
 
 
@@ -106,7 +107,7 @@ class PqrsWorkflowTests(unittest.TestCase):
         )
 
     def test_minor_without_parental_consent_cannot_create_pqrs(self):
-        today = date.today()
+        today = now_colombia().date()
         try:
             birth_date = today.replace(year=today.year - 15)
         except ValueError:
@@ -136,6 +137,66 @@ class PqrsWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(Pqrs.query.count(), 0)
+
+    def test_incident_date_accepts_past_and_rejects_future(self):
+        yesterday = (now_colombia().date() - timedelta(days=1)).isoformat()
+        past = self.client.post(
+            "/api/pqrs",
+            headers=self.auth(self.resident),
+            json={
+                "subject": "Incidente anterior",
+                "message": "Descripción",
+                "incidentDate": yesterday,
+            },
+        )
+        self.assertEqual(past.status_code, 201)
+        self.assertEqual(Pqrs.query.one().incident_date, yesterday)
+
+        future = (now_colombia().date() + timedelta(days=1)).isoformat()
+        rejected = self.client.post(
+            "/api/pqrs",
+            headers=self.auth(self.resident),
+            json={
+                "subject": "Incidente futuro",
+                "message": "Descripción",
+                "incidentDate": future,
+            },
+        )
+        self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(
+            rejected.json["error"],
+            "La fecha del incidente no puede ser futura.",
+        )
+        self.assertEqual(Pqrs.query.count(), 1)
+
+    def test_new_pqrs_notifies_every_active_admin(self):
+        second_admin = User(
+            name="Segundo admin",
+            email="second-admin@test.local",
+            password_hash=generate_password_hash("Admin123*"),
+            role="ADMIN",
+            is_active=True,
+        )
+        disabled_admin = User(
+            name="Admin desactivado",
+            email="inactive-admin@test.local",
+            password_hash=generate_password_hash("Admin123*"),
+            role="ADMIN",
+            is_active=False,
+        )
+        db.session.add_all([second_admin, disabled_admin])
+        db.session.commit()
+
+        response = self.client.post(
+            "/api/pqrs",
+            headers=self.auth(self.resident),
+            json={"subject": "Solicitud", "message": "Descripción"},
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Notification.query.filter_by(user_id=self.admin.id).count(), 1)
+        self.assertEqual(Notification.query.filter_by(user_id=second_admin.id).count(), 1)
+        self.assertEqual(Notification.query.filter_by(user_id=disabled_admin.id).count(), 0)
 
     def test_admin_cannot_resolve_pqrs_without_text_response(self):
         pqrs = self.make_pqrs()

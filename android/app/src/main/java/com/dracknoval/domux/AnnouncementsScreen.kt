@@ -9,6 +9,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -73,18 +75,20 @@ fun AnnouncementsScreen(navController: NavController) {
         if (Session.isAdmin && selectedTab == 1) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Column(Modifier.padding(12.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Publicar anuncio", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         title, { title = it }, label = { Text("Título *") },
                         isError = attemptedSubmit && title.trim().isEmpty(),
                         supportingText = { if (attemptedSubmit && title.trim().isEmpty()) Text("El título es obligatorio") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         detail, { detail = it }, label = { Text("Mensaje *") },
                         isError = attemptedSubmit && detail.trim().isEmpty(),
                         supportingText = { if (attemptedSubmit && detail.trim().isEmpty()) Text("El mensaje es obligatorio") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         modifier = Modifier.fillMaxWidth()
                     )
                     DatePickerField(
@@ -149,7 +153,7 @@ fun AnnouncementsScreen(navController: NavController) {
                         if (announcement.eventDate != null || announcement.eventTime != null) {
                             Text("Evento: ${announcement.eventDate.orEmpty()} ${announcement.eventTime.orEmpty()}")
                         }
-                        MediaAttachmentChip(announcement.mediaUrl, announcement.mediaType)
+                        DomuxAttachmentPreview(announcement.mediaUrl, announcement.mediaType)
                         Text(
                             "Por ${announcement.authorName ?: "Administración"} · ${announcement.createdAt.orEmpty()}",
                             style = MaterialTheme.typography.bodySmall

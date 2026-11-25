@@ -1,16 +1,9 @@
 package com.dracknoval.domux
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.dracknoval.domux.data.NotificationItem
 
 object DomuxLocalNotifications {
@@ -44,45 +37,15 @@ object DomuxLocalNotifications {
         context: Context,
         notification: NotificationItem,
         route: String = routeForNotification(notification.type),
-        highPriority: Boolean = false
-    ): Boolean {
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            return false
-        }
-        if (!markSeen(context, notification.id)) return true
-
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(MainActivity.EXTRA_NOTIFICATION_ROUTE, route)
-            putExtra("notification_id", notification.id)
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            notification.id,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val builder = NotificationCompat.Builder(
-            context,
-            if (highPriority) criticalChannelId else channelId
-        )
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(notification.title)
-            .setContentText(notification.message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(notification.message))
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setPriority(
-                if (highPriority) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
-            )
-
-        NotificationManagerCompat.from(context).notify(notification.id, builder.build())
-        return true
-    }
+        highPriority: Boolean = true
+    ): Boolean = DomuxNotifier.showSystemNotification(
+        context,
+        notification.id,
+        notification.title,
+        notification.message,
+        route,
+        highPriority
+    )
 
     fun markSeen(context: Context, notificationId: Int): Boolean {
         val preferences = context.getSharedPreferences("domux_local_notifications", Context.MODE_PRIVATE)

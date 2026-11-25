@@ -10,6 +10,7 @@ from auth import role_required, token_required
 from errors import error_response
 from extensions import db
 from models import (
+    AuditLog,
     HouseholdMember,
     Pet,
     ResidentialUnit,
@@ -17,6 +18,7 @@ from models import (
     User,
     Vehicle,
 )
+from time_utils import now_colombia
 from services.excel_service import (
     MIME_XLSX,
     generate_census_template_xlsx,
@@ -71,7 +73,7 @@ def _phone_or_error(value):
 @role_required("ADMIN")
 def get_census_template():
     return jsonify({
-        "fileName": "Plantilla_Censo_DOMUX.xlsx",
+        "fileName": "plantilla_migracion_datos.xlsx",
         "mimeType": MIME_XLSX,
         "base64": _encode_base64(generate_census_template_xlsx()),
     })
@@ -103,7 +105,7 @@ def post_import_census():
     except ValueError as error:
         return error_response(400, str(error))
     return jsonify({
-        "message": "Importación del censo procesada.",
+        "message": "Importación de migración de datos procesada.",
         **result,
     })
 
@@ -115,7 +117,7 @@ def get_legal_report():
     workbook_bytes, counts = generate_legal_report_xlsx()
     return jsonify({
         "message": "Reporte legal generado exitosamente.",
-        "fileName": f"Reporte_Legal_DOMUX_{date.today().isoformat()}.xlsx",
+        "fileName": f"Reporte_Legal_DOMUX_{now_colombia().date().isoformat()}.xlsx",
         "mimeType": MIME_XLSX,
         "base64": _encode_base64(workbook_bytes),
         **counts,
@@ -227,7 +229,7 @@ def get_users():
             or (minimum_age is not None and maximum_age is not None and minimum_age > maximum_age)
         ):
             return error_response(400, "El rango de edad es inválido.")
-        today = date.today()
+        today = now_colombia().date()
 
         def years_before(years):
             try:
@@ -306,7 +308,7 @@ def create_user():
     if "birthDate" in data:
         if error := validate_iso_date(data["birthDate"]):
             return error_response(400, error)
-        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > date.today():
+        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > now_colombia().date():
             return error_response(400, "La fecha de nacimiento no puede ser futura.")
     parental_consent = data.get("parentalConsent", False)
     if not isinstance(parental_consent, bool):
@@ -337,14 +339,24 @@ def create_user():
         birth_date=data.get("birthDate"),
         parental_consent=parental_consent,
         data_processing_consent=role == "RESIDENT",
-        data_processing_consent_at=datetime.utcnow() if role == "RESIDENT" else None,
+        data_processing_consent_at=now_colombia() if role == "RESIDENT" else None,
         is_active=True,
+        must_change_password=True,
     )
     db.session.add(user)
     if role == "RESIDENT":
         unit = ResidentialUnit.query.filter_by(apartment=user.apartment).first()
         if unit is None:
             db.session.add(ResidentialUnit(apartment=user.apartment))
+    db.session.flush()
+    db.session.add(AuditLog(
+        entity_type="USER",
+        entity_id=user.id,
+        action="user_created",
+        actor_id=g.current_user.id,
+        actor_role=g.current_user.role,
+        details="Un administrador creó la cuenta del usuario.",
+    ))
     db.session.commit()
     return jsonify({"message": "Usuario creado", "user": user.to_dict()}), 201
 
@@ -369,7 +381,7 @@ def update_user(user_id):
     if "birthDate" in data:
         if error := validate_iso_date(data["birthDate"]):
             return error_response(400, error)
-        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > date.today():
+        if datetime.strptime(data["birthDate"], "%Y-%m-%d").date() > now_colombia().date():
             return error_response(400, "La fecha de nacimiento no puede ser futura.")
         user.birth_date = data["birthDate"]
     if "parentalConsent" in data:
@@ -419,7 +431,7 @@ def update_user(user_id):
                     "Debes registrar la autorización de tratamiento de datos del residente.",
                 )
             user.data_processing_consent = True
-            user.data_processing_consent_at = datetime.utcnow()
+            user.data_processing_consent_at = now_colombia()
         user.role = role
     if "occupancyType" in data:
         error = validate_occupancy_type(data["occupancyType"])
@@ -452,6 +464,8 @@ def update_user(user_id):
 
 @bp.put("/users/<int:user_id>/password")
 @bp.put("/admin/users/<int:user_id>/password")
+@bp.post("/users/<int:user_id>/reset-password")
+@bp.post("/admin/users/<int:user_id>/reset-password")
 @token_required
 @role_required("ADMIN")
 def reset_user_password(user_id):
@@ -469,6 +483,15 @@ def reset_user_password(user_id):
     if user is None:
         return error_response(404, "Usuario no encontrado")
     user.password_hash = generate_password_hash(data["password"])
+    user.must_change_password = True
+    db.session.add(AuditLog(
+        entity_type="USER",
+        entity_id=user.id,
+        action="password_reset",
+        actor_id=g.current_user.id,
+        actor_role=g.current_user.role,
+        details="Un administrador restableció la contraseña del usuario.",
+    ))
     db.session.commit()
     return jsonify({"message": "Contraseña restablecida"})
 
@@ -543,7 +566,7 @@ def update_unit_profile():
             birth_date = date.fromisoformat(member["birthDate"])
         except ValueError:
             return error_response(400, f"La fecha de nacimiento del miembro #{index + 1} no es válida.")
-        if birth_date.isoformat() != member["birthDate"] or birth_date > date.today():
+        if birth_date.isoformat() != member["birthDate"] or birth_date > now_colombia().date():
             return error_response(400, f"La fecha de nacimiento del miembro #{index + 1} no es válida.")
         relationship = member["relationship"]
         if relationship not in HOUSEHOLD_RELATIONSHIPS:
@@ -611,7 +634,7 @@ def update_unit_profile():
         if vehicle["type"] not in ("carro", "moto"):
             return error_response(400, f"El tipo del vehículo #{index + 1} debe ser carro o moto.")
         year = vehicle.get("year")
-        if not isinstance(year, int) or isinstance(year, bool) or not 1950 <= year <= date.today().year + 1:
+        if not isinstance(year, int) or isinstance(year, bool) or not 1950 <= year <= now_colombia().year + 1:
             return error_response(400, f"El año del vehículo #{index + 1} no es válido.")
         for field in ("color",):
             if vehicle.get(field) is not None and not isinstance(vehicle[field], str):

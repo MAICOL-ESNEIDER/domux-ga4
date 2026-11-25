@@ -34,6 +34,10 @@ import kotlinx.coroutines.delay
 import android.net.Uri
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -62,7 +66,7 @@ private fun ageFromIsoDate(value: String): Int? {
     return age.takeIf { it >= 0 }
 }
 
-private fun validStrongPassword(value: String): Boolean =
+internal fun validStrongPassword(value: String): Boolean =
     value.length >= 8 &&
         value.any { it in 'A'..'Z' } &&
         value.any { it in 'a'..'z' } &&
@@ -181,7 +185,7 @@ fun CreateUserScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DomuxSectionTabs(
-                listOf("Usuarios ($totalUsers)", "Crear usuario", "Censo Excel"),
+                listOf("Usuarios ($totalUsers)", "Crear usuario", "Migración de datos"),
                 selectedTab
             ) { selectedTab = it }
             if (message.isNotBlank()) DomuxFeedbackBanner(message) { message = "" }
@@ -398,6 +402,7 @@ fun CreateUserScreen(navController: NavController) {
                                         label = { Text("Cuarto útil: ${filterLabel(storageFilter)}") }
                                     )
                                 }
+                                Text("Filtrar residentes por rango de edad", style = MaterialTheme.typography.labelMedium)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
                                         value = minAge,
@@ -455,14 +460,17 @@ fun CreateUserScreen(navController: NavController) {
                                     "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
                                         if (user.isActive) "Activo" else "Inactivo"
                                 )
-                                Row {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
                                     TextButton(onClick = { editUser = user }) { Text("Editar") }
                                     OutlinedButton(onClick = {
                                         resetUser = user
                                         resetPassword = ""
                                     }) { Text("Asignar nueva clave") }
                                     if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
-                                        TextButton(onClick = {
+                                        Button(onClick = {
                                             navController.navigate("unitProfile/${Uri.encode(user.apartment)}")
                                         }) { Text("Ficha del hogar") }
                                     }
@@ -523,7 +531,7 @@ fun CreateUserScreen(navController: NavController) {
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                     UserInput(eName, { eName = it }, "Nombre", true, showMissingError = attemptedEdit)
                     UserInput(eLastName, { eLastName = it }, "Apellido", true, showMissingError = attemptedEdit)
-                    UserInput(eEmail, { eEmail = it }, "Correo", true, showMissingError = attemptedEdit)
+                    UserInput(eEmail, { eEmail = it }, "Correo principal", true, showMissingError = attemptedEdit)
                     UserInput(ePhone, { ePhone = it }, "Teléfono", true, showMissingError = attemptedEdit)
                     UserInput(eDocument, { eDocument = it }, "Documento", true, showMissingError = attemptedEdit)
                     Row(
@@ -566,12 +574,24 @@ fun CreateUserScreen(navController: NavController) {
                             }
                         }
                         Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             occupancyOptions.forEach { (value, label) ->
                                 FilterChip(selected = eOccupancy == value, onClick = { eOccupancy = value }, label = { Text(label) })
                             }
+                        }
+                    }
+                    if (eRole == "RESIDENT" && eApartment.isNotBlank()) {
+                        Button(
+                            onClick = {
+                                val apt = eApartment.trim()
+                                editUser = null
+                                navController.navigate("unitProfile/${Uri.encode(apt)}")
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                        ) {
+                            Text("Abrir Ficha del Hogar para apto $eApartment")
                         }
                     }
                     Row {
@@ -735,8 +755,8 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Censo Excel", style = MaterialTheme.typography.titleMedium)
-            Text("Descarga la plantilla o importa el censo de residentes de una unidad.")
+            Text("Migración de datos", style = MaterialTheme.typography.titleMedium)
+            Text("Descarga la plantilla o importa datos de residentes y unidades.")
             Button(
                 enabled = !busy,
                 onClick = {
@@ -785,11 +805,12 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             ) {
                 Text("Descargar plantilla Excel de ejemplo")
             }
             ExcelFilePickerButton(
+                label = "Importar migración de datos (Excel)",
                 onFileSelected = { base64, fileName ->
                     busy = true
                     message = ""
@@ -803,7 +824,7 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
                                 val result = response.body()
                                     ?: error("El servidor devolvió un resumen vacío.")
                                 message = buildString {
-                                    append(result.message ?: "Importación del censo procesada.")
+                                    append(result.message ?: "Importación de datos procesada.")
                                     append("\nResidentes creados: ${result.createdUsers}")
                                     append("\nResidentes actualizados: ${result.updatedUsers}")
                                     append("\nUnidades procesadas: ${result.unitsProcessed}")
@@ -823,7 +844,7 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
                                 if (exception is CancellationException) throw exception
                                 return@launch
                             }
-                            message = "No se pudo importar el censo: ${exception.message}"
+                            message = "No se pudo importar la migración de datos: ${exception.message}"
                             messageIsError = true
                         } finally {
                             busy = false
@@ -855,9 +876,11 @@ private fun UserInput(
     password: Boolean = false,
     showMissingError: Boolean = false
 ) {
+    var passwordVisible by remember { mutableStateOf(false) }
     val isPhone = label == "Teléfono"
     val missing = required && showMissingError && value.trim().isEmpty()
-    val invalidEmail = label == "Correo" && value.isNotEmpty() && !value.trim().contains("@")
+    val invalidEmail = label in setOf("Correo", "Correo principal") &&
+        value.isNotEmpty() && !value.trim().contains("@")
     val invalidPassword = password && value.isNotEmpty() && !validStrongPassword(value)
     val invalidPhone = isPhone && showMissingError && value.length != 10
     OutlinedTextField(
@@ -870,16 +893,28 @@ private fun UserInput(
         isError = missing || invalidEmail || invalidPassword || invalidPhone,
         keyboardOptions = if (isPhone) {
             KeyboardOptions(keyboardType = KeyboardType.Number)
+        } else if (password) {
+            KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
+        } else if (label in listOf("Nombre", "Apellido", "Nombre principal", "Nombre y Apellidos")) {
+            KeyboardOptions(capitalization = KeyboardCapitalization.Words)
         } else {
             KeyboardOptions.Default
         },
+        trailingIcon = if (password) {
+            {
+                val image = if (passwordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(image, "Toggle password visibility")
+                }
+            }
+        } else null,
         supportingText = {
             if (isPhone) Text("10 dígitos (ej. 3001234567)")
             else if (missing) Text("$label es obligatorio")
             else if (invalidEmail) Text("Ingresa un correo válido")
             else if (invalidPassword) Text("Usa 8 caracteres con mayúscula, minúscula, número y símbolo")
         },
-        visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation()
+        visualTransformation = if (password && !passwordVisible) androidx.compose.ui.text.input.PasswordVisualTransformation()
         else androidx.compose.ui.text.input.VisualTransformation.None,
         modifier = Modifier.fillMaxWidth()
     )

@@ -1,6 +1,17 @@
 package com.dracknoval.domux
 
+import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.EventAvailable
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.HomeWork
+import androidx.compose.material.icons.rounded.FolderCopy
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,7 +63,7 @@ import kotlinx.coroutines.launch
 private data class HomeModule(
     val title: String,
     val detail: String,
-    val icon: String,
+    val icon: ImageVector,
     val route: String,
     val accentColor: Color
 )
@@ -64,15 +75,9 @@ fun HomeScreen(navController: NavController) {
     var notificationError by remember { mutableStateOf<String?>(null) }
     var notificationActionMessage by remember { mutableStateOf<String?>(null) }
     var showNotifications by remember { mutableStateOf(false) }
-    var permissionRequested by remember { mutableStateOf(false) }
     val knownNotificationIds = remember(Session.userId) { mutableStateOf<Set<Int>?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) notificationError = "Activa el permiso de notificaciones para recibir avisos locales."
-    }
     val backStackEntry by navController.currentBackStackEntryFlow.collectAsState(
         initial = navController.currentBackStackEntry
     )
@@ -87,17 +92,6 @@ fun HomeScreen(navController: NavController) {
 
     LaunchedEffect(currentRoute, Session.userId) {
         if (currentRoute != "home") return@LaunchedEffect
-        if (
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            !permissionRequested
-        ) {
-            permissionRequested = true
-            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-        }
         while (isActive) {
             try {
                 val response = RetrofitClient.api.getNotifications(Session.bearer())
@@ -138,22 +132,25 @@ fun HomeScreen(navController: NavController) {
     }
 
     val modules = buildList {
-        add(HomeModule("Anuncios", "Comunicados", "▤", "announcements", Color(0xFFFFB300)))
+        add(HomeModule("Anuncios", "Comunicados", Icons.Rounded.Campaign, "announcements", Color(0xFFFFB300)))
         if (Session.isAdmin) {
-            add(HomeModule("PQRS", "Gestión de solicitudes", "◎", "pqrs", Color(0xFF00E5FF)))
-            add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations", Color(0xFF10B981)))
-            add(HomeModule("Paquetería y visitas", "Control de portería", "▣", "registry", Color(0xFFA855F7)))
-            add(HomeModule("Usuarios", "Administración", "♙", "createUser", Color(0xFF3B82F6)))
+            add(HomeModule("PQRS", "Gestión de solicitudes", Icons.Rounded.Forum, "pqrs", Color(0xFF00E5FF)))
+            add(HomeModule("Reservas", "Zonas comunes", Icons.Rounded.EventAvailable, "reservations", Color(0xFF10B981)))
+            add(HomeModule("Paquetería", "Administrar paquetes", Icons.Rounded.Inventory2, "registry?initialTab=0", Color(0xFFA855F7)))
+            add(HomeModule("Visitas y QR", "Control de portería", Icons.Rounded.Badge, "registry?initialTab=2", Color(0xFFA855F7)))
+            add(HomeModule("Usuarios", "Administración", Icons.Rounded.Groups, "createUser", Color(0xFF3B82F6)))
+            add(HomeModule("Respaldo", "Exportación de datos", Icons.Rounded.FolderCopy, "exports_archive", Color(0xFFEF4444)))
         } else if (Session.isResident) {
-            add(HomeModule("Mi perfil", "Mis datos y hogar", "♙", "profile", Color(0xFF3B82F6)))
-            add(HomeModule("Mis PQRS", "Solicitudes y respuestas", "◎", "pqrs", Color(0xFF00E5FF)))
-            add(HomeModule("Reservas", "Zonas comunes", "◷", "reservations", Color(0xFF10B981)))
-            add(HomeModule("Paquetería y visitas", "Mis registros", "▣", "registry", Color(0xFFA855F7)))
+            add(HomeModule("Mi perfil", "Mis datos y hogar", Icons.Rounded.HomeWork, "profile", Color(0xFF3B82F6)))
+            add(HomeModule("Mis PQRS", "Solicitudes y respuestas", Icons.Rounded.Forum, "pqrs", Color(0xFF00E5FF)))
+            add(HomeModule("Reservas", "Zonas comunes", Icons.Rounded.EventAvailable, "reservations", Color(0xFF10B981)))
+            add(HomeModule("Mis Paquetes", "Paquetes recibidos", Icons.Rounded.Inventory2, "registry?initialTab=0", Color(0xFFA855F7)))
+            add(HomeModule("Mis Visitas y QR", "Mis registros", Icons.Rounded.Badge, "registry?initialTab=1", Color(0xFFA855F7)))
         } else if (Session.isGuard) {
-            add(HomeModule("Registrar Visitante", "Visitas y portería", "♙", "registry?initialTab=3", Color(0xFFFF6D00)))
-            add(HomeModule("Ver Visitas y QR", "Visitas activas", "▦", "registry?initialTab=2", Color(0xFFFF6D00)))
-            add(HomeModule("Registrar Paquete", "Registrar en portería", "＋", "registry?initialTab=1", Color(0xFFA855F7)))
-            add(HomeModule("Bandeja de Paquetes", "Paquetes recibidos", "▣", "registry?initialTab=0", Color(0xFFA855F7)))
+            add(HomeModule("Registrar Visitante", "Visitas y portería", Icons.Rounded.Badge, "registry?initialTab=3", Color(0xFFFF6D00)))
+            add(HomeModule("Ver Visitas y QR", "Visitas activas", Icons.Rounded.Badge, "registry?initialTab=2", Color(0xFFFF6D00)))
+            add(HomeModule("Registrar Paquete", "Registrar en portería", Icons.Rounded.Inventory2, "registry?initialTab=1", Color(0xFFA855F7)))
+            add(HomeModule("Bandeja de Paquetes", "Paquetes recibidos", Icons.Rounded.Inventory2, "registry?initialTab=0", Color(0xFFA855F7)))
         }
     }
 
@@ -208,7 +205,7 @@ fun HomeScreen(navController: NavController) {
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text("CENTRO DE CONTROL", color = Color(0xFF38BDF8), fontSize = 11.sp, letterSpacing = 1.5.sp)
                 Text("Altos de DOMUX", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -216,23 +213,16 @@ fun HomeScreen(navController: NavController) {
                     "Hola, $greetingName",
                     color = Color(0xFFCBD5E1)
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        when {
-                            Session.isAdmin -> "Administrador"
-                            Session.isResident -> "Residente${Session.apartment?.let { " · $it" }.orEmpty()}"
-                            Session.isGuard -> "Guardia de seguridad"
-                            else -> "Usuario"
-                        },
-                        color = Color(0xFF94A3B8),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    DomuxStatusBadge("Operación estable")
-                }
+                Text(
+                    when {
+                        Session.isAdmin -> "Administrador"
+                        Session.isResident -> "Residente${Session.apartment?.let { " · $it" }.orEmpty()}"
+                        Session.isGuard -> "Guardia de seguridad"
+                        else -> "Usuario"
+                    },
+                    color = Color(0xFF94A3B8),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
 

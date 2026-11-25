@@ -60,18 +60,14 @@ def _dispatch_after_commit(session):
             tokens = item["tokens"][offset:offset + 500]
             message = messaging.MulticastMessage(
                 tokens=tokens,
-                notification=messaging.Notification(
-                    title=item["title"],
-                    body=item["message"],
-                ),
                 data={
+                    "title": item["title"],
+                    "message": item["message"],
                     "type": item["type"],
                     "route": item["route"],
                     "notificationId": str(item["notification"].id),
                 },
-                android=messaging.AndroidConfig(
-                    priority="high" if item["type"] == "visit" else "normal"
-                ),
+                android=messaging.AndroidConfig(priority="high"),
             )
             try:
                 result = messaging.send_each_for_multicast(message, app=app)
@@ -160,3 +156,15 @@ def notify_residents(title, message, notification_type):
             notification,
         )
     return notifications
+
+
+def notify_admins(title, message, notification_type):
+    """Create notifications for every active administrator."""
+    admin_ids = db.session.query(User.id).filter_by(
+        role="ADMIN",
+        is_active=True,
+    ).all()
+    return [
+        notify_user(admin_id, title, message, notification_type)
+        for (admin_id,) in admin_ids
+    ]

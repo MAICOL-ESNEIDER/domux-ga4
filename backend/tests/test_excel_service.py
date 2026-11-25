@@ -2,7 +2,7 @@ import base64
 import io
 import os
 import unittest
-from datetime import date, timedelta
+from datetime import timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
@@ -30,6 +30,7 @@ from services.excel_service import (
     import_census_from_bytes,
 )
 from werkzeug.security import generate_password_hash
+from time_utils import now_colombia
 
 
 class ExcelServiceTests(unittest.TestCase):
@@ -79,7 +80,7 @@ class ExcelServiceTests(unittest.TestCase):
 
     def test_census_template_has_expected_columns_and_examples(self):
         workbook = load_workbook(io.BytesIO(generate_census_template_xlsx()), data_only=True)
-        worksheet = workbook["Censo_Residentes"]
+        worksheet = workbook["Migracion_Datos_Residentes"]
 
         self.assertEqual(tuple(cell.value for cell in worksheet[1]), CENSUS_HEADERS)
         self.assertEqual(worksheet.max_row, 3)
@@ -92,7 +93,10 @@ class ExcelServiceTests(unittest.TestCase):
             headers=self.headers(),
         )
         self.assertEqual(template_response.status_code, 200)
-        self.assertEqual(template_response.json["fileName"], "Plantilla_Censo_DOMUX.xlsx")
+        self.assertEqual(
+            template_response.json["fileName"],
+            "plantilla_migracion_datos.xlsx",
+        )
         self.assertEqual(template_response.json["mimeType"], MIME_XLSX)
 
         import_response = self.client.post(
@@ -190,7 +194,7 @@ class ExcelServiceTests(unittest.TestCase):
         reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() + timedelta(days=5)).isoformat(),
+            date=(now_colombia().date() + timedelta(days=5)).isoformat(),
             time_slot="10:00-12:00",
             status="pendiente",
         )
@@ -264,21 +268,21 @@ class ExcelServiceTests(unittest.TestCase):
         old_reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() - timedelta(days=1)).isoformat(),
+            date=(now_colombia().date() - timedelta(days=1)).isoformat(),
             time_slot="10:00-12:00",
             status="aprobada",
         )
         rejected_reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() + timedelta(days=3)).isoformat(),
+            date=(now_colombia().date() + timedelta(days=3)).isoformat(),
             time_slot="12:00-14:00",
             status="rechazada",
         )
         active_reservation = Reservation(
             resident_id=self.resident.id,
             common_area_id=self.area.id,
-            date=(date.today() + timedelta(days=4)).isoformat(),
+            date=(now_colombia().date() + timedelta(days=4)).isoformat(),
             time_slot="14:00-16:00",
             status="pendiente",
         )

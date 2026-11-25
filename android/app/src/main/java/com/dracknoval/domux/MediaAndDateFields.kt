@@ -12,7 +12,24 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Button
@@ -35,19 +52,32 @@ import androidx.compose.ui.unit.dp
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+private fun pickerDateMillis(value: String): Long? =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        isLenient = false
+    }.parse(value)?.time
 
 @Composable
 fun DatePickerField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    allowPastDates: Boolean = false
+    allowPastDates: Boolean = false,
+    minDate: String? = null,
+    maxDate: String? = null
 ) {
     val context = LocalContext.current
     OutlinedButton(
         onClick = {
-            val calendar = Calendar.getInstance()
+            val selectedDate = value.takeIf(String::isNotBlank)?.let(::pickerDateMillis)
+            val calendar = Calendar.getInstance().apply {
+                selectedDate?.let { time = Date(it) }
+            }
             DatePickerDialog(
                 context,
                 { _, year, month, day ->
@@ -57,6 +87,7 @@ fun DatePickerField(
                 calendar.get(Calendar.MONTH),
                 calendar.get(Calendar.DAY_OF_MONTH)
             ).apply {
+                minDate?.let(::pickerDateMillis)?.let { datePicker.minDate = it }
                 if (!allowPastDates) {
                     val today = Calendar.getInstance().apply {
                         set(Calendar.HOUR_OF_DAY, 0)
@@ -64,11 +95,12 @@ fun DatePickerField(
                         set(Calendar.SECOND, 0)
                         set(Calendar.MILLISECOND, 0)
                     }
-                    datePicker.minDate = today.timeInMillis
+                    datePicker.minDate = maxOf(datePicker.minDate, today.timeInMillis)
                 }
+                maxDate?.let(::pickerDateMillis)?.let { datePicker.maxDate = it }
             }.show()
         },
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
     ) {
         Text(if (value.isBlank()) label else "$label: $value")
     }
@@ -113,6 +145,7 @@ fun MediaAttachmentPicker(
     MediaAttachmentPickerFiltered(attachmentName, onAttachment, mimeTypeFilter, onError)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MediaAttachmentPickerFiltered(
     attachmentName: String?,
@@ -122,41 +155,197 @@ private fun MediaAttachmentPickerFiltered(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+    var showDialog by remember { mutableStateOf(false) }
+    var currentCameraUri by remember { mutableStateOf<Uri?>(null) }
+    
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val encoded = withContext(Dispatchers.IO) { processImageUriToCompressedBase64(context, uri) }
+                    if (encoded != null) {
+                        onAttachment("data:image/jpeg;base64,$encoded", "image", "imagen_galeria.jpg")
+                    } else {
+                        onError("No se pudo procesar la imagen.")
+                    }
+                } catch (exception: Exception) {
+                    onError("No se pudo leer la imagen: ${exception.message}")
+                }
+            }
+        }
+    }
+    
+    val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             scope.launch {
                 try {
                     val mimeType = context.contentResolver.getType(uri).orEmpty()
                     val type = when {
-                        mimeType.startsWith("image/") -> "image"
                         mimeType.startsWith("video/") -> "video"
                         mimeType.startsWith("audio/") -> "audio"
-                        else -> null
+                        else -> "document"
                     }
-                    if (type == null) {
-                        onError("Selecciona una imagen, video o audio.")
-                    } else {
-                        val encoded = withContext(Dispatchers.IO) { readAsBase64(context, uri) }
-                        val dataUrl = "data:$mimeType;base64,$encoded"
-                        onAttachment(dataUrl, type, uri.lastPathSegment ?: "Adjunto")
+                    val fileName = withContext(Dispatchers.IO) {
+                        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                            if (cursor.moveToFirst() && nameIndex >= 0) cursor.getString(nameIndex) else null
+                        } ?: uri.lastPathSegment ?: "Archivo adjunto"
                     }
+                    val encoded = withContext(Dispatchers.IO) { readAsBase64(context, uri) }
+                    val dataUrl = "data:$mimeType;base64,$encoded"
+                    onAttachment(dataUrl, type, fileName)
                 } catch (exception: Exception) {
-                    onError("No se pudo leer el adjunto: ${exception.message}")
+                    onError("No se pudo leer el archivo: ${exception.message}")
                 }
             }
         }
     }
-    Column {
-        Button(
-            onClick = { launcher.launch(mimeTypeFilter ?: "*/*") },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        ) {
-            Text(if (attachmentName == null) "Adjuntar imagen, video o audio" else "Cambiar adjunto")
-        }
-        if (attachmentName != null) {
-            Text("Adjunto: $attachmentName", color = MaterialTheme.colorScheme.secondary)
+    
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && currentCameraUri != null) {
+            scope.launch {
+                try {
+                    val encoded = withContext(Dispatchers.IO) { processImageUriToCompressedBase64(context, currentCameraUri!!) }
+                    if (encoded != null) {
+                        onAttachment("data:image/jpeg;base64,$encoded", "image", "foto_camara.jpg")
+                    } else {
+                        onError("No se pudo procesar la foto.")
+                    }
+                } catch (exception: Exception) {
+                    onError("Error al procesar la captura: ${exception.message}")
+                }
+            }
         }
     }
+    
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val file = File(context.cacheDir, "camera_capture_${System.currentTimeMillis()}.jpg")
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            currentCameraUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            onError("Se requiere permiso de cámara para tomar fotos.")
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = { showDialog = true },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text(if (attachmentName == null) "Adjuntar foto, video o archivo" else "Cambiar adjunto")
+        }
+        
+        if (attachmentName != null) {
+            DomuxCard(Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Adjunto: $attachmentName", modifier = Modifier.weight(1f))
+                    TextButton(onClick = { onAttachment("", "", "") }) {
+                        Text("Quitar", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDialog) {
+        ModalBottomSheet(
+            onDismissRequest = { showDialog = false },
+            sheetState = rememberModalBottomSheetState()
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Seleccionar archivo", style = MaterialTheme.typography.titleMedium)
+                
+                Button(
+                    onClick = {
+                        showDialog = false
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                            val file = File(context.cacheDir, "camera_capture_${System.currentTimeMillis()}.jpg")
+                            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                            currentCameraUri = uri
+                            cameraLauncher.launch(uri)
+                        } else {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                ) { Text("📷 Tomar foto (Cámara)") }
+                
+                Button(
+                    onClick = {
+                        showDialog = false
+                        galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                ) { Text("🖼 Elegir de Galería") }
+                
+                Button(
+                    onClick = {
+                        showDialog = false
+                        fileLauncher.launch(arrayOf(mimeTypeFilter ?: "*/*"))
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                ) { Text("📄 Seleccionar archivo (PDF / Audio)") }
+                
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri): String? {
+    val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+    val bytes = inputStream.readBytes()
+    inputStream.close()
+    
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    
+    var scale = 1
+    while (options.outWidth / scale > 1280 || options.outHeight / scale > 1280) {
+        scale *= 2
+    }
+    
+    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = scale }
+    var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions) ?: return null
+    
+    try {
+        val exifStream = context.contentResolver.openInputStream(uri)
+        if (exifStream != null) {
+            val exif = ExifInterface(exifStream)
+            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            val matrix = Matrix()
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            }
+            if (!matrix.isIdentity) {
+                val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                if (rotated != bitmap) {
+                    bitmap.recycle()
+                    bitmap = rotated
+                }
+            }
+            exifStream.close()
+        }
+    } catch (e: Exception) {
+        // Ignorar errores EXIF y continuar
+    }
+    
+    val outputStream = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
+    bitmap.recycle()
+    
+    return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 }
 
 fun saveBase64FileToDownloads(
@@ -254,7 +443,7 @@ fun DomuxCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
     )
 }
 
-private fun readAsBase64(context: android.content.Context, uri: Uri): String {
+fun readAsBase64(context: android.content.Context, uri: Uri): String {
     val input = context.contentResolver.openInputStream(uri)
         ?: error("El archivo seleccionado no está disponible")
     input.use { stream ->

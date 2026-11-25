@@ -29,6 +29,21 @@ import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
+
+private fun getDaysAgo(dateString: String?): Long {
+    if (dateString.isNullOrBlank()) return 0
+    return try {
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val date = format.parse(dateString.take(10))
+        if (date != null) {
+            val diff = System.currentTimeMillis() - date.time
+            java.util.concurrent.TimeUnit.MILLISECONDS.toDays(diff)
+        } else 0
+    } catch(e: Exception) { 0 }
+}
+
 private val pqrsCategories = listOf("Petición", "Queja", "Reclamo", "Sugerencia", "Daño")
 private val pqrsStates = listOf(
     "Todas" to null,
@@ -44,14 +59,12 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var loading by remember { mutableStateOf(true) }
     var sending by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var messageIsError by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf<String?>(null) }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
-    var includeArchived by remember { mutableStateOf(false) }
-    var showLegalOptions by remember { mutableStateOf(false) }
-    var legalSuccessMessage by remember { mutableStateOf("") }
-    var legalBusy by remember { mutableStateOf(false) }
-    var archiveDialog by remember { mutableStateOf(false) }
+    var residentStatusFilter by remember { mutableStateOf("Activas") }
+    var sortOrder by remember { mutableStateOf("recientes") }
     var expandedId by remember { mutableStateOf<Int?>(null) }
     var selectedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -83,7 +96,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
             val response = RetrofitClient.api.getPqrs(
                 Session.bearer(), null, null, search.trim().ifEmpty { null },
                 targetResidentId.takeIf { Session.isAdmin },
-                if (includeArchived) "true" else null
+                null
             )
             if (response.isSuccessful) {
                 allItems = response.body()?.pqrs.orEmpty()
@@ -111,18 +124,24 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
         }
     }
 
-    LaunchedEffect(search, includeArchived) {
+    LaunchedEffect(search) {
         selectedIds = emptySet()
         selectedCategory = null
         load()
     }
 
     val visibleItems = allItems.filter { pqrs ->
-        (statusFilter == null || pqrs.status == statusFilter) &&
+        if (Session.isResident) {
+            (if (residentStatusFilter == "Activas") pqrs.status in listOf("abierta", "en_proceso") else pqrs.status == "resuelta") &&
             (categoryFilter == null || pqrs.category == categoryFilter)
+        } else {
+            (statusFilter == null || pqrs.status == statusFilter) &&
+            (categoryFilter == null || pqrs.category == categoryFilter)
+        }
     }
-    val groupedItems = visibleItems.groupBy { it.category ?: "Petición" }.toSortedMap()
-    val selectedVisibleCount = visibleItems.count { it.id in selectedIds }
+    val sortedItems = if (sortOrder == "antiguas") visibleItems.sortedBy { it.createdAt } else visibleItems.sortedByDescending { it.createdAt }
+    val groupedItems = sortedItems.groupBy { it.category ?: "Petición" }.toSortedMap()
+    val selectedVisibleCount = sortedItems.count { it.id in selectedIds }
 
     DomuxScreenScaffold(title = "PQRS", navController = navController) { padding ->
     Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 12.dp)) {
@@ -130,73 +149,8 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
             listOf("Solicitudes PQRS", "Nueva PQRS"),
             selectedTab
         ) { selectedTab = it }
-        DomuxFeedbackBanner(message) { message = "" }
-        if (legalSuccessMessage.isNotBlank()) {
-            Text(legalSuccessMessage, color = Color(0xFF34D399), modifier = Modifier.padding(vertical = 4.dp))
-        }
+        DomuxFeedbackBanner(message, isError = messageIsError) { message = "" }
         if (selectedTab == 0) {
-        if (Session.isAdmin) {
-            TextButton(
-                onClick = { showLegalOptions = !showLegalOptions },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    if (showLegalOptions) "Ocultar opciones de archivo y Excel legal"
-                    else "Opciones de archivo y Excel legal"
-                )
-            }
-        }
-        if (Session.isAdmin && showLegalOptions) {
-            DomuxCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Column(
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("Respaldo Legal y Archivo Excel", style = MaterialTheme.typography.titleSmall)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = {
-                                legalBusy = true
-                                legalSuccessMessage = ""
-                                scope.launch {
-                                    try {
-                                        val response = RetrofitClient.api.exportLegalReport(Session.bearer())
-                                        if (response.isSuccessful) {
-                                            val file = response.body()
-                                                ?: error("El servidor devolvió un reporte vacío.")
-                                            saveBase64FileToDownloads(
-                                                context,
-                                                file.fileName,
-                                                file.base64,
-                                                file.mimeType
-                                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                            )
-                                            legalSuccessMessage =
-                                                "Reporte legal guardado exitosamente en Descargas/${file.fileName}."
-                                            message = ""
-                                        } else {
-                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                        }
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        message = "No se pudo guardar el reporte legal: ${exception.message}"
-                                    } finally {
-                                        legalBusy = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Descargar Excel Legal") }
-                        OutlinedButton(
-                            enabled = !legalBusy,
-                            onClick = { archiveDialog = true },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Archivar resueltas y limpiar") }
-                    }
-                }
-            }
-        }
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
@@ -208,12 +162,22 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            pqrsStates.forEach { (label, value) ->
-                FilterChip(
-                    selected = statusFilter == value,
-                    onClick = { statusFilter = value },
-                    label = { Text(label) }
-                )
+            if (Session.isResident) {
+                listOf("Activas", "Resueltas / Historial").forEach { label ->
+                    FilterChip(
+                        selected = residentStatusFilter == label,
+                        onClick = { residentStatusFilter = label },
+                        label = { Text(label) }
+                    )
+                }
+            } else {
+                pqrsStates.forEach { (label, value) ->
+                    FilterChip(
+                        selected = statusFilter == value,
+                        onClick = { statusFilter = value },
+                        label = { Text(label) }
+                    )
+                }
             }
         }
         Row(
@@ -232,12 +196,17 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                 )
             }
         }
-        if (Session.isAdmin) {
-            FilterChip(
-                selected = includeArchived,
-                onClick = { includeArchived = !includeArchived },
-                label = { Text("Ver archivadas") }
-            )
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf("Más recientes" to "recientes", "Más antiguas primero" to "antiguas").forEach { (label, value) ->
+                FilterChip(
+                    selected = sortOrder == value,
+                    onClick = { sortOrder = value },
+                    label = { Text(label) }
+                )
+            }
         }
         }
 
@@ -268,7 +237,8 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                         supportingText = {
                             if (attemptedSubmit && subject.trim().isEmpty()) Text("El asunto es obligatorio")
                         },
-                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                        minLines = 3, maxLines = 6, modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         detail, { detail = it }, label = { Text("Descripción *") },
@@ -276,11 +246,13 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                         supportingText = {
                             if (attemptedSubmit && detail.trim().isEmpty()) Text("La descripción es obligatoria")
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                        minLines = 3, maxLines = 6, modifier = Modifier.fillMaxWidth()
                     )
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         pqrsCategories.forEach { value ->
                             FilterChip(
@@ -294,61 +266,68 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                         "Fecha del incidente",
                         incidentDate,
                         { incidentDate = it },
-                        allowPastDates = true
+                        allowPastDates = true,
+                        maxDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
                     )
                     TimePickerField("Hora del incidente", incidentTime, { incidentTime = it })
-                    MediaAttachmentPicker(mediaName, { url, type, name ->
-                        mediaUrl = url
-                        mediaType = type
-                        mediaName = name
-                    }, { message = it })
-                    Button(
-                        enabled = !sending &&
-                            !(Session.isResident && Session.isMinor && !Session.parentalConsent),
-                        onClick = {
-                            attemptedSubmit = true
-                            if (subject.trim().isEmpty() || detail.trim().isEmpty() ||
-                                (Session.isAdmin && selectedResident == null)
-                            ) {
-                                message = "Asunto, descripción y residente son obligatorios."
-                                return@Button
-                            }
-                            sending = true
-                            scope.launch {
-                                try {
-                                    val response = RetrofitClient.api.createPqrs(
-                                        Session.bearer(),
-                                        CreatePqrsRequest(
-                                            subject.trim(), detail.trim(), category,
-                                            incidentDate.ifBlank { null }, incidentTime.ifBlank { null },
-                                            mediaUrl, mediaType, if (Session.isAdmin) selectedResident?.id else null
-                                        )
-                                    )
-                                    if (response.isSuccessful) {
-                                        subject = ""
-                                        detail = ""
-                                        incidentDate = ""
-                                        incidentTime = ""
-                                        mediaUrl = null
-                                        mediaType = null
-                                        mediaName = null
-                                        attemptedSubmit = false
-                                        message = "PQRS enviada exitosamente."
-                                        selectedTab = 0
-                                        load()
-                                    } else {
-                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                    }
-                                } catch (exception: Exception) {
-                                    if (exception is CancellationException) throw exception
-                                    message = "No se pudo enviar la PQRS: ${exception.message}"
-                                } finally {
-                                    sending = false
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+                        MediaAttachmentPicker(mediaName, { url, type, name ->
+                            mediaUrl = url
+                            mediaType = type
+                            mediaName = name
+                        }, { message = it; messageIsError = true })
+                        Button(
+                            enabled = !sending &&
+                                !(Session.isResident && Session.isMinor && !Session.parentalConsent),
+                            onClick = {
+                                attemptedSubmit = true
+                                if (subject.trim().isEmpty() || detail.trim().isEmpty() ||
+                                    (Session.isAdmin && selectedResident == null)
+                                ) {
+                                    message = "Asunto, descripción y residente son obligatorios."
+                                    messageIsError = true
+                                    return@Button
                                 }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (sending) "Enviando..." else "Enviar PQRS") }
+                                sending = true
+                                scope.launch {
+                                    try {
+                                        val response = RetrofitClient.api.createPqrs(
+                                            Session.bearer(),
+                                            CreatePqrsRequest(
+                                                subject.trim(), detail.trim(), category,
+                                                incidentDate.ifBlank { null }, incidentTime.ifBlank { null },
+                                                mediaUrl, mediaType, if (Session.isAdmin) selectedResident?.id else null
+                                            )
+                                        )
+                                        if (response.isSuccessful) {
+                                            subject = ""
+                                            detail = ""
+                                            incidentDate = ""
+                                            incidentTime = ""
+                                            mediaUrl = null
+                                            mediaType = null
+                                            mediaName = null
+                                            attemptedSubmit = false
+                                            message = "PQRS enviada exitosamente."
+                                            messageIsError = false
+                                            selectedTab = 0
+                                            load()
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            messageIsError = true
+                                        }
+                                    } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
+                                        message = "No se pudo enviar la PQRS: ${exception.message}"
+                                        messageIsError = true
+                                    } finally {
+                                        sending = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (sending) "Enviando..." else "Enviar PQRS") }
+                    }
                 }
             }
             }
@@ -419,8 +398,9 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                             onRefresh = {
                                 scope.launch { load() }
                             },
-                            onMessage = { text ->
+                            onMessage = { text, isError ->
                                 message = text
+                                messageIsError = isError
                             }
                         )
                     }
@@ -431,47 +411,6 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
         }
         }
     }
-    }
-
-    if (archiveDialog) {
-        DomuxConfirmDialog(
-            title = "Archivar y limpiar historial",
-            message = "Las PQRS resueltas y las reservas finalizadas se respaldarán en un archivo Excel en este dispositivo y se ocultarán de la bandeja activa.",
-            confirmLabel = "Archivar y descargar",
-            onConfirm = {
-                archiveDialog = false
-                legalBusy = true
-                legalSuccessMessage = ""
-                scope.launch {
-                    try {
-                        val response = RetrofitClient.api.archiveHistory(Session.bearer())
-                        if (response.isSuccessful) {
-                            val file = response.body()
-                                ?: error("El servidor devolvió un archivo vacío.")
-                            load()
-                            saveBase64FileToDownloads(
-                                context,
-                                file.fileName,
-                                file.base64,
-                                file.mimeType
-                                    ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                            legalSuccessMessage =
-                                "${file.message ?: "Historial archivado."} Archivo guardado en Descargas/${file.fileName}."
-                            message = ""
-                        } else {
-                            message = mensajeDeError(response.code(), response.errorBody()?.string())
-                        }
-                    } catch (exception: Exception) {
-                        if (exception is CancellationException) throw exception
-                        message = "No se pudo archivar y guardar el historial: ${exception.message}"
-                    } finally {
-                        legalBusy = false
-                    }
-                }
-            },
-            onDismiss = { archiveDialog = false }
-        )
     }
 
     if (batchDialog) {
@@ -509,7 +448,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                         batchMediaUrl = url
                         batchMediaType = type
                         batchMediaName = name
-                    }, { message = it })
+                    }, { message = it; messageIsError = true })
                 }
             },
             confirmButton = {
@@ -522,7 +461,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                                 val response = RetrofitClient.api.respondPqrsBatch(
                                     Session.bearer(),
                                     BatchRespondPqrsRequest(
-                                        visibleItems.filter { it.id in selectedIds }.map { it.id },
+                                        sortedItems.filter { it.id in selectedIds }.map { it.id },
                                         batchStatus,
                                         batchMessage.trim(),
                                         batchMediaUrl,
@@ -531,6 +470,7 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                                 )
                                 if (response.isSuccessful) {
                                     message = response.body()?.message ?: "PQRS actualizadas."
+                                    messageIsError = false
                                     selectedIds = emptySet()
                                     selectedCategory = null
                                     batchMessage = ""
@@ -541,10 +481,12 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
                                     load()
                                 } else {
                                     message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                    messageIsError = true
                                 }
                             } catch (exception: Exception) {
                                 if (exception is CancellationException) throw exception
                                 message = "No se pudieron responder las PQRS: ${exception.message}"
+                                messageIsError = true
                             } finally {
                                 sending = false
                             }
@@ -573,7 +515,7 @@ private fun PqrsCard(
     onToggleExpanded: () -> Unit,
     onToggleSelected: (Boolean) -> Unit,
     onRefresh: () -> Unit,
-    onMessage: (String) -> Unit
+    onMessage: (String, Boolean) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var responseText by remember(pqrs.id, pqrs.adminResponse) {
@@ -601,40 +543,45 @@ private fun PqrsCard(
     }
 
     DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-        Column(Modifier.fillMaxWidth().animateContentSize().padding(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(Modifier.weight(1f).clickable(onClick = onToggleExpanded)) {
-                    Text(pqrs.subject, style = MaterialTheme.typography.titleMedium)
-                }
-                if (Session.isAdmin) {
-                    Checkbox(checked = selected, onCheckedChange = onToggleSelected)
-                }
-                DomuxStatusBadge(pqrs.status.toDomuxDisplayLabel(), tone)
-            }
-            Text("${pqrs.residentName ?: "Residente"} · ${pqrs.apartment.orEmpty()}", style = MaterialTheme.typography.bodySmall)
-            if (pqrs.createdByAdministration) {
-                Text("Creada por administración", style = MaterialTheme.typography.labelSmall)
-            }
-            Text(pqrs.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
-            if (expanded) {
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                val messages = pqrs.messages.orEmpty()
-                if (messages.isEmpty()) {
-                    Text(pqrs.message)
-                    MediaAttachmentChip(pqrs.mediaUrl, pqrs.mediaType)
-                    if (!pqrs.adminResponse.isNullOrBlank()) Text("Respuesta anterior: ${pqrs.adminResponse}")
-                } else {
-                    messages.forEach { item ->
-                        Text(
-                            "${item.authorName ?: item.authorRole} · ${item.createdAt.orEmpty()}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        if (!item.message.isNullOrBlank()) Text(item.message)
-                        MediaAttachmentChip(item.mediaUrl, item.mediaType)
-                        Spacer(Modifier.height(6.dp))
+        Column(Modifier.fillMaxWidth().animateContentSize()) {
+            Column(Modifier.fillMaxWidth().clickable(onClick = onToggleExpanded).padding(12.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(pqrs.subject, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    if (Session.isAdmin) {
+                        Checkbox(checked = selected, onCheckedChange = onToggleSelected)
                     }
+                    DomuxStatusBadge(pqrs.status.toDomuxDisplayLabel(), tone)
                 }
+                Text("${pqrs.residentName ?: "Residente"} · ${pqrs.apartment.orEmpty()}", style = MaterialTheme.typography.bodySmall)
+                if (pqrs.createdByAdministration) {
+                    Text("Creada por administración", style = MaterialTheme.typography.labelSmall)
+                }
+                Text(pqrs.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                val daysAgo = getDaysAgo(pqrs.createdAt)
+                if (pqrs.status != "resuelta" && daysAgo > 0) {
+                    Text("Hace $daysAgo días", color = if (daysAgo >= 3) Color(0xFFEF4444) else Color(0xFFF59E0B), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            if (expanded) {
+                Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                    HorizontalDivider(Modifier.padding(bottom = 8.dp))
+                    val messages = pqrs.messages.orEmpty()
+                    if (messages.isEmpty()) {
+                        Text(pqrs.message)
+                        DomuxAttachmentPreview(pqrs.mediaUrl, pqrs.mediaType)
+                        if (!pqrs.adminResponse.isNullOrBlank()) Text("Respuesta anterior: ${pqrs.adminResponse}")
+                    } else {
+                        messages.forEach { item ->
+                            Text(
+                                "${item.authorName ?: item.authorRole} · ${item.createdAt.orEmpty()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            if (!item.message.isNullOrBlank()) Text(item.message)
+                            DomuxAttachmentPreview(item.mediaUrl, item.mediaType)
+                            Spacer(Modifier.height(6.dp))
+                        }
+                    }
                 if (pqrs.incidentDate != null || pqrs.incidentTime != null) {
                     Text("Incidente: ${pqrs.incidentDate.orEmpty()} ${pqrs.incidentTime.orEmpty()}")
                 }
@@ -669,7 +616,7 @@ private fun PqrsCard(
                         responseMediaUrl = url
                         responseMediaType = type
                         responseMediaName = name
-                    }, onMessage)
+                    }, { onMessage(it, true) })
                     Button(
                         enabled = responseText.isNotBlank() && !busy,
                         onClick = {
@@ -686,14 +633,15 @@ private fun PqrsCard(
                                             responseMediaType
                                         )
                                     )
-                                    onMessage(
-                                        if (result.isSuccessful) "PQRS actualizada."
-                                        else mensajeDeError(result.code(), result.errorBody()?.string())
-                                    )
-                                    if (result.isSuccessful) onRefresh()
+                                    if (result.isSuccessful) {
+                                        onMessage("PQRS actualizada.", false)
+                                        onRefresh()
+                                    } else {
+                                        onMessage(mensajeDeError(result.code(), result.errorBody()?.string()), true)
+                                    }
                                 } catch (exception: Exception) {
                                     if (exception is CancellationException) throw exception
-                                    onMessage("No se pudo actualizar la PQRS: ${exception.message}")
+                                    onMessage("No se pudo actualizar la PQRS: ${exception.message}", true)
                                 } finally {
                                     busy = false
                                 }
@@ -711,7 +659,7 @@ private fun PqrsCard(
                         replyMediaUrl = url
                         replyMediaType = type
                         replyMediaName = name
-                    }, onMessage)
+                    }, { onMessage(it, true) })
                     Button(
                         enabled = (replyText.isNotBlank() || replyMediaUrl != null) && !busy,
                         onClick = {
@@ -727,14 +675,15 @@ private fun PqrsCard(
                                             replyMediaType
                                         )
                                     )
-                                    onMessage(
-                                        if (result.isSuccessful) "Mensaje enviado."
-                                        else mensajeDeError(result.code(), result.errorBody()?.string())
-                                    )
-                                    if (result.isSuccessful) onRefresh()
+                                    if (result.isSuccessful) {
+                                        onMessage("Mensaje enviado.", false)
+                                        onRefresh()
+                                    } else {
+                                        onMessage(mensajeDeError(result.code(), result.errorBody()?.string()), true)
+                                    }
                                 } catch (exception: Exception) {
                                     if (exception is CancellationException) throw exception
-                                    onMessage("No se pudo enviar el mensaje: ${exception.message}")
+                                    onMessage("No se pudo enviar el mensaje: ${exception.message}", true)
                                 } finally {
                                     busy = false
                                 }
@@ -774,14 +723,15 @@ private fun PqrsCard(
                                             pqrs.id,
                                             RatePqrsRequest(rating, ratingComment.trim().ifEmpty { null })
                                         )
-                                        onMessage(
-                                            if (result.isSuccessful) "Calificación guardada."
-                                            else mensajeDeError(result.code(), result.errorBody()?.string())
-                                        )
-                                        if (result.isSuccessful) onRefresh()
+                                        if (result.isSuccessful) {
+                                            onMessage("Calificación guardada.", false)
+                                            onRefresh()
+                                        } else {
+                                            onMessage(mensajeDeError(result.code(), result.errorBody()?.string()), true)
+                                        }
                                     } catch (exception: Exception) {
                                         if (exception is CancellationException) throw exception
-                                        onMessage("No se pudo guardar la calificación: ${exception.message}")
+                                        onMessage("No se pudo guardar la calificación: ${exception.message}", true)
                                     } finally {
                                         busy = false
                                     }
@@ -793,4 +743,5 @@ private fun PqrsCard(
             }
         }
     }
+}
 }

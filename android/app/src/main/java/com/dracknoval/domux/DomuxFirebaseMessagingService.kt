@@ -1,7 +1,6 @@
 package com.dracknoval.domux
 
 import android.util.Log
-import com.dracknoval.domux.data.NotificationItem
 import com.dracknoval.domux.data.PushRegistration
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -21,22 +20,16 @@ class DomuxFirebaseMessagingService : FirebaseMessagingService() {
             return
         }
         val route = data["route"] ?: DomuxLocalNotifications.routeForNotification(type)
-        val id = data["notificationId"]?.toIntOrNull()
-            ?: message.messageId?.hashCode()?.let { if (it == Int.MIN_VALUE) 1 else kotlin.math.abs(it) }
-            ?.takeIf { it > 0 } ?: System.currentTimeMillis().toInt()
-        DomuxLocalNotifications.show(
+        val backendNotificationId = data["notificationId"]?.toIntOrNull()?.takeIf { it > 0 }
+        val fallbackId = message.messageId?.hashCode()?.and(Int.MAX_VALUE)?.takeIf { it > 0 }
+            ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt().coerceAtLeast(1)
+        DomuxNotifier.showSystemNotification(
             applicationContext,
-            NotificationItem(
-                id = id,
-                userId = 0,
-                title = title,
-                message = body,
-                type = type,
-                isRead = false,
-                createdAt = null
-            ),
+            id = backendNotificationId ?: fallbackId,
+            title = title,
+            body = body,
             route = route,
-            highPriority = type == "visit"
+            isLatestNotificationId = backendNotificationId != null
         )
     }
 }

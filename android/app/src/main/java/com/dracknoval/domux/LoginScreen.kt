@@ -5,6 +5,7 @@
 package com.dracknoval.domux
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +20,13 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import android.content.Context
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,17 +42,19 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("domux_login_prefs", Context.MODE_PRIVATE) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var attemptedLogin by remember { mutableStateOf(false) }
-    var showNetworkDialog by remember { mutableStateOf(false) }
-    var serverUrl by remember { mutableStateOf(RetrofitClient.baseUrl) }
-    var checkingServer by remember { mutableStateOf(false) }
-    var serverMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    
+    val recentEmails = remember {
+        prefs.getString("recent_emails", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+    }
 
     Column(
         modifier = Modifier
@@ -54,22 +64,6 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(onClick = {
-                serverUrl = RetrofitClient.baseUrl
-                serverMessage = null
-                showNetworkDialog = true
-            }) {
-                Icon(
-                    painter = painterResource(android.R.drawable.ic_menu_manage),
-                    contentDescription = "Configurar URL del servidor",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
         DomuxBrandMark(size = 64.dp)
         Spacer(Modifier.height(14.dp))
         Text("DOMUX", fontSize = 27.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
@@ -123,6 +117,26 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
             },
             modifier = Modifier.fillMaxWidth()
         )
+        if (recentEmails.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                recentEmails.forEach { recentEmail ->
+                    Surface(
+                        modifier = Modifier.clickable { email = recentEmail },
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            recentEmail,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
@@ -130,7 +144,14 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
             onValueChange = { password = it },
             label = { Text("Contraseña") },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+            trailingIcon = {
+                val image = if (passwordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(image, "Toggle password visibility")
+                }
+            },
             isError = attemptedLogin && password.trim().isEmpty(),
             supportingText = { if (attemptedLogin && password.trim().isEmpty()) Text("La contraseña es obligatoria") },
             modifier = Modifier.fillMaxWidth()
@@ -149,7 +170,6 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
                 result = ""
                 scope.launch {
                     try {
-                        RetrofitClient.resolveBestServerUrl(RetrofitClient.fallbackUrls)
                         val response = RetrofitClient.api.login(LoginRequest(normalizedEmail, password))
                         if (response.isSuccessful) {
                             val user = response.body()?.user
@@ -161,12 +181,21 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
                                     result = "El servidor no envió el token de sesión."
                                     return@launch
                                 }
+                                val updatedEmails = (listOf(normalizedEmail) + recentEmails).distinct().take(4)
+                                prefs.edit().putString("recent_emails", updatedEmails.joinToString(",")).apply()
+                                
                                 Session.token = accessToken
                                 Session.updateFrom(user)
                                 Session.persist(context)
                                 PushRegistration.registerAfterAuthentication(context.applicationContext)
-                                navController.navigate("home") {
+                                val destination = if (Session.mustChangePassword) {
+                                    "force_password_change"
+                                } else {
+                                    "home"
+                                }
+                                navController.navigate(destination) {
                                     popUpTo("login") { inclusive = true }
+                                    launchSingleTop = true
                                 }
                                 onLoginComplete()
                             }
@@ -189,68 +218,7 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
 
         if (result.isNotEmpty()) {
             Spacer(Modifier.height(20.dp))
-            Text(result)
+            Text(result, color = MaterialTheme.colorScheme.error)
         }
-    }
-
-    if (showNetworkDialog) {
-        AlertDialog(
-            onDismissRequest = { if (!checkingServer) showNetworkDialog = false },
-            title = { Text("URL del servidor") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = serverUrl,
-                        onValueChange = {
-                            serverUrl = it
-                            serverMessage = null
-                        },
-                        label = { Text("URL base") },
-                        placeholder = { Text("http://192.168.1.50:5000/") },
-                        singleLine = true,
-                        enabled = !checkingServer,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    serverMessage?.let { Text(it) }
-                    if (checkingServer) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !checkingServer && serverUrl.isNotBlank(),
-                    onClick = {
-                        checkingServer = true
-                        serverMessage = null
-                        scope.launch {
-                            try {
-                                val saved = RetrofitClient.testAndSaveServerUrl(serverUrl)
-                                serverMessage = if (saved) {
-                                    "Conexión probada y URL guardada."
-                                } else {
-                                    "No hubo respuesta HTTP 200 en /api/health."
-                                }
-                            } catch (exception: Exception) {
-                                if (exception is CancellationException) throw exception
-                                serverMessage = "No se pudo guardar la URL: ${exception.message}"
-                            } finally {
-                                checkingServer = false
-                            }
-                        }
-                    }
-                ) {
-                    Text("Probar y guardar")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !checkingServer,
-                    onClick = { showNetworkDialog = false }
-                ) {
-                    Text("Cancelar")
-                }
-            }
-        )
     }
 }

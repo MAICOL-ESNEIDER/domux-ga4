@@ -22,6 +22,8 @@ load_dotenv()
 SQLITE_ADDITIONS = {
     "users": {
         "last_name": "VARCHAR(120)",
+        "must_change_password": "BOOLEAN NOT NULL DEFAULT 0",
+        "recovery_email": "VARCHAR(120)",
         "phone": "VARCHAR(30)",
         "document_id": "VARCHAR(40)",
         "occupancy_type": "VARCHAR(30)",
@@ -54,6 +56,8 @@ SQLITE_ADDITIONS = {
         "created_by_admin_id": "INTEGER REFERENCES users(id)",
         "is_archived": "BOOLEAN NOT NULL DEFAULT 0",
         "archived_at": "DATETIME",
+        "payment_deadline": "DATETIME",
+        "payment_reminder_sent": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "packages": {
         "media_url": "TEXT",
@@ -65,6 +69,7 @@ SQLITE_ADDITIONS = {
         "is_deleted": "BOOLEAN NOT NULL DEFAULT 0",
         "deleted_at": "DATETIME",
         "deleted_by_id": "INTEGER REFERENCES users(id)",
+        "delivery_media_url": "TEXT",
     },
     "visits": {
         "visitor_document": "VARCHAR(40)",
@@ -79,6 +84,13 @@ SQLITE_ADDITIONS = {
         "exited_at": "DATETIME",
         "exit_returning": "BOOLEAN NOT NULL DEFAULT FALSE",
         "qr_pass_id": "INTEGER REFERENCES visit_qr_passes(id)",
+    },
+    "visit_qr_passes": {
+        "visitor_name": "VARCHAR(120)",
+        "visitor_document": "VARCHAR(40)",
+        "max_guests": "INTEGER NOT NULL DEFAULT 1",
+        "used_entries": "INTEGER NOT NULL DEFAULT 0",
+        "guests_json": "TEXT",
     },
 }
 
@@ -127,7 +139,8 @@ def migrate_reservation_index():
     with db.engine.begin() as connection:
         duplicate_active_slots = connection.exec_driver_sql(
             "SELECT 1 FROM reservations "
-            f"WHERE status IN ('activa', 'aprobada') AND is_archived = {false_value} "
+            f"WHERE status IN ('pendiente_pago', 'activa', 'aprobada') "
+            f"AND is_archived = {false_value} "
             "GROUP BY common_area_id, date, time_slot "
             "HAVING COUNT(*) > 1 LIMIT 1"
         ).first()
@@ -143,7 +156,8 @@ def migrate_reservation_index():
         connection.exec_driver_sql(
             "CREATE UNIQUE INDEX uq_reservation_active_slot "
             "ON reservations (common_area_id, date, time_slot) "
-            f"WHERE status IN ('activa', 'aprobada') AND is_archived = {false_value}"
+            f"WHERE status IN ('pendiente_pago', 'activa', 'aprobada') "
+            f"AND is_archived = {false_value}"
         )
 
 
@@ -169,6 +183,11 @@ def migrate_profile_columns():
         "data_processing_consent_at": (
             "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
         ),
+        "must_change_password": (
+            "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+            else "BOOLEAN NOT NULL DEFAULT 0"
+        ),
+        "recovery_email": "VARCHAR(120)",
     }
     with db.engine.begin() as connection:
         for name, column_type in column_types.items():
@@ -211,6 +230,7 @@ def migrate_security_columns():
             ),
             "deleted_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
             "deleted_by_id": "INTEGER REFERENCES users(id)",
+            "delivery_media_url": "TEXT",
         },
         "visits": {
             "visitor_photo_url": "TEXT",
@@ -235,7 +255,12 @@ def migrate_security_columns():
             "qr_pass_id": "INTEGER REFERENCES visit_qr_passes(id)",
         },
         "visit_qr_passes": {
+            "visitor_name": "VARCHAR(120)",
+            "visitor_document": "VARCHAR(40)",
+            "max_guests": "INTEGER NOT NULL DEFAULT 1",
+            "used_entries": "INTEGER NOT NULL DEFAULT 0",
             "revoked_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+            "guests_json": "TEXT",
         },
         "pqrs": {
             "is_archived": (
@@ -250,6 +275,13 @@ def migrate_security_columns():
                 else "BOOLEAN NOT NULL DEFAULT 0"
             ),
             "archived_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+            "payment_deadline": (
+                "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
+            ),
+            "payment_reminder_sent": (
+                "BOOLEAN NOT NULL DEFAULT FALSE" if dialect == "postgresql"
+                else "BOOLEAN NOT NULL DEFAULT 0"
+            ),
         },
     }
     with db.engine.begin() as connection:
@@ -282,6 +314,17 @@ def migrate_resident_profiles():
         if unit is None:
             db.session.add(ResidentialUnit(apartment=resident.apartment))
     db.session.commit()
+
+
+def migrate_common_area_names():
+    """Rename the retired gym area without changing its primary key."""
+    if "common_areas" not in inspect(db.engine).get_table_names():
+        return
+    with db.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE common_areas SET name = 'Salón de Juegos' "
+            "WHERE lower(name) = lower('Gimnasio')"
+        )
 
 
 def migrate_pqrs_conversations():
@@ -358,6 +401,7 @@ def create_app():
         migrate_profile_columns()
         migrate_admin_action_columns()
         migrate_security_columns()
+        migrate_common_area_names()
         migrate_resident_profiles()
         migrate_pqrs_conversations()
         seed_if_empty()

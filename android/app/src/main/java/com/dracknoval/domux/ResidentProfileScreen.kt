@@ -27,6 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -39,19 +45,6 @@ import com.dracknoval.domux.data.UserData
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-
-private val profilePasswordSymbols = setOf('@', '$', '!', '%', '*', '?', '&', '#', '.', '_', '-')
-
-private fun validProfilePassword(value: String): Boolean =
-    value.length >= 8 &&
-        value.any { it in 'A'..'Z' } &&
-        value.any { it in 'a'..'z' } &&
-        value.any { it in '0'..'9' } &&
-        value.any { it in profilePasswordSymbols } &&
-        value.all {
-            it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' ||
-                it in profilePasswordSymbols
-        }
 
 @Composable
 fun ResidentProfileScreen(navController: NavController) {
@@ -66,7 +59,10 @@ fun ResidentProfileScreen(navController: NavController) {
     var newPassword by remember { mutableStateOf("") }
     var passwordBusy by remember { mutableStateOf(false) }
     var attemptedPasswordChange by remember { mutableStateOf(false) }
+    var currentPasswordVisible by remember { mutableStateOf(false) }
+    var newPasswordVisible by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var messageIsError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun loadProfile() {
@@ -96,9 +92,9 @@ fun ResidentProfileScreen(navController: NavController) {
     DomuxScreenScaffold(title = "Mi perfil", navController = navController) { padding ->
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            DomuxFeedbackBanner(message) { message = "" }
+            DomuxFeedbackBanner(message, isError = messageIsError) { message = "" }
             if (loading) CircularProgressIndicator()
             user?.let { profile ->
             DomuxCard(Modifier.fillMaxWidth()) {
@@ -108,6 +104,9 @@ fun ResidentProfileScreen(navController: NavController) {
                     Text("Apartamento: ${profile.apartment ?: "Sin asignar"}")
                     Text("Tipo de residente: ${profile.occupancyType?.toDomuxDisplayLabel() ?: "—"}")
                     Text("Rol: ${profile.role.toDomuxDisplayLabel()}")
+                    profile.recoveryEmail?.takeIf { it.isNotBlank() }?.let {
+                        Text("Correo de recuperación: $it")
+                    }
                 }
             }
             Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
@@ -149,11 +148,16 @@ fun ResidentProfileScreen(navController: NavController) {
                             )
                             if (response.isSuccessful) {
                                 user = response.body()?.user
-                                message = "Perfil actualizado."
-                            } else message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                message = "Tus datos fueron actualizados exitosamente."
+                                messageIsError = false
+                            } else {
+                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                messageIsError = true
+                            }
                         } catch (exception: Exception) {
                             if (exception is CancellationException) throw exception
                             message = "No se pudo guardar el perfil: ${exception.message}"
+                            messageIsError = true
                         } finally {
                             busy = false
                         }
@@ -182,28 +186,40 @@ fun ResidentProfileScreen(navController: NavController) {
                         label = { Text("Contraseña actual") },
                         isError = attemptedPasswordChange && currentPassword.isBlank(),
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        trailingIcon = {
+                            val image = if (currentPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                            IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                                Icon(image, "Toggle password visibility")
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = newPassword,
                         onValueChange = { newPassword = it },
                         label = { Text("Nueva contraseña") },
-                        isError = attemptedPasswordChange && !validProfilePassword(newPassword),
+                        isError = attemptedPasswordChange && !validStrongPassword(newPassword),
                         supportingText = {
                             Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.")
                         },
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        trailingIcon = {
+                            val image = if (newPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                            IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                                Icon(image, "Toggle password visibility")
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Button(
                         enabled = !passwordBusy,
                         onClick = {
                             attemptedPasswordChange = true
-                            if (currentPassword.isBlank() || !validProfilePassword(newPassword)) {
+                            if (currentPassword.isBlank() || !validStrongPassword(newPassword)) {
                                 message = "Revisa la contraseña actual y los requisitos de la nueva contraseña."
                                 return@Button
                             }
@@ -218,15 +234,18 @@ fun ResidentProfileScreen(navController: NavController) {
                                     if (response.isSuccessful) {
                                         message = response.body()?.message
                                             ?: "Contraseña actualizada exitosamente."
+                                        messageIsError = false
                                         currentPassword = ""
                                         newPassword = ""
                                         attemptedPasswordChange = false
                                     } else {
                                         message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
                                     }
                                 } catch (exception: Exception) {
                                     if (exception is CancellationException) throw exception
                                     message = "No se pudo actualizar la contraseña: ${exception.message}"
+                                    messageIsError = true
                                 } finally {
                                     passwordBusy = false
                                 }
@@ -247,9 +266,9 @@ fun ResidentProfileScreen(navController: NavController) {
                 )
             }
             Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
-            Text("Cuarto útil: ${profile.storageIdentifier ?: "No registrado"}")
-            Text("Seguro de mascotas: ${if (profile.petInsurance) profile.petInsurer ?: "Sí" else "No"}")
-            Text("Plan funerario: ${if (profile.funeralPlan) profile.funeralProvider ?: "Sí" else "No"}")
+            profile.storageIdentifier?.takeIf(String::isNotBlank)?.let { storage ->
+                Text("Cuarto útil: $storage")
+            }
             profile.members.forEach { member ->
                 DomuxCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
@@ -261,17 +280,17 @@ fun ResidentProfileScreen(navController: NavController) {
                     }
                 }
             }
-            profile.pets.forEach { pet ->
-                Text(
-                    "Mascota: ${pet.name} · ${pet.species.toDomuxDisplayLabel()} · " +
-                        "${pet.breed} · ${pet.ageYears} años"
-                )
+            if (profile.pets.isNotEmpty()) {
+                Text("Mascotas registradas", style = MaterialTheme.typography.titleMedium)
+                profile.pets.forEach { pet ->
+                    Text("• ${pet.name} (${pet.species.toDomuxDisplayLabel()})")
+                }
             }
-            profile.vehicles.forEach { vehicle ->
-                Text(
-                    "Vehículo: ${vehicle.type.toDomuxDisplayLabel()} ${vehicle.plate} · " +
-                        "${vehicle.makeModel} · ${vehicle.year}"
-                )
+            if (profile.vehicles.isNotEmpty()) {
+                Text("Vehículos registrados", style = MaterialTheme.typography.titleMedium)
+                profile.vehicles.forEach { vehicle ->
+                    Text("• ${vehicle.type.toDomuxDisplayLabel()}: ${vehicle.plate}")
+                }
             }
         }
             Spacer(Modifier.height(6.dp))

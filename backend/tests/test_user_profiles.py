@@ -1,7 +1,5 @@
 import os
 import unittest
-from datetime import date
-
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
@@ -10,6 +8,7 @@ from auth import generate_token
 from extensions import db
 from models import Pet, ResidentialUnit, User, Vehicle
 from werkzeug.security import generate_password_hash
+from time_utils import now_colombia
 
 
 class UserProfileTests(unittest.TestCase):
@@ -283,7 +282,8 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual(age_filter.status_code, 200)
         self.assertEqual([user["id"] for user in age_filter.json["users"]], [self.resident.id])
 
-        self.resident.birth_date = date.today().replace(year=date.today().year - 35).isoformat()
+        today = now_colombia().date()
+        self.resident.birth_date = today.replace(year=today.year - 35).isoformat()
         db.session.commit()
         resident_age_filter = self.client.get(
             "/api/users?minAge=30&maxAge=40",

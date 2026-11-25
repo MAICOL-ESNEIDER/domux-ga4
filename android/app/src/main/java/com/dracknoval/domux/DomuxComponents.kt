@@ -1,6 +1,10 @@
 package com.dracknoval.domux
 
 import android.util.Log
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,6 +75,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+val DomuxPersonNameKeyboard = KeyboardOptions(keyboardType = KeyboardType.Text, capitalization = KeyboardCapitalization.Words)
+val DomuxSentenceKeyboard = KeyboardOptions(keyboardType = KeyboardType.Text, capitalization = KeyboardCapitalization.Sentences)
+val DomuxPasswordKeyboard = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
+
 fun String.toDomuxDisplayLabel(): String {
     val value = trim()
     return when (value.lowercase()) {
@@ -85,6 +93,8 @@ fun String.toDomuxDisplayLabel(): String {
         "activa" -> "Activa"
         "aprobada" -> "Aprobada"
         "pendiente" -> "Pendiente"
+        "pendiente_pago" -> "Pendiente de pago"
+        "expirada" -> "Expirada"
         "rechazada" -> "Rechazada"
         "cancelada" -> "Cancelada"
         "finalizada" -> "Finalizada"
@@ -186,7 +196,7 @@ fun DomuxConfirmDialog(
 fun DomuxBentoCard(
     title: String,
     detail: String,
-    icon: String,
+    icon: ImageVector,
     modifier: Modifier = Modifier,
     accentColor: Color = Color(0xFF38BDF8),
     onClick: () -> Unit
@@ -215,7 +225,7 @@ fun DomuxBentoCard(
                         .background(accentColor.copy(alpha = 0.2f), RoundedCornerShape(13.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(icon, color = accentColor, fontSize = 26.sp)
+                    Icon(imageVector = icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(26.dp))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(title, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelMedium)
@@ -275,7 +285,7 @@ fun DomuxBrandMark(size: Dp = 54.dp) {
 }
 
 @Composable
-fun DomuxFeedbackBanner(message: String, onDismiss: (() -> Unit)? = null) {
+fun DomuxFeedbackBanner(message: String, isError: Boolean? = null, onDismiss: (() -> Unit)? = null) {
         if (message.isBlank()) return
 
         val confirmations = listOf(
@@ -284,7 +294,7 @@ fun DomuxFeedbackBanner(message: String, onDismiss: (() -> Unit)? = null) {
             "entregado", "restaurado", "restablecida", "revocado", "autorizado",
             "aprobada", "vinculado", "papelera", "archivada", "exitosamente"
         )
-        val isSuccess = confirmations.any { message.contains(it, ignoreCase = true) }
+        val isSuccess = if (isError != null) !isError else confirmations.any { message.contains(it, ignoreCase = true) }
         val background = if (isSuccess) Color(0xFF052E16) else Color(0xFF450A0A)
         val foreground = if (isSuccess) Color(0xFF34D399) else Color(0xFFF87171)
         val outline = if (isSuccess) Color(0xFF10B981) else Color(0xFFEF4444)
@@ -453,7 +463,13 @@ fun DomuxResidentSearchField(
                 searchError?.let {
                     Text(it, color = Color(0xFFF87171), style = MaterialTheme.typography.bodySmall)
                 }
-                if (results.isNotEmpty()) {
+                if (searchQuery.isBlank()) {
+                    Text(
+                        "Escribe nombre o apartamento para buscar...",
+                        color = Color(0xFF94A3B8),
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (results.isNotEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = Color(0xFF091426),
@@ -466,7 +482,7 @@ fun DomuxResidentSearchField(
                                 .verticalScroll(rememberScrollState())
                                 .padding(6.dp)
                         ) {
-                            results.take(if (searchQuery.isBlank()) 3 else 5).forEach { resident ->
+                            results.take(5).forEach { resident ->
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -526,13 +542,16 @@ fun DomuxScreenScaffold(
             if (Session.isAdmin) {
                 add("PQRS" to "pqrs")
                 add("Reservas" to "reservations")
-                add("Paquetería y visitas" to "registry")
+                add("Paquetería" to "registry?initialTab=0")
+                add("Visitas y QR" to "registry?initialTab=2")
                 add("Gestión de usuarios" to "createUser")
+                add("Respaldo y Exportación" to "exports_archive")
             } else if (Session.isResident) {
                 add("Mi perfil" to "profile")
                 add("Mis PQRS" to "pqrs")
                 add("Reservas" to "reservations")
-                add("Paquetería y visitas" to "registry")
+                add("Mis Paquetes" to "registry?initialTab=0")
+                add("Mis Visitas y QR" to "registry?initialTab=1")
             } else if (Session.isGuard) {
                 add("Registrar Visitante" to "registry?initialTab=3")
                 add("Ver Visitas y QR" to "registry?initialTab=2")
@@ -543,6 +562,7 @@ fun DomuxScreenScaffold(
         val currentEntry = navController.currentBackStackEntry
         val currentRoute = currentEntry?.destination?.route?.substringBefore("?")
         val currentRegistryTab = currentEntry?.arguments?.getInt("initialTab") ?: 0
+        var isNavigating by remember { mutableStateOf(false) }
 
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -602,6 +622,8 @@ fun DomuxScreenScaffold(
                                 selected = currentRoute == destinationRoute &&
                                     (destinationTab == null || destinationTab == currentRegistryTab),
                                 onClick = {
+                                    if (isNavigating) return@NavigationDrawerItem
+                                    isNavigating = true
                                     scope.launch {
                                         drawerState.close()
                                         if (currentRoute != destinationRoute ||
@@ -609,6 +631,7 @@ fun DomuxScreenScaffold(
                                         ) {
                                             navController.navigate(route) { launchSingleTop = true }
                                         }
+                                        isNavigating = false
                                     }
                                 },
                                 colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
