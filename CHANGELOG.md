@@ -121,7 +121,10 @@ administración.
   sesión, leer los textos y aceptar (responde 403 con `legalAcceptanceRequired`). Se guarda cuándo
   aceptó y cuál versión leyó, y queda en la auditoría. Rutas nuevas: `GET /api/auth/legal-acceptance`
   y `POST /api/auth/accept-legal`. Si es menor de edad, acepta su representante legal.
-- Hoy los ocho están «en preparación». Un programa revisa que cada texto esté bien armado y, para la
+- Los ocho tienen un borrador de demostración (versión 0.1) escrito con todas las funciones de la app: visitas y
+  QR, paquetes, vehículos, mascotas y familiares, reservas, PQRS, comunicados, documentos, avisos al celular
+  (Firebase), menores de edad y la Ley 1581 de 2012. Cada uno empieza con el aviso «Borrador de
+  demostración»; quién es el responsable queda «por completar». Un programa revisa que cada texto esté bien armado y, para la
   versión final, exige que todos estén vigentes (`python -m scripts.verificar_legal`).
 
 **App Android**
@@ -206,8 +209,8 @@ administración.
 - Librerías sin fallas conocidas y con versiones fijas (TT-023).
 
 ### Pendiente antes de entregar la versión reducida
-- Escribir y revisar los ocho textos legales (hoy están «en preparación»): una persona debe
-  revisarlos antes de marcarlos como vigentes.
+- Que una persona con conocimiento legal revise los ocho borradores de los textos legales, y completar
+  quién es el responsable de la unidad, antes de quitarles el aviso «Borrador de demostración».
 
 ### Pendiente para la versión completa
 - Cambiar los colores de la app (Mixto u Oscuro) desde Preferencias, como ya se puede en la web.

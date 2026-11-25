@@ -251,7 +251,7 @@ Hay dos formas de correr DOMUX:
 
 Las copias de seguridad de la base (diarias y automáticas, con su restauración) están explicadas en [`backend/scripts/LEEME.md`](backend/scripts/LEEME.md).
 
-Los documentos legales (política de datos, términos, cookies y los demás) se leen sin iniciar sesión: en la web en `/web/legal`, en la app desde el inicio de sesión y desde «Más» o «Mi hogar», y en la API en `/api/legal`. La primera vez que una persona entra (y cada vez que cambian los términos, la política de datos o la autorización) la app y la web le muestran la pantalla «Acepto»: debe leerlos y aceptarlos para seguir, y queda guardado cuándo y qué versión aceptó (`DOMUX_REQUIRE_LEGAL_ACCEPTANCE=0` apaga la exigencia en pruebas). Hoy los ocho están «en preparación»; cómo se escribe y se publica cada uno está en [`backend/legal/LEEME.md`](backend/legal/LEEME.md).
+Los documentos legales (política de datos, términos, cookies y los demás) se leen sin iniciar sesión: en la web en `/web/legal`, en la app desde el inicio de sesión y desde «Más» o «Mi hogar», y en la API en `/api/legal`. La primera vez que una persona entra (y cada vez que cambian los términos, la política de datos o la autorización) la app y la web le muestran la pantalla «Acepto»: debe leerlos y aceptarlos para seguir, y queda guardado cuándo y qué versión aceptó (`DOMUX_REQUIRE_LEGAL_ACCEPTANCE=0` apaga la exigencia en pruebas). Hoy los ocho son borradores de demostración (versión 0.1) que todavía no revisó una persona con conocimiento legal; cómo se escribe y se publica cada uno está en [`backend/legal/LEEME.md`](backend/legal/LEEME.md).
 
 ## 12. Estructura del repositorio
 
