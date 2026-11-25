@@ -4,7 +4,7 @@ Agrega a users dos columnas: cuándo la persona aceptó los textos legales y cu�
 cuenta queda sin aceptar y la verá al entrar la próxima vez: así cada persona deja su propia constancia, no
 solo la del administrador que la creó.
 
-Revision ID: 0024_aceptacion_de_textos_legales
+Revision ID: 0024_aceptacion_de_textos
 Revises: 0023_documentos_de_la_unidad
 Create Date: 2026-11-25 18:00:00.000000
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0024_aceptacion_de_textos_legales'
+revision = '0024_aceptacion_de_textos'
 down_revision = '0023_documentos_de_la_unidad'
 branch_labels = None
 depends_on = None

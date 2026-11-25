@@ -47,7 +47,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dracknoval.domux.data.AcceptLegalRequest
 import com.dracknoval.domux.data.LegalDocument
-import com.dracknoval.domux.data.PushRegistration
 import com.dracknoval.domux.data.RetrofitClient
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.ui.theme.DomuxColor
@@ -156,7 +155,6 @@ class LegalAcceptViewModel : DomuxViewModel() {
             }
             Session.updateFrom(user)
             Session.persist(appContext)
-            PushRegistration.registerAfterAuthentication(appContext)
             onAccepted()
         }
     }
