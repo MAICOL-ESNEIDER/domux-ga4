@@ -134,7 +134,7 @@ private fun LegalReader(document: LegalDocument) {
 
 /** Dibuja un trozo del texto según su clase: título, párrafo o lista (con viñetas o numerada). */
 @Composable
-private fun LegalBlockText(block: LegalBlock) {
+internal fun LegalBlockText(block: LegalBlock) {
     when (block.type) {
         "heading" -> Text(
             block.text.orEmpty(),

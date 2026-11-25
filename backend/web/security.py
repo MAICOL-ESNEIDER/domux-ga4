@@ -26,6 +26,7 @@ from config import is_production
 from errors import is_web_path
 from extensions import db
 from models import User
+from services.legal_acceptance import acceptance_pending
 from web import bp
 
 #: Segundos sin actividad después de los cuales la sesión se cierra sola.
@@ -34,6 +35,8 @@ IDLE_SECONDS = 30 * 60
 PASSWORD_CONFIRM_SECONDS = 10 * 60
 #: Páginas que puede usar quien tiene pendiente poner una contraseña propia.
 PASSWORD_CHANGE_PAGES = frozenset({"web.password_change", "web.password_change_submit", "web.logout"})
+#: Páginas que puede usar quien aún no aceptó los textos legales: aceptarlos, cambiar la contraseña y salir.
+ACCEPTANCE_PAGES = frozenset({"web.legal_accept", "web.legal_accept_submit"}) | PASSWORD_CHANGE_PAGES
 
 #: Horas que dura una sesión como máximo, aunque la persona no deje de usarla.
 SESSION_HOURS = 8
@@ -191,6 +194,9 @@ def login_required(view):
         # Con una contraseña que le puso otro administrador, primero debe poner una propia.
         if user.must_change_password and request.endpoint not in PASSWORD_CHANGE_PAGES:
             return redirect(url_for("web.password_change"))
+        # Sin aceptar los textos legales (o con textos nuevos desde la última vez), primero la pantalla «Acepto».
+        if request.endpoint not in ACCEPTANCE_PAGES and acceptance_pending(user):
+            return redirect(url_for("web.legal_accept"))
         return view(*args, **kwargs)
 
     return wrapper

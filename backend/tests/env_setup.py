@@ -19,6 +19,8 @@ for _name in ("SEED_ADMIN_PASSWORD", "SEED_GUARD_PASSWORD", "SEED_RESIDENT_PASSW
 # Cada grupo de pruebas arma sus propios datos: los datos de prueba de demo_data.py solo se
 # cargan en las pruebas que los piden (test_demo_data.py).
 os.environ.setdefault("DOMUX_DEMO_DATA", "0")
+# Las pruebas que no tratan de la pantalla «Acepto» no la exigen (la exige test_legal_acceptance).
+os.environ.setdefault("DOMUX_REQUIRE_LEGAL_ACCEPTANCE", "0")
 
 
 def release_app(app):

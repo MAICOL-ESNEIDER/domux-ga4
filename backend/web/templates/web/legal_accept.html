@@ -1,0 +1,33 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import legal_status, legal_blocks %}
+{% from "web/_forms.html" import checkbox %}
+{% set page_title = "Acepto los textos de DOMUX" %}
+{% set wide_card = true %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Antes de continuar, lee y acepta</h1>
+    <p>DOMUX guarda datos personales de quienes viven y trabajan en la unidad: nombres, documentos, teléfonos, visitas, paquetes y vehículos. La ley colombiana (Ley 1581 de 2012) pide que cada persona sepa cómo se usan y los autorice. Abre cada texto, léelo y marca la casilla del final.</p>
+  </div>
+</div>
+
+{% for document in documents %}
+<details class="card legal-accept">
+  <summary><strong>{{ document.title }}</strong> <span class="muted">· {{ document.summary }}</span></summary>
+  <p class="small">{{ legal_status(document) }}</p>
+  {{ legal_blocks(document) }}
+</details>
+{% endfor %}
+
+<form method="post" action="{{ url_for('web.legal_accept_submit') }}" class="card form-narrow" aria-label="Aceptar los textos legales">
+  {{ csrf_input() }}
+  <input type="hidden" name="version" value="{{ version }}">
+  <input type="hidden" name="next" value="{{ next_url or '' }}">
+  {{ checkbox("accepted", "He leído y acepto los términos de uso, la política de tratamiento de datos personales y autorizo el tratamiento de mis datos como allí se explica.",
+              help="Tu aceptación queda guardada con la fecha y la versión de los textos. Si los textos cambian, te la volveremos a pedir.") }}
+  <div class="form-actions">
+    <button type="submit" class="btn">Acepto y continuar</button>
+  </div>
+</form>
+{% endblock %}

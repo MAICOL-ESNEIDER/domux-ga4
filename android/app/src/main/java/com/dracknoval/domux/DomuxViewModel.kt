@@ -52,7 +52,12 @@ abstract class DomuxViewModel : ViewModel() {
     ): Response<T>? {
         val response = callRaw(failure, onError, request) ?: return null
         if (response.isSuccessful) return response
-        onError(mensajeDeError(response.code(), response.errorBody()?.string()))
+        val body = response.errorBody()?.string()
+        // Los textos legales cambiaron (o aún no se aceptan): la app vuelve a mostrar la pantalla «Acepto».
+        if (response.code() == 403 && body?.contains("legalAcceptanceRequired") == true) {
+            Session.legalAcceptanceRequired = true
+        }
+        onError(mensajeDeError(response.code(), body))
         return null
     }
 

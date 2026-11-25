@@ -36,6 +36,7 @@ PUBLIC_ENDPOINTS = {
 #: Rutas de la API que sirven a cualquier persona con sesión, sea cual sea su rol.
 ANY_ROLE_ENDPOINTS = {
     "auth.current_session", "auth.change_own_password", "unit.get_unit_info", "unit.get_unit_logo",
+    "auth.legal_acceptance_status", "auth.accept_legal",
 }
 
 ALL_ROLES = {"ADMIN", "GUARD", "RESIDENT"}

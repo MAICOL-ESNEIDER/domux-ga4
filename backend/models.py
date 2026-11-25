@@ -8,6 +8,7 @@ from sqlalchemy.orm import declared_attr, deferred
 from sqlalchemy.orm.attributes import set_committed_value
 
 from extensions import db
+from services.legal_acceptance import acceptance_pending
 from services.pqrs_rules import make_radicado, running_semaphore
 from services.unit_rules import current_rules, forget_rules
 from services.zone_rules import (
@@ -152,6 +153,10 @@ class User(db.Model):
     must_change_password = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     data_processing_consent = db.Column(db.Boolean, nullable=False, default=False)
     data_processing_consent_at = db.Column(db.DateTime, nullable=True)
+    # La pantalla «Acepto»: cuándo la persona aceptó los textos legales y cuál versión leyó. Si los textos
+    # cambian, la versión ya no coincide y la app se la vuelve a pedir.
+    legal_accepted_at = db.Column(db.DateTime, nullable=True)
+    legal_accepted_version = db.Column(db.String(200), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=utc_now)
 
@@ -243,6 +248,8 @@ class User(db.Model):
             "dataProcessingConsentAt": _fmt(self.data_processing_consent_at),
             "isActive": self.is_active if self.is_active is not None else True,
             "mustChangePassword": bool(self.must_change_password),
+            "legalAcceptanceRequired": acceptance_pending(self),
+            "legalAcceptedAt": _fmt(self.legal_accepted_at),
             "createdAt": _fmt(self.created_at),
         }
 

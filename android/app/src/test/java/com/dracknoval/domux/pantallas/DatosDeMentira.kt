@@ -163,6 +163,16 @@ object DatosDeMentira {
         // Textos legales
         "getLegalDocuments" -> LegalDocumentsResponse(documentosLegales())
         "getLegalDocument" -> documentoLegal(a.getOrNull(0) as? String ?: "")
+        // Pantalla «Acepto»: la persona debe aceptar los dos textos de ejemplo; al aceptar queda al día.
+        "getLegalAcceptance" -> LegalAcceptanceStatus(
+            required = true,
+            version = "terminos:1.0|politica-datos:1.0|autorizacion-datos:1.0",
+            documents = documentosLegales().take(2)
+        )
+        "acceptLegal" -> UserDataResponse(
+            message = "Aceptación registrada",
+            user = usuarios().first { it.id == (Session.userId ?: 6) }.copy(legalAcceptanceRequired = false)
+        )
         else -> cuerpoVacio(metodo)
     }
 
@@ -730,8 +740,10 @@ object DatosDeMentira {
     )
 
     private fun documentoLegal(slug: String) = LegalDocument(
-        slug = slug, title = "Política de privacidad",
-        summary = "Qué datos se guardan, para qué y cómo pedir que se corrijan o se borren.",
+        slug = slug,
+        title = documentosLegales().firstOrNull { it.slug == slug }?.title ?: "Política de privacidad",
+        summary = documentosLegales().firstOrNull { it.slug == slug }?.summary
+            ?: "Qué datos se guardan, para qué y cómo pedir que se corrijan o se borren.",
         status = "vigente", version = "1.0", effectiveFrom = "2026-11-01",
         blocks = listOf(
             LegalBlock("heading", 2, "1. Quién cuida tus datos", null, null),

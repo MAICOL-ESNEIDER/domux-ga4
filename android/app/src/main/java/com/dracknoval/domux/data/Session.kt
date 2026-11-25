@@ -38,6 +38,10 @@ object Session {
     var mustChangePassword by mutableStateOf(false)
         private set
 
+    // Verdadero mientras la persona no haya aceptado los textos legales vigentes: la app muestra la
+    // pantalla «Acepto» y no deja hacer nada más hasta que acepte (después de cambiar la contraseña, si toca).
+    var legalAcceptanceRequired by mutableStateOf(false)
+
     val isAdmin: Boolean get() = role == "ADMIN"
     val isResident: Boolean get() = role == "RESIDENT"
     val isGuard: Boolean get() = role == "GUARD"
@@ -56,6 +60,7 @@ object Session {
             .put("isMinor", isMinor)
             .put("parentalConsent", parentalConsent)
             .put("mustChangePassword", mustChangePassword)
+            .put("legalAcceptanceRequired", legalAcceptanceRequired)
             .toString()
         SessionStorage.write(context, payload)
     }
@@ -85,6 +90,7 @@ object Session {
             isMinor = session.optBoolean("isMinor", false)
             parentalConsent = session.optBoolean("parentalConsent", false)
             mustChangePassword = session.optBoolean("mustChangePassword", false)
+            legalAcceptanceRequired = session.optBoolean("legalAcceptanceRequired", false)
             if (token != null && userId != null && role != null) true else {
                 clear()
                 SessionStorage.clear(context)
@@ -109,6 +115,7 @@ object Session {
         isMinor = false
         parentalConsent = false
         mustChangePassword = false
+        legalAcceptanceRequired = false
         ComplexInfoStore.clear()
     }
 
@@ -129,6 +136,7 @@ object Session {
         isMinor = user.isMinor
         parentalConsent = user.parentalConsent
         mustChangePassword = user.mustChangePassword
+        legalAcceptanceRequired = user.legalAcceptanceRequired
         changeCount++
     }
 }

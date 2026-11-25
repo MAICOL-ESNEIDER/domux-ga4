@@ -28,7 +28,10 @@ data class UserData(
     // Solo los guardias tienen PIN para cambiar de turno (HU-010).
     val hasPin: Boolean = false,
     // El administrador le restableció la contraseña: al entrar debe poner una propia.
-    val mustChangePassword: Boolean = false
+    val mustChangePassword: Boolean = false,
+    // Todavía no aceptó los textos legales (o cambiaron desde que los aceptó): debe aceptarlos para seguir.
+    val legalAcceptanceRequired: Boolean = false,
+    val legalAcceptedAt: String? = null
 )
 
 data class LoginResponse(val message: String?, val token: String?, val user: UserData?)
@@ -658,6 +661,15 @@ data class LegalDocumentSummary(
     val effectiveFrom: String?
 )
 data class LegalDocumentsResponse(val documents: List<LegalDocumentSummary>?)
+
+// Pantalla «Acepto»: qué textos debe aceptar la persona y en qué versión. «version» se manda de vuelta al aceptar.
+data class LegalAcceptanceStatus(
+    val required: Boolean = false,
+    val version: String = "",
+    val acceptedAt: String? = null,
+    val documents: List<LegalDocumentSummary>? = null
+)
+data class AcceptLegalRequest(val accepted: Boolean, val version: String)
 
 // Un trozo del texto. «type» es heading (título), paragraph (párrafo) o list (lista) y cada clase
 // trae solo sus datos: heading → level y text; paragraph → text; list → ordered e items.
