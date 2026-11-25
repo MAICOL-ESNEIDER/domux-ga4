@@ -154,7 +154,12 @@ class LegalAcceptViewModel : DomuxViewModel() {
                 return@launch
             }
             Session.updateFrom(user)
-            Session.persist(appContext)
+            // Si no se pudo guardar en el celular no pasa nada grave: al abrir la app se pide la sesión de nuevo.
+            try {
+                Session.persist(appContext)
+            } catch (exception: Exception) {
+                Log.e("DomuxSession", "Could not store the session after accepting the legal texts.", exception)
+            }
             onAccepted()
         }
     }
