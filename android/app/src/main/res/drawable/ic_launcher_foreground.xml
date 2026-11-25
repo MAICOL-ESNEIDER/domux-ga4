@@ -1,13 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M38,30 L38,78 C38,78 52,78 58,74 C66,68 70,58 70,54 C70,50 66,40 58,34 C52,30 38,30 38,30 Z M46,38 L54,38 C60,40 62,46 62,54 C62,62 60,68 54,70 L46,70 L46,38 Z"/>
-    <path
-        android:fillColor="#00E5FF"
-        android:pathData="M48,58 L48,50 L54,44 L60,50 L60,58 Z" />
+    <group
+        android:scaleX="2.5"
+        android:scaleY="2.5"
+        android:translateX="24"
+        android:translateY="24">
+        <!-- Outer Shield -->
+        <path
+            android:fillColor="#38BDF8"
+            android:pathData="M12,2 L3,6 L3,12 C3,17.55 6.84,22.74 12,24 C17.16,22.74 21,17.55 21,12 L21,6 L12,2 Z" />
+
+        <!-- Inner Geometric 'D' / House -->
+        <path
+            android:fillColor="#F8FAFC"
+            android:pathData="M9,7 L13.5,7 C15.98,7 18,9.02 18,11.5 C18,13.98 15.98,16 13.5,16 L9,16 L9,7 Z M11,9 L11,14 L13.5,14 C14.88,14 16,12.88 16,11.5 C16,10.12 14.88,9 13.5,9 L11,9 Z" />
+    </group>
 </vector>

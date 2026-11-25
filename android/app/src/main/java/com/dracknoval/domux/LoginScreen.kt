@@ -106,7 +106,7 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
 
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = { email = it.trim() },
             label = { Text("Correo") },
             singleLine = true,
             isError = (attemptedLogin && email.trim().isEmpty()) ||
@@ -200,11 +200,15 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
                                 onLoginComplete()
                             }
                         } else {
-                            result = "❌ ${mensajeDeError(response.code(), response.errorBody()?.string())}"
+                            if (response.code() == 401) {
+                                result = "Credenciales inválidas"
+                            } else {
+                                result = "Error ${response.code()}: ${response.errorBody()?.string() ?: response.message()}"
+                            }
                         }
                     } catch (exception: Exception) {
                         if (exception is CancellationException) throw exception
-                        result = "⚠️ No se pudo conectar con el servidor: ${exception.message}"
+                        result = "⚠️ Error: ${exception.javaClass.simpleName} - ${exception.message}"
                     } finally {
                         loading = false
                     }

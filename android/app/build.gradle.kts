@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -10,20 +8,7 @@ if (file("google-services.json").isFile) {
     apply(plugin = "com.google.gms.google-services")
 }
 
-val localProperties = Properties().apply {
-    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
-}
-val devBaseUrl = localProperties.getProperty("domux.dev.baseUrl")
-    ?.trim()
-    ?.takeIf { it.isNotEmpty() }
-    ?: "http://10.0.2.2:5000/"
-val escapedDevBaseUrl = devBaseUrl
-    .replace("\\", "\\\\")
-    .replace("\"", "\\\"")
-val fallbackUrls = localProperties.getProperty("DOMUX_FALLBACK_URLS").orEmpty().trim()
-val escapedFallbackUrls = fallbackUrls
-    .replace("\\", "\\\\")
-    .replace("\"", "\\\"")
+val renderBaseUrl = "https://domux-api-lein.onrender.com/"
 
 android {
     namespace = "com.dracknoval.domux"
@@ -36,10 +21,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // URL base del backend. Cambia aquí o sobreescribe en distintos builds si lo necesitas.
-        // Por defecto apunta al servicio desplegado en Render; para desarrollo local usa 10.0.2.2:5000.
-        buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
-        buildConfigField("String", "DOMUX_FALLBACK_URLS", "\"$escapedFallbackUrls\"")
+        buildConfigField("String", "BASE_URL", "\"$renderBaseUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -57,18 +39,15 @@ android {
         }
     }
 
-    // Definir flavors para poder cambiar la BASE_URL sin editar código.
     flavorDimensions += "environment"
     productFlavors {
         create("dev") {
             dimension = "environment"
-            // Para un teléfono físico, define domux.dev.baseUrl=http://<IP-LAN>:5000/ en local.properties.
-            buildConfigField("String", "BASE_URL", "\"$escapedDevBaseUrl\"")
+            buildConfigField("String", "BASE_URL", "\"$renderBaseUrl\"")
         }
         create("prod") {
             dimension = "environment"
-            // URL por defecto apuntando al servicio desplegado en Render
-            buildConfigField("String", "BASE_URL", "\"https://domux-backend.onrender.com/\"")
+            buildConfigField("String", "BASE_URL", "\"$renderBaseUrl\"")
         }
     }
 
@@ -81,7 +60,6 @@ android {
     }
     buildFeatures {
         compose = true
-        // Habilitar generación de BuildConfig para poder usar buildConfigField por flavor
         buildConfig = true
     }
     composeOptions {
@@ -111,14 +89,11 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
-    // Navigation Compose: nos deja movernos entre pantallas con rutas ("login", "home", etc.)
     implementation("androidx.navigation:navigation-compose:2.8.1")
-    // Retrofit + Gson: consumo de la API REST del backend Flask.
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("com.google.zxing:core:3.5.3")
-    // Corrutinas: para las funciones "suspend" de las llamadas de red.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

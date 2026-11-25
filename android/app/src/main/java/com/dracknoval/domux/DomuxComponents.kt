@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
@@ -264,21 +265,15 @@ fun DomuxBrandMark(size: Dp = 54.dp) {
     Surface(
         modifier = Modifier.size(size),
         shape = RoundedCornerShape(17.dp),
-        color = Color.Transparent
+        color = Color(0xFF0B1220),
+        border = BorderStroke(1.dp, Color(0x33FFFFFF))
     ) {
-        Box(
-            modifier = Modifier.background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF22D3EE), Color(0xFF818CF8), Color(0xFFA855F7))
-                )
-            ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "D",
-                color = Color.White,
-                fontSize = (size.value * 0.52f).sp,
-                fontWeight = FontWeight.Bold
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_domux_shield),
+                contentDescription = "DOMUX Shield",
+                modifier = Modifier.size(size * 0.5f),
+                tint = Color.Unspecified
             )
         }
     }

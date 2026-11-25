@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Outer Shield -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M12,2 L3,6 L3,12 C3,17.55 6.84,22.74 12,24 C17.16,22.74 21,17.55 21,12 L21,6 L12,2 Z" />
+
+    <!-- Inner Geometric 'D' / House -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M9,7 L13.5,7 C15.98,7 18,9.02 18,11.5 C18,13.98 15.98,16 13.5,16 L9,16 L9,7 Z M11,9 L11,14 L13.5,14 C14.88,14 16,12.88 16,11.5 C16,10.12 14.88,9 13.5,9 L11,9 Z" />
+</vector>

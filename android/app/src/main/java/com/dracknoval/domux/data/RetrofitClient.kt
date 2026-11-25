@@ -15,8 +15,13 @@ object RetrofitClient {
         .build()
 
     private fun normalizeUrl(url: String): String {
-        val withoutBrackets = url.trim().replace("[", "").replace("]", "")
-        return if (withoutBrackets.endsWith("/")) withoutBrackets else "$withoutBrackets/"
+        var cleanUrl = url.trim().replace("[", "").replace("]", "").replace("\"", "")
+        if (cleanUrl.endsWith("/api/")) {
+            cleanUrl = cleanUrl.removeSuffix("api/")
+        } else if (cleanUrl.endsWith("/api")) {
+            cleanUrl = cleanUrl.removeSuffix("api")
+        }
+        return if (cleanUrl.endsWith("/")) cleanUrl else "$cleanUrl/"
     }
 
     val baseUrl: String = normalizeUrl(BuildConfig.BASE_URL)
