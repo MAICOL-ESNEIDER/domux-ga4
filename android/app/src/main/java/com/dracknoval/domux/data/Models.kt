@@ -259,6 +259,7 @@ data class Reservation(
     val date: String,
     val timeSlot: String,
     val status: String,
+    val createdAt: String? = null,
     val residentName: String?,
     val residentId: Int? = null,
     val apartment: String? = null,
@@ -290,7 +291,8 @@ data class CreateReservationRequest(
     val residentId: Int? = null,
     val message: String? = null,
     val mediaUrl: String? = null,
-    val mediaType: String? = null
+    val mediaType: String? = null,
+    val paymentAlreadyReceived: Boolean = false
 )
 data class AddReservationMessageRequest(
     val message: String? = null,

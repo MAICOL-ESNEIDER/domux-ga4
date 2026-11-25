@@ -1,6 +1,7 @@
 package com.dracknoval.domux
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.horizontalScroll
@@ -39,6 +40,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
 
 private val reservationSlots = listOf(
     "08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00",
@@ -80,6 +84,7 @@ private fun reservationDateMillis(value: String): Long? = try {
 private fun ReservationCalendarPicker(
     value: String,
     blockedDates: Set<String>,
+    maxDaysAhead: Int,
     onMonthChanged: (year: Int, month: Int) -> Unit,
     onValueChange: (String) -> Unit
 ) {
@@ -88,7 +93,10 @@ private fun ReservationCalendarPicker(
         object : SelectableDates {
             override fun isSelectableDate(utcTimeMillis: Long): Boolean {
                 val selectedDate = reservationDateString(Date(utcTimeMillis))
-                return selectedDate >= reservationTodayString() && selectedDate !in blockedDates
+                val maxCalendar = Calendar.getInstance()
+                maxCalendar.add(Calendar.DAY_OF_YEAR, maxDaysAhead)
+                val maxDateString = reservationDateString(maxCalendar.time)
+                return selectedDate >= reservationTodayString() && selectedDate <= maxDateString && selectedDate !in blockedDates
             }
 
             override fun isSelectableYear(year: Int): Boolean =
@@ -160,7 +168,8 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var message by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var attemptedCreate by remember { mutableStateOf(false) }
-    var showLegalOptions by remember { mutableStateOf(false) }
+    var paymentAlreadyReceived by remember { mutableStateOf(false) }
+    var messageIsError by remember { mutableStateOf(false) }
     var selectedTab by remember {
         mutableIntStateOf(if (targetResidentId != null) 1 else 0)
     }
@@ -208,10 +217,12 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             try {
                 val (successful, responseMessage) = action()
                 message = responseMessage ?: fallbackMessage
+                messageIsError = !successful
                 if (successful) load()
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
                 message = "No se pudo actualizar el pago de la reserva: ${exception.message}"
+                messageIsError = true
             } finally {
                 paymentActionInProgress = false
             }
@@ -259,7 +270,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             listOf("Reservas registradas", "Nueva reserva"),
             selectedTab
         ) { selectedTab = it }
-        DomuxFeedbackBanner(message) { message = "" }
+        DomuxFeedbackBanner(message, isError = messageIsError) { message = "" }
         if ((Session.isAdmin || Session.isResident) && selectedTab == 1) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             DomuxCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -274,7 +285,8 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                     Text(if (Session.isAdmin) "Crear reserva para un residente" else "Nueva reserva", style = MaterialTheme.typography.titleMedium)
                     Text("Zona común")
                     Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         areas.forEach { area ->
                             FilterChip(
@@ -290,10 +302,18 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                             selectedResident = selectedResident,
                             onSelectResident = { selectedResident = it }
                         )
+                        Row(
+                            Modifier.fillMaxWidth().clickable { paymentAlreadyReceived = !paymentAlreadyReceived }.padding(vertical = 8.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = paymentAlreadyReceived, onCheckedChange = { paymentAlreadyReceived = it })
+                            Text("Pago ya recibido en oficina (Aprobar inmediatamente)")
+                        }
                     }
                     ReservationCalendarPicker(
                         date,
                         blockedDates,
+                        if (isSocialHall(selectedArea?.name)) 60 else 30,
                         { year, month -> calendarMonth = year to month },
                         { date = it; slot = "" }
                     )
@@ -339,86 +359,115 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                         value = requestMessage,
                         onValueChange = { requestMessage = it },
                         label = { Text("Mensaje opcional para administración") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                        minLines = 3,
+                        maxLines = 6
                     )
-                    MediaAttachmentPicker(requestMediaName, { url, type, name ->
-                        requestMediaUrl = url
-                        requestMediaType = type
-                        requestMediaName = name
-                    }, { message = it })
-                    Button(
-                        enabled = !submitting &&
-                            !(Session.isResident && Session.isMinor && !Session.parentalConsent),
-                        onClick = {
-                            attemptedCreate = true
-                            val area = selectedArea
-                            if (area == null || date.isBlank() || slot.isBlank() ||
-                                (Session.isAdmin && selectedResident == null)
-                            ) {
-                                message = "Elige zona, fecha, horario y residente cuando corresponda."
-                                return@Button
-                            }
-                            confirmation = "¿Estás seguro de crear esta reserva?" to {
-                                scope.launch {
-                                    submitting = true
-                                    try {
-                                        val response = RetrofitClient.api.createReservation(
-                                            Session.bearer(),
-                                            CreateReservationRequest(
-                                                area.id, date, slot,
-                                                if (Session.isAdmin) selectedResident?.id else null,
-                                                requestMessage.trim().takeIf(String::isNotEmpty),
-                                                requestMediaUrl,
-                                                requestMediaType
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MediaAttachmentPicker(requestMediaName, { url, type, name ->
+                            requestMediaUrl = url
+                            requestMediaType = type
+                            requestMediaName = name
+                        }, { message = it; messageIsError = true })
+                        Button(
+                            enabled = !submitting &&
+                                !(Session.isResident && Session.isMinor && !Session.parentalConsent),
+                            onClick = {
+                                attemptedCreate = true
+                                val area = selectedArea
+                                if (area == null || date.isBlank() || slot.isBlank() ||
+                                    (Session.isAdmin && selectedResident == null)
+                                ) {
+                                    message = "Elige zona, fecha, horario y residente cuando corresponda."
+                                    messageIsError = true
+                                    return@Button
+                                }
+                                confirmation = "¿Estás seguro de crear esta reserva?" to {
+                                    scope.launch {
+                                        submitting = true
+                                        try {
+                                            val response = RetrofitClient.api.createReservation(
+                                                Session.bearer(),
+                                                CreateReservationRequest(
+                                                    area.id, date, slot,
+                                                    if (Session.isAdmin) selectedResident?.id else null,
+                                                    requestMessage.trim().takeIf(String::isNotEmpty),
+                                                    requestMediaUrl,
+                                                    requestMediaType,
+                                                    paymentAlreadyReceived
+                                                )
                                             )
-                                        )
-                                        if (response.isSuccessful) {
-                                            date = ""; slot = ""
-                                            requestMessage = ""
-                                            requestMediaUrl = null
-                                            requestMediaType = null
-                                            requestMediaName = null
-                                            attemptedCreate = false
-                                            message = "Reserva registrada exitosamente."
-                                            selectedTab = 0
-                                            load()
-                                        } else {
-                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            if (response.isSuccessful) {
+                                                date = ""; slot = ""
+                                                requestMessage = ""
+                                                requestMediaUrl = null
+                                                requestMediaType = null
+                                                requestMediaName = null
+                                                paymentAlreadyReceived = false
+                                                attemptedCreate = false
+                                                message = "Reserva registrada exitosamente."
+                                                messageIsError = false
+                                                selectedTab = 0
+                                                load()
+                                            } else {
+                                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                                messageIsError = true
+                                            }
+                                        } catch (exception: Exception) {
+                                            if (exception is CancellationException) throw exception
+                                            message = "No se pudo crear la reserva: ${exception.message}"
+                                            messageIsError = true
+                                        } finally {
+                                            submitting = false
                                         }
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        message = "No se pudo crear la reserva: ${exception.message}"
-                                    } finally {
-                                        submitting = false
                                     }
                                 }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) { Text(if (submitting) "Guardando..." else "Reservar") }
+                            },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        ) { Text(if (submitting) "Guardando..." else "Reservar") }
+                    }
                 }
             }
             }
         }
         if (selectedTab == 0) {
-        if (Session.isAdmin) {
-            TextButton(
-                onClick = { showLegalOptions = !showLegalOptions },
-                modifier = Modifier.fillMaxWidth()
+        var residentReservationFilter by remember { mutableStateOf("Activas y pendientes") }
+        if (Session.isResident) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    if (showLegalOptions) "Ocultar opciones de archivo y Excel legal"
-                    else "Opciones de archivo y Excel legal"
-                )
+                listOf("Activas y pendientes", "Historial").forEach { filterOption ->
+                    FilterChip(
+                        selected = residentReservationFilter == filterOption,
+                        onClick = { residentReservationFilter = filterOption },
+                        label = { Text(filterOption) }
+                    )
+                }
             }
         }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        val visibleReservations = if (Session.isResident) {
+            reservations.filter {
+                if (residentReservationFilter == "Activas y pendientes") {
+                    it.status !in listOf("finalizada", "cancelada", "expirada")
+                } else {
+                    it.status in listOf("finalizada", "cancelada", "expirada")
+                }
+            }
+        } else {
+            reservations
+        }
         LazyColumn(Modifier.weight(1f)) {
-            items(reservations, key = { it.id }) { reservation ->
+            items(visibleReservations, key = { it.id }) { reservation ->
                 DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
-                        Text("${reservation.date} · ${reservation.timeSlot}")
+                        Text("Reserva: ${reservation.date} · ${reservation.timeSlot}", style = MaterialTheme.typography.titleMedium)
+                        if (reservation.createdAt != null) {
+                            Text("Solicitada: ${reservation.createdAt}", style = MaterialTheme.typography.bodySmall)
+                        }
                         Text("Residente: ${reservation.residentName.orEmpty()} · ${reservation.apartment.orEmpty()}")
                         if (reservation.status == "pendiente_pago") {
                             val minutesRemaining = reservation.minutesRemaining
@@ -442,7 +491,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                 style = MaterialTheme.typography.labelSmall
                             )
                             if (!item.message.isNullOrBlank()) Text(item.message)
-                            MediaAttachmentChip(item.mediaUrl, item.mediaType)
+                            DomuxAttachmentPreview(item.mediaUrl, item.mediaType)
                         }
                         DomuxStatusBadge(
                             reservation.status.toDomuxDisplayLabel(),
@@ -468,12 +517,18 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                         val response = RetrofitClient.api.cancelReservation(
                                             Session.bearer(), reservation.id
                                         )
-                                        message = if (response.isSuccessful) "Reserva cancelada."
-                                        else mensajeDeError(response.code(), response.errorBody()?.string())
+                                        if (response.isSuccessful) {
+                                            message = "Reserva cancelada."
+                                            messageIsError = false
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            messageIsError = true
+                                        }
                                         load()
                                     } catch (exception: Exception) {
                                         if (exception is CancellationException) throw exception
                                         message = "No se pudo cancelar la reserva: ${exception.message}"
+                                        messageIsError = true
                                     }
                                 }
                             }
@@ -564,12 +619,18 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                                         Session.bearer(), reservation.id,
                                                         UpdateReservationStatusRequest("aprobada")
                                                     )
-                                                    message = if (response.isSuccessful) "Reserva aprobada."
-                                                    else mensajeDeError(response.code(), response.errorBody()?.string())
+                                                    if (response.isSuccessful) {
+                                                        message = "Reserva aprobada."
+                                                        messageIsError = false
+                                                    } else {
+                                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                                        messageIsError = true
+                                                    }
                                                     load()
                                                 } catch (exception: Exception) {
                                                     if (exception is CancellationException) throw exception
                                                     message = "No se pudo aprobar: ${exception.message}"
+                                                    messageIsError = true
                                                 }
                                             }
                                         }
@@ -582,12 +643,18 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                                         Session.bearer(), reservation.id,
                                                         UpdateReservationStatusRequest("rechazada")
                                                     )
-                                                    message = if (response.isSuccessful) "Reserva rechazada."
-                                                    else mensajeDeError(response.code(), response.errorBody()?.string())
+                                                    if (response.isSuccessful) {
+                                                        message = "Reserva rechazada."
+                                                        messageIsError = false
+                                                    } else {
+                                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                                        messageIsError = true
+                                                    }
                                                     load()
                                                 } catch (exception: Exception) {
                                                     if (exception is CancellationException) throw exception
                                                     message = "No se pudo rechazar: ${exception.message}"
+                                                    messageIsError = true
                                                 }
                                             }
                                         }
@@ -624,10 +691,11 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                 replyMediaUrl = url
                                 replyMediaType = type
                                 replyMediaName = name
-                            }, { message = it })
+                            }, { message = it; messageIsError = true })
                             TextButton(onClick = {
                                 if (reply.isBlank() && replyMediaUrl == null) {
                                     message = "Escribe un mensaje o adjunta un archivo."
+                                    messageIsError = true
                                     return@TextButton
                                 }
                                 scope.launch {
@@ -641,12 +709,18 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                                                 replyMediaType
                                             )
                                         )
-                                        message = if (response.isSuccessful) "Mensaje enviado."
-                                        else mensajeDeError(response.code(), response.errorBody()?.string())
+                                        if (response.isSuccessful) {
+                                            message = "Mensaje enviado."
+                                            messageIsError = false
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            messageIsError = true
+                                        }
                                         if (response.isSuccessful) load()
                                     } catch (exception: Exception) {
                                         if (exception is CancellationException) throw exception
                                         message = "No se pudo enviar el mensaje: ${exception.message}"
+                                        messageIsError = true
                                     }
                                 }
                             }) { Text("Enviar mensaje") }
