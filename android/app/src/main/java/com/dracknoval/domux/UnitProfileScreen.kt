@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -150,8 +151,8 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             var memberPhone by remember { mutableStateOf("") }
             var memberRelationship by remember { mutableStateOf("hijo") }
             var otherRelationship by remember { mutableStateOf("") }
-            OutlinedTextField(memberName, { memberName = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(memberLastName, { memberLastName = it }, label = { Text("Apellido") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(memberName, { memberName = it }, label = { Text("Nombre") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(memberLastName, { memberLastName = it }, label = { Text("Apellido") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberDocument, { memberDocument = it }, label = { Text("Documento") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberBirthDate, { memberBirthDate = it }, label = { Text("Nacimiento AAAA-MM-DD") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(
@@ -218,12 +219,12 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             var petBreed by remember { mutableStateOf("") }
             var petAge by remember { mutableStateOf("") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(petName, { petName = it }, label = { Text("Nombre") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(petSpecies, { petSpecies = it }, label = { Text("Especie") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(petName, { petName = it }, label = { Text("Nombre") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(petSpecies, { petSpecies = it }, label = { Text("Especie") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(petBreed, { petBreed = it }, label = { Text("Raza") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(petAge, { petAge = it.filter(Char::isDigit) }, label = { Text("Edad") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(petBreed, { petBreed = it }, label = { Text("Raza") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(petAge, { petAge = it.filter(Char::isDigit) }, label = { Text("Edad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
             }
             Button(onClick = {
                 val age = petAge.toIntOrNull()
@@ -260,10 +261,10 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 }
             }
             OutlinedTextField(plate, { plate = it.uppercase() }, label = { Text("Placa colombiana") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(makeModel, { makeModel = it }, label = { Text("Marca y modelo") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(vehicleYear, { vehicleYear = it.filter(Char::isDigit) }, label = { Text("Año") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(registeredOwner, { registeredOwner = it }, label = { Text("A nombre de") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(color, { color = it }, label = { Text("Color (opcional)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(makeModel, { makeModel = it }, label = { Text("Marca y modelo") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(vehicleYear, { vehicleYear = it.filter(Char::isDigit) }, label = { Text("Año") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(registeredOwner, { registeredOwner = it }, label = { Text("A nombre de") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(color, { color = it }, label = { Text("Color (opcional)") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
             Button(onClick = {
                 val year = vehicleYear.toIntOrNull()
                 if (!plate.matches(Regex("[A-Z]{3}\\d{3}|[A-Z]{3}\\d{2}[A-Z]")) ||

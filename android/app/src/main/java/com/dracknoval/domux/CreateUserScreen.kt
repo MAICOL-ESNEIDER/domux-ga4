@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 import android.net.Uri
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -401,6 +402,7 @@ fun CreateUserScreen(navController: NavController) {
                                         label = { Text("Cuarto útil: ${filterLabel(storageFilter)}") }
                                     )
                                 }
+                                Text("Filtrar residentes por rango de edad", style = MaterialTheme.typography.labelMedium)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
                                         value = minAge,
@@ -458,14 +460,17 @@ fun CreateUserScreen(navController: NavController) {
                                     "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
                                         if (user.isActive) "Activo" else "Inactivo"
                                 )
-                                Row {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
                                     TextButton(onClick = { editUser = user }) { Text("Editar") }
                                     OutlinedButton(onClick = {
                                         resetUser = user
                                         resetPassword = ""
                                     }) { Text("Asignar nueva clave") }
                                     if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
-                                        TextButton(onClick = {
+                                        Button(onClick = {
                                             navController.navigate("unitProfile/${Uri.encode(user.apartment)}")
                                         }) { Text("Ficha del hogar") }
                                     }
@@ -569,12 +574,24 @@ fun CreateUserScreen(navController: NavController) {
                             }
                         }
                         Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             occupancyOptions.forEach { (value, label) ->
                                 FilterChip(selected = eOccupancy == value, onClick = { eOccupancy = value }, label = { Text(label) })
                             }
+                        }
+                    }
+                    if (eRole == "RESIDENT" && eApartment.isNotBlank()) {
+                        Button(
+                            onClick = {
+                                val apt = eApartment.trim()
+                                editUser = null
+                                navController.navigate("unitProfile/${Uri.encode(apt)}")
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                        ) {
+                            Text("Abrir Ficha del Hogar para apto $eApartment")
                         }
                     }
                     Row {
@@ -878,6 +895,8 @@ private fun UserInput(
             KeyboardOptions(keyboardType = KeyboardType.Number)
         } else if (password) {
             KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
+        } else if (label in listOf("Nombre", "Apellido", "Nombre principal", "Nombre y Apellidos")) {
+            KeyboardOptions(capitalization = KeyboardCapitalization.Words)
         } else {
             KeyboardOptions.Default
         },

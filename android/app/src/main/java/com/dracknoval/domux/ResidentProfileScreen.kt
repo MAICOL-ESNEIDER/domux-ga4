@@ -62,6 +62,7 @@ fun ResidentProfileScreen(navController: NavController) {
     var currentPasswordVisible by remember { mutableStateOf(false) }
     var newPasswordVisible by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var messageIsError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun loadProfile() {
@@ -91,9 +92,9 @@ fun ResidentProfileScreen(navController: NavController) {
     DomuxScreenScaffold(title = "Mi perfil", navController = navController) { padding ->
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            DomuxFeedbackBanner(message) { message = "" }
+            DomuxFeedbackBanner(message, isError = messageIsError) { message = "" }
             if (loading) CircularProgressIndicator()
             user?.let { profile ->
             DomuxCard(Modifier.fillMaxWidth()) {
@@ -147,11 +148,16 @@ fun ResidentProfileScreen(navController: NavController) {
                             )
                             if (response.isSuccessful) {
                                 user = response.body()?.user
-                                message = "Perfil actualizado."
-                            } else message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                message = "Tus datos fueron actualizados exitosamente."
+                                messageIsError = false
+                            } else {
+                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                messageIsError = true
+                            }
                         } catch (exception: Exception) {
                             if (exception is CancellationException) throw exception
                             message = "No se pudo guardar el perfil: ${exception.message}"
+                            messageIsError = true
                         } finally {
                             busy = false
                         }
@@ -228,15 +234,18 @@ fun ResidentProfileScreen(navController: NavController) {
                                     if (response.isSuccessful) {
                                         message = response.body()?.message
                                             ?: "Contraseña actualizada exitosamente."
+                                        messageIsError = false
                                         currentPassword = ""
                                         newPassword = ""
                                         attemptedPasswordChange = false
                                     } else {
                                         message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
                                     }
                                 } catch (exception: Exception) {
                                     if (exception is CancellationException) throw exception
                                     message = "No se pudo actualizar la contraseña: ${exception.message}"
+                                    messageIsError = true
                                 } finally {
                                     passwordBusy = false
                                 }
@@ -257,9 +266,9 @@ fun ResidentProfileScreen(navController: NavController) {
                 )
             }
             Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
-            Text("Cuarto útil: ${profile.storageIdentifier ?: "No registrado"}")
-            Text("Seguro de mascotas: ${if (profile.petInsurance) profile.petInsurer ?: "Sí" else "No"}")
-            Text("Plan funerario: ${if (profile.funeralPlan) profile.funeralProvider ?: "Sí" else "No"}")
+            profile.storageIdentifier?.takeIf(String::isNotBlank)?.let { storage ->
+                Text("Cuarto útil: $storage")
+            }
             profile.members.forEach { member ->
                 DomuxCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
@@ -271,17 +280,17 @@ fun ResidentProfileScreen(navController: NavController) {
                     }
                 }
             }
-            profile.pets.forEach { pet ->
-                Text(
-                    "Mascota: ${pet.name} · ${pet.species.toDomuxDisplayLabel()} · " +
-                        "${pet.breed} · ${pet.ageYears} años"
-                )
+            if (profile.pets.isNotEmpty()) {
+                Text("Mascotas registradas", style = MaterialTheme.typography.titleMedium)
+                profile.pets.forEach { pet ->
+                    Text("• ${pet.name} (${pet.species.toDomuxDisplayLabel()})")
+                }
             }
-            profile.vehicles.forEach { vehicle ->
-                Text(
-                    "Vehículo: ${vehicle.type.toDomuxDisplayLabel()} ${vehicle.plate} · " +
-                        "${vehicle.makeModel} · ${vehicle.year}"
-                )
+            if (profile.vehicles.isNotEmpty()) {
+                Text("Vehículos registrados", style = MaterialTheme.typography.titleMedium)
+                profile.vehicles.forEach { vehicle ->
+                    Text("• ${vehicle.type.toDomuxDisplayLabel()}: ${vehicle.plate}")
+                }
             }
         }
             Spacer(Modifier.height(6.dp))
