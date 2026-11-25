@@ -532,6 +532,114 @@ class ComplexProfile(db.Model):
         }
 
 
+#: Los tipos de documento de la unidad, con el nombre que ve la persona (DEC-032).
+DOCUMENT_CATEGORIES = {
+    "convivencia": "Manual de convivencia",
+    "reglas": "Reglas de la unidad",
+    "presupuesto": "Presupuestos aprobados",
+    "gastos": "Gastos e informes",
+    "actas": "Actas de asamblea",
+    "otro": "Otros",
+}
+
+#: A quién puede mostrarle la administración un documento: a cada tipo de residente y a la portería.
+#: La administración siempre los ve todos. Las llaves de los residentes son las de ``occupancy_type``.
+DOCUMENT_AUDIENCES = {
+    "propietario": "Propietarios",
+    "arrendatario": "Arrendatarios",
+    "residente": "Otros residentes",
+    "guardia": "Portería",
+}
+
+
+class UnitDocument(RetirableMixin, db.Model):
+    """Un documento de la unidad que sube la administración: manual de convivencia, reglas, presupuestos...
+
+    El archivo (PDF, PNG, JPG o WebP de hasta 6 MB) se guarda en la base, revisado por sus primeros bytes
+    al subirlo. La administración marca quién lo puede ver (``for_*``): sin ninguna marca solo lo ve ella.
+    Nada se borra (ADR-013): un documento retirado deja de verse para los demás, pero queda guardado.
+    ``content_sha256`` es la huella del archivo: sirve de versión para no descargarlo de nuevo si no cambió.
+    """
+
+    __tablename__ = "unit_documents"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    category = db.Column(db.String(20), nullable=False, default="otro")
+    file_name = db.Column(db.String(160), nullable=False)
+    mime_type = db.Column(db.String(30), nullable=False)
+    size_bytes = db.Column(db.Integer, nullable=False)
+    # «deferred»: los bytes se leen solo cuando alguien abre el documento, no al listar.
+    content = deferred(db.Column(db.LargeBinary, nullable=False))
+    content_sha256 = db.Column(db.String(64), nullable=False)
+    for_owners = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    for_tenants = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    for_residents = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    for_guards = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    uploaded_by_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", name="fk_unit_documents_uploaded_by_id_users"), nullable=False,
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now, onupdate=utc_now)
+
+    uploaded_by = db.relationship("User", foreign_keys=[uploaded_by_id])
+    retired_by = db.relationship("User", foreign_keys="UnitDocument.retired_by_id")
+
+    __table_args__ = (
+        Index("ix_unit_documents_retired_at_created_at", "retired_at", "created_at"),
+    )
+
+    #: Cada llave de ``DOCUMENT_AUDIENCES`` con la columna que la guarda.
+    AUDIENCE_COLUMNS = {
+        "propietario": "for_owners",
+        "arrendatario": "for_tenants",
+        "residente": "for_residents",
+        "guardia": "for_guards",
+    }
+
+    @property
+    def audiences(self):
+        """A quién se lo muestra la administración, en el orden de ``DOCUMENT_AUDIENCES``."""
+        return [key for key, column in self.AUDIENCE_COLUMNS.items() if getattr(self, column)]
+
+    @property
+    def version(self):
+        """Un texto corto que cambia solo cuando cambia el archivo."""
+        return self.content_sha256[:12]
+
+    @property
+    def kind(self):
+        """«pdf» o «image»: lo que la app necesita saber para saber cómo mostrarlo."""
+        return "pdf" if self.mime_type == "application/pdf" else "image"
+
+    def to_dict(self, admin=False):
+        """El documento sin el archivo. Solo la administración ve a quién se lo muestra y si está retirado."""
+        data = {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "category": self.category,
+            "categoryLabel": DOCUMENT_CATEGORIES.get(self.category, DOCUMENT_CATEGORIES["otro"]),
+            "fileName": self.file_name,
+            "mimeType": self.mime_type,
+            "kind": self.kind,
+            "sizeBytes": self.size_bytes,
+            "version": self.version,
+            "createdAt": format_colombia(self.created_at),
+            "updatedAt": format_colombia(self.updated_at),
+            "uploadedByName": self.uploaded_by.full_name if self.uploaded_by is not None else None,
+        }
+        if admin:
+            data.update({
+                "visibleTo": self.audiences,
+                "isRetired": self.is_retired,
+                "retiredAt": format_colombia(self.retired_at),
+                "retiredByName": self.retired_by.full_name if self.retired_by is not None else None,
+            })
+        return data
+
+
 class UnitSettings(db.Model):
     """Reglas de la unidad que la administración ajusta: plazos de PQRS, alertas de paquetes y parqueadero.
 

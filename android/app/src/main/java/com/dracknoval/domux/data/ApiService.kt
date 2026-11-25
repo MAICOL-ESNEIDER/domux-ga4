@@ -173,6 +173,20 @@ interface ApiService {
         @Path("id") id: Int
     ): Response<GenericMessageResponse>
 
+    // Documentos de la unidad (DEC-032): la lista de los que la persona puede ver, sin archivos...
+    @GET("api/documents")
+    suspend fun getDocuments(
+        @Header("Authorization") auth: String,
+        @Query("category") category: String? = null
+    ): Response<DocumentsListResponse>
+
+    // ...y, aparte, el archivo de uno (PDF o imagen de hasta 6 MB) cuando la persona lo abre.
+    @GET("api/documents/{id}/file")
+    suspend fun getDocumentFile(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<ResponseBody>
+
     @GET("api/pqrs")
     suspend fun getPqrs(
         @Header("Authorization") auth: String,

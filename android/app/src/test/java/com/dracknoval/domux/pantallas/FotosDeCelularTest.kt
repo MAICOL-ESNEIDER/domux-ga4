@@ -150,6 +150,12 @@ class FotosDeCelularTest : BaseDeFotos() {
         foto("administracion-21-legal-documento", "legal?slug=politica-de-privacidad")
     }
 
+    @Test
+    fun administracion_documentos() {
+        entrarComo(Roles.ADMINISTRACION)
+        foto("administracion-22-documentos", "documents")
+    }
+
     // --- Portería -------------------------------------------------------------------------------
 
     @Test
@@ -224,6 +230,12 @@ class FotosDeCelularTest : BaseDeFotos() {
         foto("porteria-12-notificaciones", "notifications")
     }
 
+    @Test
+    fun porteria_documentos() {
+        entrarComo(Roles.PORTERIA)
+        foto("porteria-13-documentos", "documents")
+    }
+
     // --- Residente ------------------------------------------------------------------------------
 
     @Test
@@ -296,6 +308,12 @@ class FotosDeCelularTest : BaseDeFotos() {
     fun residente_notificaciones() {
         entrarComo(Roles.RESIDENTE)
         foto("residente-12-notificaciones", "notifications")
+    }
+
+    @Test
+    fun residente_documentos() {
+        entrarComo(Roles.RESIDENTE)
+        foto("residente-13-documentos", "documents")
     }
 
     // --- Sin sesión -----------------------------------------------------------------------------

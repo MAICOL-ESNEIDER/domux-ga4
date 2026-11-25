@@ -201,6 +201,20 @@ private fun AttachmentFrame(height: Int, content: @Composable BoxScope.() -> Uni
     )
 }
 
+/**
+ * Abre de una vez, en pantalla completa, un PDF ([mediaType] «document») o una foto («image») que ya
+ * está en memoria como «data:…;base64,…». Lo usan los documentos de la unidad: es el mismo visor de los
+ * adjuntos y nada se guarda en el celular.
+ */
+@Composable
+fun AttachmentViewerDialog(dataUrl: String, mediaType: String, description: String, onClose: () -> Unit) {
+    if (mediaType.equals("document", ignoreCase = true)) {
+        PdfViewerDialog(dataUrl, onClose)
+    } else {
+        ImageViewerDialog(dataUrl, description, onClose)
+    }
+}
+
 // --- Fotos ----------------------------------------------------------------------------------
 
 @Composable

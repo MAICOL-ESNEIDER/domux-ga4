@@ -18,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.dracknoval.domux.AnnouncementsScreen
 import com.dracknoval.domux.CreateUserScreen
+import com.dracknoval.domux.DocumentsScreen
 import com.dracknoval.domux.HomeScreen
 import com.dracknoval.domux.LegalScreen
 import com.dracknoval.domux.LoginScreen
@@ -255,6 +256,7 @@ private fun GrafoDeLaApp(navegacion: NavHostController, rutaPedida: String) {
             UnitProfileScreen(navegacion, entry.arguments?.getString("apartment").orEmpty())
         }
         composable("notifications") { NotificationsScreen(navegacion) }
+        composable("documents") { DocumentsScreen(navegacion) }
         composable(
             "legal?slug={slug}",
             arguments = listOf(navArgument("slug") {

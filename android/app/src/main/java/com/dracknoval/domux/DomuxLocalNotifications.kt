@@ -105,6 +105,7 @@ object DomuxLocalNotifications {
         "package", "visit" -> "registry"
         "vehicle" -> "vehicles"
         "announcement" -> "announcements"
+        "document" -> "documents"
         else -> "notifications"
     }
 }

@@ -350,6 +350,7 @@ class ContractContentTests(unittest.TestCase):
         self.walk_structure()
         self.walk_users()
         self.walk_unit()
+        self.walk_documents()
         self.walk_community()
         self.walk_notifications()
         self.walk_admin_reports()
@@ -524,6 +525,37 @@ class ContractContentTests(unittest.TestCase):
             "petInsurance": False,
         })
         self.call(resident, "GET", "/api/profile/unit")
+
+    def walk_documents(self):
+        admin, guard, resident = self.admin, self.guard, self.resident
+        pdf = data_url(b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n", "application/pdf")
+        document = self.data(admin, "POST", "/api/documents", expect=201, json={
+            "title": "Manual de convivencia", "category": "convivencia", "description": "Versión de la asamblea.",
+            "file": pdf, "fileName": "manual.pdf", "visibleTo": ["propietario", "arrendatario", "guardia"],
+            "notify": True,
+        })["document"]
+        self.call(admin, "POST", "/api/documents", expect=409, json={
+            "title": "manual de convivencia", "file": pdf, "visibleTo": [],
+        })
+        self.call(admin, "POST", "/api/documents", expect=400, json={
+            "title": "Archivo dañado", "file": data_url(b"no soy un pdf"), "visibleTo": [],
+        })
+        self.call(admin, "GET", "/api/documents", query={"includeRetired": "true", "category": "convivencia"})
+        self.call(resident, "GET", "/api/documents")
+        self.call(guard, "GET", "/api/documents")
+        self.call(resident, "GET", f"/api/documents/{document['id']}")
+        file = self.call(resident, "GET", f"/api/documents/{document['id']}/file")
+        self.call(
+            resident, "GET", f"/api/documents/{document['id']}/file", expect=304,
+            headers={"If-None-Match": file.headers["ETag"]},
+        )
+        self.call(admin, "PUT", f"/api/documents/{document['id']}", json={
+            "title": "Manual de convivencia 2027", "description": None, "visibleTo": ["propietario"],
+        })
+        self.call(guard, "GET", f"/api/documents/{document['id']}", expect=404)
+        self.call(admin, "DELETE", f"/api/documents/{document['id']}")
+        self.call(resident, "GET", f"/api/documents/{document['id']}/file", expect=404)
+        self.call(admin, "POST", f"/api/documents/{document['id']}/restore")
 
     def walk_community(self):
         admin, resident = self.admin, self.resident
