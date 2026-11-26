@@ -2,7 +2,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, redirect, request, url_for
+from flask import Flask, render_template, request
 from flask_cors import CORS
 from flask_migrate import stamp, upgrade
 from sqlalchemy import inspect
@@ -349,8 +349,8 @@ def create_app():
 
     @app.get("/")
     def root():
-        """La dirección principal del servidor lleva a la web de administración."""
-        return redirect(url_for("web.panel"))
+        """La dirección principal del servidor es la página de bienvenida de DOMUX (pública, sin datos de nadie)."""
+        return render_template("web/landing.html")
 
     @app.before_request
     def reject_empty_write_fields():
