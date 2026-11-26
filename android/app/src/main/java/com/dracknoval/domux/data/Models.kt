@@ -333,7 +333,14 @@ data class ImportCensusResponse(
     val createdUsers: Int = 0,
     val updatedUsers: Int = 0,
     val unitsProcessed: Int = 0,
-    val errors: List<String>? = null
+    val errors: List<String>? = null,
+    val createdCredentials: List<CreatedCredentialDto>? = null
+)
+
+data class CreatedCredentialDto(
+    val email: String,
+    val temporaryPassword: String,
+    val apartment: String?
 )
 
 data class PackageItem(

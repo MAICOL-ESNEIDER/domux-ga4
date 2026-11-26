@@ -154,7 +154,13 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             OutlinedTextField(memberName, { memberName = it }, label = { Text("Nombre") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberLastName, { memberLastName = it }, label = { Text("Apellido") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(memberDocument, { memberDocument = it }, label = { Text("Documento") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(memberBirthDate, { memberBirthDate = it }, label = { Text("Nacimiento AAAA-MM-DD") }, modifier = Modifier.fillMaxWidth())
+            DatePickerField(
+        label = "Nacimiento",
+        value = memberBirthDate,
+        onValueChange = { memberBirthDate = it },
+        allowPastDates = true,
+        maxDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+    )
             OutlinedTextField(
                 value = memberPhone,
                 onValueChange = { input ->
@@ -186,11 +192,14 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
             Button(onClick = {
                 if (memberPhone.isNotEmpty() && memberPhone.length != 10) {
                     message = "El teléfono debe tener exactamente 10 dígitos o estar vacío."
-                } else if (memberName.isBlank() || memberDocument.isBlank() ||
-                    !memberBirthDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) ||
-                    (memberRelationship == "otro" && otherRelationship.isBlank())
-                ) {
-                    message = "Completa nombre, documento, fecha y parentesco."
+                } else if (memberName.isBlank()) {
+                    message = "El nombre es obligatorio."
+                } else if (memberDocument.isBlank()) {
+                    message = "El documento es obligatorio."
+                } else if (!memberBirthDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
+                    message = "Selecciona una fecha de nacimiento válida."
+                } else if (memberRelationship == "otro" && otherRelationship.isBlank()) {
+                    message = "Especifica el parentesco si seleccionaste 'Otro'."
                 } else {
                     members.add(HouseholdMemberData(
                         name = memberName.trim(),
@@ -313,7 +322,7 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                             )
                             if (response.isSuccessful) {
                                 message = "Ficha del hogar guardada."
-                                response.body()?.unit?.let { unit = it }
+                                load()
                             } else message = mensajeDeError(response.code(), response.errorBody()?.string())
                         } catch (exception: Exception) {
                             if (exception is CancellationException) throw exception

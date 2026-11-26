@@ -584,7 +584,8 @@ private fun PqrsCard(
                         }
                     }
                 if (pqrs.incidentDate != null || pqrs.incidentTime != null) {
-                    Text("Incidente: ${pqrs.incidentDate.orEmpty()} ${pqrs.incidentTime.orEmpty()}")
+                    val formattedTime = pqrs.incidentTime?.let { formatTimeAmPm(it) } ?: ""
+                    Text("Incidente: ${pqrs.incidentDate.orEmpty()} $formattedTime".trimEnd())
                 }
                 if (Session.isAdmin) {
                     Text(

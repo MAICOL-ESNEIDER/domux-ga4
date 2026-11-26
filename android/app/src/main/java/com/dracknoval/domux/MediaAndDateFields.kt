@@ -117,12 +117,24 @@ fun TimePickerField(label: String, value: String, onValueChange: (String) -> Uni
                 { _, hour, minute -> onValueChange("%02d:%02d".format(hour, minute)) },
                 calendar.get(Calendar.HOUR_OF_DAY),
                 calendar.get(Calendar.MINUTE),
-                true
+                false
             ).show()
         },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(if (value.isBlank()) label else "$label: $value")
+        val displayValue = if (value.isNotBlank()) formatTimeAmPm(value) else value
+        Text(if (value.isBlank()) label else "$label: $displayValue")
+    }
+}
+
+fun formatTimeAmPm(time24: String): String {
+    return try {
+        val format24 = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val format12 = SimpleDateFormat("hh:mm a", Locale.getDefault())
+        val date = format24.parse(time24)
+        date?.let { format12.format(it) } ?: time24
+    } catch (e: Exception) {
+        time24
     }
 }
 

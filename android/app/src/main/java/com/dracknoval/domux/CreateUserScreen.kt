@@ -125,7 +125,7 @@ fun CreateUserScreen(navController: NavController) {
     var phone by remember { mutableStateOf("") }
     var documentId by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var role by remember { mutableStateOf("RESIDENT") }
+    var role by remember { mutableStateOf("") }
     var apartment by remember { mutableStateOf("") }
     var occupancyType by remember { mutableStateOf("propietario") }
     var editUser by remember { mutableStateOf<UserData?>(null) }
@@ -266,7 +266,11 @@ fun CreateUserScreen(navController: NavController) {
                     enabled = !busy,
                     onClick = {
                         attemptedSubmit = true
-                        if (listOf(name, lastName, email, phone, documentId).any { it.trim().isEmpty() } ||
+                        if (role.isEmpty()) {
+                        message = "Debes seleccionar un rol para el usuario."
+                        return@Button
+                    }
+                    if (listOf(name, lastName, email, phone, documentId).any { it.trim().isEmpty() } ||
                             phone.length != 10 ||
                             (role == "RESIDENT" && apartment.trim().isEmpty()) ||
                             (role == "RESIDENT" && !consentConfirmed) ||
@@ -464,7 +468,11 @@ fun CreateUserScreen(navController: NavController) {
                                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    TextButton(onClick = { editUser = user }) { Text("Editar") }
+                                    if (user.id == Session.userId || user.email == Session.email) {
+                                        Text("Tu cuenta (gestionar en Mi Perfil)", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF10B981))
+                                    } else {
+                                        TextButton(onClick = { editUser = user }) { Text("Editar") }
+                                    }
                                     OutlinedButton(onClick = {
                                         resetUser = user
                                         resetPassword = ""
@@ -603,6 +611,10 @@ fun CreateUserScreen(navController: NavController) {
             confirmButton = {
                 TextButton(onClick = {
                     attemptedEdit = true
+                    if (eRole.isEmpty()) {
+                        message = "Debes seleccionar un rol para el usuario."
+                        return@TextButton
+                    }
                     if (ePhone.length != 10) {
                         message = "El teléfono debe tener exactamente 10 dígitos."
                         return@TextButton
@@ -750,6 +762,36 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
         busy = false
     }
 
+    var importedCredentials by remember { mutableStateOf<List<com.dracknoval.domux.data.CreatedCredentialDto>?>(null) }
+    
+    if (importedCredentials != null) {
+        AlertDialog(
+            onDismissRequest = { importedCredentials = null },
+            title = { Text("Contraseñas temporales generadas") },
+            text = {
+                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                    Text("Los siguientes usuarios fueron creados exitosamente. Copia estas contraseñas temporales y entrégalas de forma segura. Por seguridad, se les pedirá cambiarla en su primer inicio de sesión.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 12.dp))
+                    importedCredentials!!.forEach { cred ->
+                        Text("• ${cred.apartment ?: "Sin Apto"} - ${cred.email}", style = MaterialTheme.typography.labelMedium)
+                        Text("Clave: ${cred.temporaryPassword}", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF10B981), modifier = Modifier.padding(bottom = 8.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val textToCopy = importedCredentials!!.joinToString("\n") { "Apto: ${it.apartment ?: "N/A"}\nCorreo: ${it.email}\nClave temporal: ${it.temporaryPassword}\n" }
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("Credenciales Domux", textToCopy)
+                    clipboard.setPrimaryClip(clip)
+                    android.widget.Toast.makeText(context, "Credenciales copiadas al portapapeles", android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text("Copiar todo al portapapeles") }
+            },
+            dismissButton = {
+                TextButton(onClick = { importedCredentials = null }) { Text("Cerrar") }
+            }
+        )
+    }
+
     DomuxCard(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -834,6 +876,7 @@ private fun CensusExcelPanel(onImportComplete: suspend () -> Unit) {
                                     }
                                 }
                                 messageIsError = false
+                                importedCredentials = result.createdCredentials
                                 onImportComplete()
                             } else {
                                 message = mensajeDeError(response.code(), response.errorBody()?.string())

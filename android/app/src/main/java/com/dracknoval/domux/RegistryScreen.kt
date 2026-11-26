@@ -121,7 +121,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     val tabs = if (Session.isGuard) {
         emptyList()
     } else if (isVisitsModule) {
-        if (Session.isResident) listOf("Mis visitas", "Código QR") else listOf("Visitas", "Registrar visita / QR")
+        if (Session.isResident) listOf("Mis visitas", "Crear QR") else listOf("Visitas", "Crear QR", "Registrar visita")
     } else {
         if (Session.isResident) listOf("Mis paquetes") else listOf("Paquetes", "Registrar paquete")
     }
@@ -372,9 +372,8 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
         if (canRegister) add("Archivados" to "papelera")
     }
     val title = when {
-        Session.isResident -> "Mis paquetes y visitas"
-        Session.isGuard -> "Control de portería"
-        else -> "Paquetería y visitas"
+        isVisitsModule -> "Visitas y QR"
+        else -> "Paquetería"
     }
 
     DomuxScreenScaffold(title = title, navController = navController) { scaffoldPadding ->

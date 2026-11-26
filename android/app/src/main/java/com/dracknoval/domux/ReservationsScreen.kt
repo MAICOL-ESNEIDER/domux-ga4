@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -449,19 +450,30 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             }
         }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        val visibleReservations = if (Session.isResident) {
-            reservations.filter {
-                if (residentReservationFilter == "Activas y pendientes") {
-                    it.status !in listOf("finalizada", "cancelada", "expirada")
-                } else {
-                    it.status in listOf("finalizada", "cancelada", "expirada")
-                }
+        val activeReservations = reservations.filter { !it.isArchived && it.status != "finalizada" && it.status != "cancelada" && it.status != "rechazada" && it.status != "expirada" }
+        val archivedReservations = reservations.filter { it.isArchived || it.status == "finalizada" || it.status == "cancelada" || it.status == "rechazada" || it.status == "expirada" }
+        val visibleReservations = if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) activeReservations else archivedReservations
+
+        if (visibleReservations.isEmpty() && !loading) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) "📅" else "🗄️", fontSize = 48.sp)
+                Text(
+                    if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) "No hay reservas activas" else "No hay reservas en el historial",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) "Las próximas reservas aparecerán aquí." else "Las reservas canceladas o finalizadas se agrupan aquí.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF94A3B8)
+                )
             }
         } else {
-            reservations
-        }
-        LazyColumn(Modifier.weight(1f)) {
-            items(visibleReservations, key = { it.id }) { reservation ->
+            LazyColumn(Modifier.weight(1f)) {
+                items(visibleReservations, key = { it.id }) { reservation ->
                 DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
@@ -741,6 +753,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
                 }
             }
         }
+    }
         }
     }
     }
