@@ -1,0 +1,238 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DOMUX Residential Security API",
+    "description": "API REST de autenticacion, comunidad, administracion y seguridad residencial.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {"url": "/"}
+  ],
+  "tags": [
+    {"name": "Auth"},
+    {"name": "Users"},
+    {"name": "Community"},
+    {"name": "Reservations"},
+    {"name": "Security"},
+    {"name": "Admin"}
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Message": {
+        "type": "object",
+        "properties": {"message": {"type": "string"}}
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {"type": "string", "format": "email"},
+          "password": {"type": "string", "format": "password"}
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Token faltante, vencido o invalido",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      },
+      "Forbidden": {
+        "description": "El usuario no tiene el rol requerido",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {"tags": ["Auth"], "summary": "Comprobar estado del servidor", "responses": {"200": {"description": "Servidor disponible"}}}
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"], "summary": "Iniciar sesion",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LoginRequest"}}}},
+        "responses": {"200": {"description": "Sesion iniciada"}, "401": {"description": "Credenciales invalidas"}}
+      }
+    },
+    "/api/auth/session": {
+      "get": {"tags": ["Auth"], "summary": "Consultar sesion activa", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Perfil del usuario actual"}, "401": {"$ref": "#/components/responses/Unauthorized"}}}
+    },
+    "/api/auth/change-password": {
+      "post": {"tags": ["Auth"], "summary": "Cambiar contrasena", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Contrasena actualizada"}, "401": {"$ref": "#/components/responses/Unauthorized"}}}
+    },
+    "/api/push-tokens": {
+      "post": {"tags": ["Security"], "summary": "Registrar token de notificaciones", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Token registrado"}}},
+      "delete": {"tags": ["Security"], "summary": "Eliminar token de notificaciones", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Token eliminado"}}}
+    },
+    "/api/users": {
+      "get": {"tags": ["Users"], "summary": "Listar usuarios", "security": [{"bearerAuth": []}], "parameters": [{"name": "page", "in": "query", "schema": {"type": "integer", "default": 1}}, {"name": "pageSize", "in": "query", "schema": {"type": "integer", "default": 25}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "role", "in": "query", "schema": {"type": "string"}}, {"name": "occupancyType", "in": "query", "schema": {"type": "string"}}, {"name": "isActive", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "Listado paginado"}}},
+      "post": {"tags": ["Users"], "summary": "Crear usuario", "security": [{"bearerAuth": []}], "responses": {"201": {"description": "Usuario creado"}, "403": {"$ref": "#/components/responses/Forbidden"}}}
+    },
+    "/api/users/{id}": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Users"], "summary": "Actualizar usuario", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Usuario actualizado"}}}
+    },
+    "/api/users/{id}/password": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Users"], "summary": "Restablecer contrasena", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Contrasena restablecida"}}}
+    },
+    "/api/residents": {
+      "get": {"tags": ["Users"], "summary": "Buscar residentes", "security": [{"bearerAuth": []}], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "Resultados"}}}
+    },
+    "/api/admin/units": {
+      "get": {"tags": ["Admin"], "summary": "Consultar ficha de unidad", "security": [{"bearerAuth": []}], "parameters": [{"name": "apartment", "in": "query", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Ficha encontrada"}}},
+      "put": {"tags": ["Admin"], "summary": "Guardar ficha de unidad", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Ficha guardada"}}}
+    },
+    "/api/profile": {
+      "get": {"tags": ["Users"], "summary": "Consultar perfil residente", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Perfil"}}},
+      "put": {"tags": ["Users"], "summary": "Actualizar perfil residente", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Perfil actualizado"}}}
+    },
+    "/api/profile/unit": {
+      "get": {"tags": ["Users"], "summary": "Consultar unidad del residente", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Unidad"}}}
+    },
+    "/api/admin/census-template": {
+      "get": {"tags": ["Admin"], "summary": "Descargar plantilla de censo", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Archivo Excel"}}}
+    },
+    "/api/admin/import-census": {
+      "post": {"tags": ["Admin"], "summary": "Importar censo", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Censo importado"}}}
+    },
+    "/api/admin/export/legal-report": {
+      "get": {"tags": ["Admin"], "summary": "Exportar reporte legal", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Archivo Excel"}}}
+    },
+    "/api/admin/archive-history": {
+      "post": {"tags": ["Admin"], "summary": "Archivar historial", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Archivo generado"}}}
+    },
+    "/api/announcements": {
+      "get": {"tags": ["Community"], "summary": "Listar anuncios", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Anuncios"}}},
+      "post": {"tags": ["Community"], "summary": "Crear anuncio", "security": [{"bearerAuth": []}], "responses": {"201": {"description": "Anuncio creado"}}}
+    },
+    "/api/announcements/{id}": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "delete": {"tags": ["Community"], "summary": "Eliminar anuncio", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Anuncio eliminado"}}}
+    },
+    "/api/pqrs": {
+      "get": {"tags": ["Community"], "summary": "Listar PQRS", "security": [{"bearerAuth": []}], "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "category", "in": "query", "schema": {"type": "string"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "residentId", "in": "query", "schema": {"type": "integer"}}, {"name": "includeArchived", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "PQRS"}}},
+      "post": {"tags": ["Community"], "summary": "Crear PQRS", "security": [{"bearerAuth": []}], "responses": {"201": {"description": "PQRS creada"}}}
+    },
+    "/api/pqrs/{id}/respond": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Community"], "summary": "Responder PQRS", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Respuesta registrada"}}}
+    },
+    "/api/pqrs/{id}/messages": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "post": {"tags": ["Community"], "summary": "Agregar mensaje a PQRS", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Mensaje agregado"}}}
+    },
+    "/api/pqrs/{id}/satisfaction": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Community"], "summary": "Calificar PQRS", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Calificacion registrada"}}}
+    },
+    "/api/pqrs/batch/respond": {
+      "post": {"tags": ["Community"], "summary": "Responder PQRS por lote", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Lote procesado"}}}
+    },
+    "/api/common-areas": {
+      "get": {"tags": ["Reservations"], "summary": "Listar zonas comunes", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Zonas comunes"}}}
+    },
+    "/api/reservations": {
+      "get": {"tags": ["Reservations"], "summary": "Listar reservas", "security": [{"bearerAuth": []}], "parameters": [{"name": "includeArchived", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "Reservas"}}},
+      "post": {"tags": ["Reservations"], "summary": "Crear reserva", "security": [{"bearerAuth": []}], "responses": {"201": {"description": "Reserva creada"}}}
+    },
+    "/api/reservations/availability": {
+      "get": {"tags": ["Reservations"], "summary": "Consultar disponibilidad", "security": [{"bearerAuth": []}], "parameters": [{"name": "commonAreaId", "in": "query", "required": true, "schema": {"type": "integer"}}, {"name": "date", "in": "query", "required": true, "schema": {"type": "string", "format": "date"}}], "responses": {"200": {"description": "Disponibilidad"}}}
+    },
+    "/api/reservations/calendar": {
+      "get": {"tags": ["Reservations"], "summary": "Consultar calendario", "security": [{"bearerAuth": []}], "parameters": [{"name": "commonAreaId", "in": "query", "required": true, "schema": {"type": "integer"}}, {"name": "year", "in": "query", "required": true, "schema": {"type": "integer"}}, {"name": "month", "in": "query", "required": true, "schema": {"type": "integer"}}], "responses": {"200": {"description": "Calendario"}}}
+    },
+    "/api/reservations/{id}/status": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Reservations"], "summary": "Cambiar estado de reserva", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Estado actualizado"}}}
+    },
+    "/api/reservations/{id}/messages": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "post": {"tags": ["Reservations"], "summary": "Agregar mensaje a reserva", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Mensaje agregado"}}}
+    },
+    "/api/reservations/{id}/cancel": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Reservations"], "summary": "Cancelar reserva", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Reserva cancelada"}}}
+    },
+    "/api/packages": {
+      "get": {"tags": ["Security"], "summary": "Listar paquetes", "security": [{"bearerAuth": []}], "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "residentId", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "Paquetes"}}},
+      "post": {"tags": ["Security"], "summary": "Registrar paquete", "security": [{"bearerAuth": []}], "responses": {"201": {"description": "Paquete registrado"}}}
+    },
+    "/api/packages/{id}/status": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Security"], "summary": "Cambiar estado de paquete", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Estado actualizado"}}}
+    },
+    "/api/packages/{id}/deliver": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Security"], "summary": "Entregar paquete", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Paquete entregado"}}}
+    },
+    "/api/packages/{id}": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "delete": {"tags": ["Security"], "summary": "Enviar paquete a papelera", "security": [{"bearerAuth": []}], "parameters": [{"name": "force", "in": "query", "schema": {"type": "boolean", "default": false}}], "responses": {"200": {"description": "Paquete eliminado o enviado a papelera"}}}
+    },
+    "/api/packages/{id}/restore": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Security"], "summary": "Restaurar paquete", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Paquete restaurado"}}}
+    },
+    "/api/visits": {
+      "get": {"tags": ["Security"], "summary": "Listar visitas", "security": [{"bearerAuth": []}], "parameters": [{"name": "search", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "Visitas"}}},
+      "post": {"tags": ["Security"], "summary": "Registrar visita", "security": [{"bearerAuth": []}], "responses": {"201": {"description": "Visita registrada"}}}
+    },
+    "/api/visits/{id}/decision": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Security"], "summary": "Autorizar o rechazar visita", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Decision registrada"}}}
+    },
+    "/api/visits/{id}/authorize-call": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Security"], "summary": "Autorizar visita por llamada", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Visita autorizada"}}}
+    },
+    "/api/visits/{id}/entry": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "post": {"tags": ["Security"], "summary": "Registrar ingreso", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Ingreso registrado"}}}
+    },
+    "/api/visits/{id}/exit": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "post": {"tags": ["Security"], "summary": "Registrar salida", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Salida registrada"}}}
+    },
+    "/api/visits/qr-passes": {
+      "get": {"tags": ["Security"], "summary": "Listar pases QR", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Pases QR"}}},
+      "post": {"tags": ["Security"], "summary": "Crear pase QR", "security": [{"bearerAuth": []}], "responses": {"201": {"description": "Pase creado"}}}
+    },
+    "/api/visits/qr-passes/{id}/revoke": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Security"], "summary": "Revocar pase QR", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Pase revocado"}}}
+    },
+    "/api/visits/qr/{token}": {
+      "parameters": [{"name": "token", "in": "path", "required": true, "schema": {"type": "string"}}],
+      "get": {"tags": ["Security"], "summary": "Inspeccionar pase QR", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Pase inspeccionado"}}}
+    },
+    "/api/visits/qr/{token}/entry": {
+      "parameters": [{"name": "token", "in": "path", "required": true, "schema": {"type": "string"}}],
+      "post": {"tags": ["Security"], "summary": "Registrar entrada con QR", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Entrada registrada"}}}
+    },
+    "/api/visits/qr/{token}/exit": {
+      "parameters": [{"name": "token", "in": "path", "required": true, "schema": {"type": "string"}}],
+      "post": {"tags": ["Security"], "summary": "Registrar salida con QR", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Salida registrada"}}}
+    },
+    "/api/notifications": {
+      "get": {"tags": ["Security"], "summary": "Consultar notificaciones", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Notificaciones"}}}
+    },
+    "/api/notifications/{id}/read": {
+      "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+      "put": {"tags": ["Security"], "summary": "Marcar notificacion como leida", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Notificacion actualizada"}}}
+    }
+  }
+}
