@@ -48,6 +48,9 @@ private const val PQRS_TAB_LIST = "Solicitudes PQRS"
 private const val PQRS_TAB_NEW = "Nueva PQRS"
 
 private val pqrsCategories = listOf("Petición", "Queja", "Reclamo", "Sugerencia", "Daño")
+
+/** Las que cuentan algo que pasó: piden la fecha (y la hora, si se sabe). Igual que en el servidor. */
+private val pqrsEventCategories = setOf("Queja", "Reclamo", "Daño")
 private val pqrsStates = listOf(
     "Todas" to null,
     "Abiertas" to "abierta",
@@ -327,7 +330,7 @@ private fun PqrsCard(
                 Column(modifier = Modifier.weight(1f).clickable(onClick = onToggleExpanded)) {
                     pqrs.radicado?.let { radicado ->
                         Text(
-                            radicado,
+                            "Radicado: $radicado",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.secondary
                         )
@@ -383,7 +386,7 @@ private fun PqrsCard(
                     }
                 }
                 if (pqrs.incidentDate != null || pqrs.incidentTime != null) {
-                    Text("Incidente: ${pqrs.incidentDate.orEmpty()} ${pqrs.incidentTime.orEmpty()}")
+                    Text("Cuándo pasó: ${humanDate(pqrs.incidentDate)} ${pqrs.incidentTime.orEmpty()}".trim())
                 }
                 if (Session.isAdmin) {
                     Text(
@@ -672,8 +675,14 @@ private fun PqrsForm(
                     "Al radicarla recibe un número de radicado y tiene ${businessDaysText(ComplexInfoStore.rules.termFor(category))} para ser respondida.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                DatePickerField("Fecha del incidente", incidentDate, { incidentDate = it })
-                TimePickerField("Hora del incidente", incidentTime, { incidentTime = it })
+                if (category in pqrsEventCategories) {
+                    Text("¿Cuándo pasó? Solo puedes elegir una fecha de hoy hacia atrás.", style = MaterialTheme.typography.bodySmall)
+                    DatePickerField("Fecha de lo que pasó *", incidentDate, { incidentDate = it }, allowFutureDates = false)
+                    if (attempted && incidentDate.isBlank()) {
+                        Text("La fecha es obligatoria en una ${category.lowercase()}.", color = MaterialTheme.colorScheme.error)
+                    }
+                    TimePickerField("Hora aproximada (opcional)", incidentTime, { incidentTime = it })
+                }
                 MediaAttachmentPicker(
                     mediaName,
                     { url, type, name ->
@@ -690,7 +699,9 @@ private fun PqrsForm(
                     enabled = !state.busy && !minorBlocked,
                     onClick = {
                         attempted = true
-                        if (subject.isBlank() || detail.isBlank() || (admin && state.resident == null)) {
+                        if (category in pqrsEventCategories && incidentDate.isBlank()) {
+                            viewModel.showNotice("Cuéntanos cuándo pasó: la fecha es obligatoria.")
+                        } else if (subject.isBlank() || detail.isBlank() || (admin && state.resident == null)) {
                             viewModel.showNotice(
                                 if (admin) "Asunto, descripción y residente son obligatorios."
                                 else "El asunto y la descripción son obligatorios."
@@ -700,8 +711,8 @@ private fun PqrsForm(
                                 subject.trim(),
                                 detail.trim(),
                                 category,
-                                incidentDate.ifBlank { null },
-                                incidentTime.ifBlank { null },
+                                incidentDate.ifBlank { null }.takeIf { category in pqrsEventCategories },
+                                incidentTime.ifBlank { null }.takeIf { category in pqrsEventCategories },
                                 mediaUrl,
                                 mediaType
                             )

@@ -98,6 +98,8 @@ class PqrsWorkflowTests(PqrsTestCase):
                 "subject": "Luminaria",
                 "message": "No enciende la luz del pasillo",
                 "category": "Daño",
+                "incidentDate": "2026-01-02",
+                "incidentTime": "08:30",
             },
         )
 
@@ -110,6 +112,34 @@ class PqrsWorkflowTests(PqrsTestCase):
             AuditLog.query.filter_by(entity_type="PQRS", entity_id=pqrs.id, action="created").count(),
             1,
         )
+
+    def test_a_complaint_must_say_when_it_happened(self):
+        for category in ("Queja", "Reclamo", "Daño"):
+            with self.subTest(category=category):
+                response = self.client.post(
+                    "/api/pqrs", headers=self.auth(self.resident),
+                    json={"subject": "Asunto", "message": "Mensaje", "category": category},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("cuándo pasó", response.get_json()["error"])
+        self.assertEqual(Pqrs.query.count(), 0)
+
+    def test_what_happened_cannot_be_in_the_future(self):
+        tomorrow = (colombia_today() + timedelta(days=1)).isoformat()
+        response = self.client.post(
+            "/api/pqrs", headers=self.auth(self.resident),
+            json={"subject": "Asunto", "message": "Mensaje", "category": "Queja", "incidentDate": tomorrow},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("futura", response.get_json()["error"])
+
+    def test_a_petition_or_suggestion_does_not_need_a_date(self):
+        for category in ("Petición", "Sugerencia"):
+            response = self.client.post(
+                "/api/pqrs", headers=self.auth(self.resident),
+                json={"subject": "Asunto", "message": "Mensaje", "category": category},
+            )
+            self.assertEqual(response.status_code, 201, category)
 
     def test_minor_without_parental_consent_cannot_create_pqrs(self):
         today = colombia_today()

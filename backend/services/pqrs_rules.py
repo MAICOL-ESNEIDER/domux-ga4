@@ -7,7 +7,7 @@ cambiar; si se las pasa como ``rules`` no consultan nada (así se prueban sin ba
 
 from business_days import add_business_days, business_days_between
 from services.unit_rules import current_rules
-from time_utils import colombia_today, to_colombia
+from time_utils import colombia_now, colombia_today, to_colombia
 
 GREEN = "verde"
 YELLOW = "amarillo"
@@ -15,6 +15,29 @@ RED = "rojo"
 
 #: Estados en los que la PQRS sigue corriendo contra el plazo; la resuelta ya no.
 RUNNING_STATUSES = ("abierta", "en_proceso")
+
+
+#: Las PQRS que cuentan algo que pasó: quien las radica dice cuándo ocurrió (fecha y, si la sabe, hora).
+#: La fecha y la hora en que se radicó la PQRS se guardan solas en todas.
+EVENT_CATEGORIES = ("Queja", "Reclamo", "Daño")
+
+
+def pqrs_event_error(category, event_date, event_time):
+    """El mensaje de error si a una PQRS le falta el cuándo pasó o lo puso en el futuro; None si está bien.
+
+    Solo se exige en ``EVENT_CATEGORIES``. La fecha ya llega con formato válido (AAAA-MM-DD); el
+    suceso no puede ser después de este momento.
+    """
+    if category not in EVENT_CATEGORIES:
+        return None
+    if not event_date:
+        return f"En una {category.lower()} cuéntanos cuándo pasó: la fecha es obligatoria."
+    now = colombia_now()
+    if event_date > now.date().isoformat():
+        return "La fecha de lo que pasó no puede ser futura."
+    if event_time and event_date == now.date().isoformat() and event_time > now.strftime("%H:%M"):
+        return "La hora de lo que pasó no puede ser futura."
+    return None
 
 
 def make_radicado(pqrs_id, created_at):

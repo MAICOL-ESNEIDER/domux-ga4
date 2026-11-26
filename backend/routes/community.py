@@ -36,6 +36,7 @@ from services.audit_service import add_audit_log
 from services import announcement_view, pqrs_service, reservation_view, zone_service
 from services.list_view import parse_view
 from services.notification_service import notify_residents, notify_user
+from services.pqrs_rules import pqrs_event_error
 from services.excel_service import (
     MIME_XLSX,
     generate_legal_report_xlsx,
@@ -470,6 +471,8 @@ def create_pqrs():
     category = data.get("category", "Petición")
     if not isinstance(category, str):
         return error_response(400, "La categoría debe ser texto")
+    if error := pqrs_event_error(category.strip(), data.get("incidentDate"), data.get("incidentTime")):
+        return error_response(400, error)
 
     pqrs = Pqrs(
         resident_id=resident.id,
