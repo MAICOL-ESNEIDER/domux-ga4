@@ -2,7 +2,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import inspect
 
@@ -388,6 +388,36 @@ def create_app(test_config=None):
     app.register_blueprint(community_bp)
     app.register_blueprint(security_bp)
     register_error_handlers(app)
+
+    @app.get("/docs")
+    def swagger_ui():
+        return """<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DOMUX API - Swagger UI</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+      window.onload = () => SwaggerUIBundle({
+        url: "/api/openapi.json",
+        dom_id: "#swagger-ui"
+      });
+    </script>
+  </body>
+</html>"""
+
+    @app.get("/api/openapi.json")
+    def openapi_spec():
+        return send_from_directory(
+            os.path.dirname(__file__),
+            "openapi.json",
+            mimetype="application/json",
+        )
 
     @app.before_request
     def reject_empty_write_fields():
