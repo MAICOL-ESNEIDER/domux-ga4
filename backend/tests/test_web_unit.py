@@ -166,7 +166,7 @@ class WebUnitTests(WebTestCase):
     def test_without_data_the_header_is_the_one_of_domux(self):
         body = self.page("/web/")
         self.assertIn("<strong>DOMUX</strong><small>Administración</small>", body)
-        self.assertIn("img/domux-logo.svg", body)
+        self.assertIn("img/domux-logo.png", body)
         self.assertNotIn("/web/unidad/logo", body)
 
     def test_with_data_the_menu_and_the_login_show_the_name_and_the_logo(self):

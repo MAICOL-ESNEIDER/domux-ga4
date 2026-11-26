@@ -2,6 +2,7 @@ package com.dracknoval.domux
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -66,6 +67,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -188,28 +190,25 @@ enum class DomuxBadgeTone(val icon: Int) {
     ALERT(R.drawable.ic_warning)
 }
 
+/** La marca de DOMUX: el logo (edificios azules con una D) sobre el azul noche de la app, con un resplandor suave. */
 @Composable
 fun DomuxBrandMark(size: Dp = 54.dp) {
-    Surface(
-        modifier = Modifier.size(size),
-        shape = RoundedCornerShape(17.dp),
-        color = Color.Transparent
-    ) {
-        Box(
-            modifier = Modifier.background(
-                Brush.linearGradient(
-                    listOf(DomuxColor.Cyan, DomuxColor.Violet, DomuxColor.Purple)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.28f))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF0F2747), DomuxColor.Deep)
                 )
             ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "D",
-                color = Color.White,
-                fontSize = (size.value * 0.52f).sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(R.drawable.domux_logo),
+            contentDescription = null,
+            modifier = Modifier.size(size * 0.74f)
+        )
     }
 }
 

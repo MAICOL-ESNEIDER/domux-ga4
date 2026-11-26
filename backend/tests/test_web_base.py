@@ -132,7 +132,7 @@ class WebBaseTests(unittest.TestCase):
         self.assertEqual(again.status_code, 304)
         again.close()
         # Los demás archivos que cargan las páginas existen (si falta uno, la página se ve rota).
-        for name in ("domux.js", "nojs.css", "img/domux-logo.svg"):
+        for name in ("domux.js", "nojs.css", "img/domux-logo.png"):
             with self.subTest(file=name):
                 found = self.client.get(f"/web/static/{name}")
                 self.assertEqual(found.status_code, 200)
