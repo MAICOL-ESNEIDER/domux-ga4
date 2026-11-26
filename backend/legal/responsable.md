@@ -5,9 +5,9 @@ estado: vigente
 version: 0.1
 vigente_desde: 2026-11-25
 ---
-## Borrador de demostración
+## Aviso importante
 
-Este texto es un borrador de demostración. Los datos que aparecen como «por completar» se llenan cuando la unidad residencial configure su servicio real. Todavía no lo ha revisado una persona con conocimiento legal.
+Este texto lo preparó el equipo de DOMUX y no es asesoría legal. Antes de adoptarlo, la unidad residencial debe revisarlo con su asesor jurídico y completar los datos propios de su servicio.
 
 ## 1. Responsable del tratamiento
 

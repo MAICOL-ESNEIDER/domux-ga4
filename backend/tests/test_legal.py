@@ -1,6 +1,6 @@
 """Documentos legales (política de datos, términos, cookies...): los textos, las rutas públicas y la web.
 
-Hoy los ocho textos son borradores de demostración (vigentes, versión 0.1, con un aviso visible al principio):
+Hoy los ocho textos son borradores del equipo (vigentes, versión 0.1, con un aviso visible al principio):
 lo que se prueba es que los espacios funcionan (la API, la web y la revisión de los archivos) y que, el día que
 cada texto lo revise una persona con conocimiento legal, solo haya que reemplazar su archivo. También se prueba el programa ``scripts/verificar_legal.py``, que es la puerta de
 la versión final. La app Android no tiene pruebas automáticas; ver ``backend/legal/LEEME.md``.
@@ -295,10 +295,10 @@ class LegalApiTests(unittest.TestCase):
                 document = response.get_json()
                 self.assertEqual(document["slug"], slug)
                 self.assertEqual(document["status"], "vigente")
-                # Cada borrador dice, desde la primera línea, que todavía no lo revisó una persona con conocimiento legal.
-                self.assertEqual(document["blocks"][0], {"type": "heading", "level": 2, "text": "Borrador de demostración"})
+                # Cada texto dice, desde la primera línea, que no es asesoría legal y que la unidad debe revisarlo con su asesor jurídico.
+                self.assertEqual(document["blocks"][0], {"type": "heading", "level": 2, "text": "Aviso importante"})
                 self.assertEqual(document["blocks"][1]["type"], "paragraph")
-                self.assertIn("conocimiento legal", document["blocks"][1]["text"])
+                self.assertIn("asesor jurídico", document["blocks"][1]["text"])
                 self.assertGreater(len(document["blocks"]), 4)
 
     def test_a_published_document_shows_its_version_date_and_every_kind_of_block(self):
@@ -366,7 +366,7 @@ class LegalWebTests(WebTestCase):
         body = self.page("/web/legal/terminos")
         self.assertIn("<h1>Términos y condiciones de uso</h1>", body)
         self.assertIn("Las reglas para usar la app y la web de DOMUX", body)
-        self.assertIn("Borrador de demostración", body)
+        self.assertIn("Aviso importante", body)
         self.assertNotIn("Documento en preparación", body)
         self.assertIn("Todos los documentos", body)
 

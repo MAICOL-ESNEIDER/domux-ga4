@@ -1,6 +1,6 @@
 // AppPreferences.kt — Las preferencias de la app en este celular.
 // Solo guarda comodidades que no son datos de nadie: por ahora, el tamaño del texto. Va en el
-// celular y no se manda al servidor. (El cambio de tema Mixto u Oscuro es de la versión completa.)
+// celular y no se manda al servidor.
 
 package com.dracknoval.domux.data
 

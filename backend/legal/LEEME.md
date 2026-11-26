@@ -5,8 +5,8 @@ datos, el aviso de privacidad, los términos y las demás reglas que la ley pide
 de personas. Cada documento es **un archivo de texto**. El servidor lo lee y lo muestra en la web, en la app y en la
 API, sin que haga falta tocar nada más.
 
-**Estado de hoy: los ocho archivos son borradores de demostración.** Están escritos teniendo en cuenta todo lo que hace
-DOMUX, marcados como `vigente` (versión `0.1`) y cada uno empieza con el aviso «Borrador de demostración»: todavía no
+**Estado de hoy: los ocho archivos son borradores preparados por el equipo.** Están escritos teniendo en cuenta todo lo que hace
+DOMUX, marcados como `vigente` (versión `0.1`) y cada uno empieza con el aviso «Aviso importante»: todavía no
 los revisó una persona con conocimiento legal ni los adoptó una unidad residencial real, y lo que depende de la unidad
 (quién es el responsable, sus datos de contacto) dice «por completar». Cuando una persona con conocimiento legal los
 revise, se reemplaza el texto, se quita el aviso y se sube la versión.

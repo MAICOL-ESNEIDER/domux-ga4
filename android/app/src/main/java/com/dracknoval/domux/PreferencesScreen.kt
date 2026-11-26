@@ -42,9 +42,7 @@ import com.dracknoval.domux.ui.theme.DomuxColor
 
 /**
  * Preferencias, para todos los roles: el tamaño del texto de la app y las cuentas que este
- * celular recuerda al iniciar sesión. Todo se guarda en el celular, nada va al servidor. La misma
- * opción existe en la web, que además cambia la apariencia (Mixto u Oscuro): ese cambio de colores
- * llega a la app en la versión completa.
+ * celular recuerda al iniciar sesión. Todo se guarda en el celular, nada va al servidor.
  */
 @Composable
 fun PreferencesScreen(navController: NavController, viewModel: PreferencesViewModel = viewModel()) {
@@ -68,11 +66,6 @@ fun PreferencesScreen(navController: NavController, viewModel: PreferencesViewMo
                 accounts = state.accounts,
                 onForget = { viewModel.forget(context, it) },
                 onForgetAll = { viewModel.forgetAll(context) }
-            )
-            Text(
-                "Los colores de la app (Mixto u Oscuro) se podrán cambiar en la versión completa.",
-                color = DomuxColor.TextMuted,
-                style = MaterialTheme.typography.bodySmall
             )
         }
     }
