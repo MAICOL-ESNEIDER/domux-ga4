@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Ícono adaptable (Android 8 o más). La capa monocromática es para el ícono con tema de Android 13. -->
+<!--
+  Ícono adaptable (Android 8 o más): el logo de DOMUX (edificios azules con una D) sobre el azul noche de la app,
+  con un resplandor celeste. La capa monocromática es la silueta del logo, para el ícono con tema de Android 13.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>
