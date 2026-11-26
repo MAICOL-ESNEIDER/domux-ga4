@@ -18,6 +18,9 @@ administración.
 
 ### Añadido
 
+**Documentación de la API**
+- Página `/docs` (Swagger UI) en el propio servidor: se abre sin sesión, muestra todas las rutas del contrato y permite probarlas con «Try it out» contra el mismo servidor.
+
 **Cuentas y estructura de la unidad**
 - Torres, apartamentos, parqueaderos y cuartos útiles, y un selector de apartamento para vincular a
   cada residente (HU-013 a HU-018 y HU-023).
