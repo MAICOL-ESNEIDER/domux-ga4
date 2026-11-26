@@ -469,13 +469,24 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                 scope.launch {
                                     val delivered = packages.filter { it.status == "entregado" && !it.isDeleted }
                                     if (delivered.isEmpty()) return@launch
-                                    var count = 0
-                                    runRegistryAction({ message = "Error al archivar en bloque: $it" }) {
+                                    var archivedCount = 0
+                                    var failedCount = 0
+                                    runRegistryAction({ message = "Error al archivar en bloque: $it"; messageIsError = true }) {
                                         for (pkg in delivered) {
                                             val response = RetrofitClient.api.deletePackage(Session.bearer(), pkg.id, force = false)
-                                            if (response.isSuccessful) count++
+                                            if (response.isSuccessful) {
+                                                archivedCount++
+                                            } else {
+                                                failedCount++
+                                            }
                                         }
-                                        message = "Se han archivado $count paquetes entregados."
+                                        if (failedCount == 0 && archivedCount > 0) {
+                                            message = "Se archivaron $archivedCount paquetes entregados."
+                                            messageIsError = false
+                                        } else {
+                                            message = "Se archivaron $archivedCount paquetes; $failedCount no pudieron archivarse."
+                                            messageIsError = true
+                                        }
                                         load()
                                     }
                                 }
@@ -1214,7 +1225,7 @@ private fun PackageRegistryCard(
                         TextButton(onClick = onRestore) { Text("Restaurar") }
                     }
                 } else {
-                    if (item.status != "entregado") {
+                    if (Session.isGuard && item.status != "entregado") {
                         TextButton(onClick = onDeliver) { Text("Marcar entregado") }
                     }
                     TextButton(onClick = onMoveToTrash) { Text("Archivar") }

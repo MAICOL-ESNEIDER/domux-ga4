@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -264,18 +266,16 @@ enum class DomuxBadgeTone { SUCCESS, PROGRESS, ALERT }
 fun DomuxBrandMark(size: Dp = 54.dp) {
     Surface(
         modifier = Modifier.size(size),
-        shape = RoundedCornerShape(17.dp),
+        shape = RoundedCornerShape(size * 0.2f),
         color = Color(0xFF0B1220),
-        border = BorderStroke(1.dp, Color(0x33FFFFFF))
+        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.25f))
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_domux_shield),
-                contentDescription = "DOMUX Shield",
-                modifier = Modifier.size(size * 0.5f),
-                tint = Color.Unspecified
-            )
-        }
+        Image(
+            painter = painterResource(id = R.drawable.domux_logo),
+            contentDescription = "Logo DOMUX",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
