@@ -209,6 +209,9 @@ fun ForcePasswordChangeScreen(navController: NavController) {
                             )
                         )
                         if (response.isSuccessful) {
+                            response.body()?.token?.takeIf { it.isNotBlank() }?.let { newToken ->
+                                Session.token = newToken
+                            }
                             Session.mustChangePassword = false
                             Session.persist(context)
                             navController.navigate("home") {

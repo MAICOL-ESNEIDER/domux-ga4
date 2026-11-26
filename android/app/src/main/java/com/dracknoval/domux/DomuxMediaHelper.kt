@@ -38,6 +38,7 @@ fun saveBytesToDownloads(
     mimeType: String,
     bytes: ByteArray
 ): Uri? {
+    if (bytes.isEmpty()) return null
     val safeFileName = fileName.substringAfterLast('/').substringAfterLast('\\').trim().ifEmpty { "archivo_descargado" }
     
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -45,10 +46,14 @@ fun saveBytesToDownloads(
             put(MediaStore.Downloads.DISPLAY_NAME, safeFileName)
             put(MediaStore.Downloads.MIME_TYPE, mimeType)
             put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
         return try {
             context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            context.contentResolver.update(uri, values, null, null)
             uri
         } catch (e: Exception) {
             context.contentResolver.delete(uri, null, null)
@@ -81,20 +86,23 @@ fun DomuxAttachmentPreview(
     var showExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var isDownloading by remember { mutableStateOf(false) }
-    val isImage = mediaType?.lowercase() == "image" || mediaUrl.startsWith("data:image/")
+    val isImage = mediaType?.lowercase() == "image" || mediaUrl.startsWith("data:image/") || mediaUrl.endsWith(".jpg", true) || mediaUrl.endsWith(".png", true)
 
-    val decodedBytes = remember(mediaUrl) {
+    val decodedBytes by androidx.compose.runtime.produceState<ByteArray?>(initialValue = null, key1 = mediaUrl) {
         if (mediaUrl.startsWith("data:")) {
-            try {
-                val base64 = mediaUrl.substringAfter("base64,")
-                Base64.decode(base64, Base64.DEFAULT)
-            } catch (e: Exception) {
-                null
+            value = withContext(Dispatchers.IO) {
+                try {
+                    val base64 = mediaUrl.substringAfter("base64,")
+                        .replace("\\s".toRegex(), "")
+                    Base64.decode(base64, Base64.DEFAULT)
+                } catch (e: Exception) {
+                    null
+                }
             }
-        } else null
+        }
     }
     
-    val imageModel = decodedBytes ?: mediaUrl
+    val imageModel = decodedBytes ?: if (mediaUrl.startsWith("/")) "https://domux.onrender.com$mediaUrl" else mediaUrl
 
     if (isImage) {
         Surface(
@@ -106,15 +114,24 @@ fun DomuxAttachmentPreview(
             color = Color(0xFF0F1E33),
             border = BorderStroke(1.dp, Color(0xFF1E334D))
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(imageModel)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "Miniatura de archivo adjunto",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(imageModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Miniatura de archivo adjunto",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                    shape = RoundedCornerShape(50),
+                    color = Color(0x80000000)
+                ) {
+                    Text("🔍 Tocar para ampliar", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                }
+            }
         }
         
         if (showExpanded) {
@@ -163,7 +180,7 @@ fun DomuxAttachmentPreview(
                                                     context, 
                                                     fileName.ifBlank { "imagen_adjunta.jpg" },
                                                     "image/jpeg",
-                                                    decodedBytes
+                                                    decodedBytes!!
                                                 )
                                                 withContext(Dispatchers.Main) {
                                                     if (uri != null) {
@@ -182,7 +199,24 @@ fun DomuxAttachmentPreview(
                                         }
                                     }
                                 ) {
-                                    Text(if (isDownloading) "Descargando..." else "Descargar", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = Color.White)
+                                    Text(if (isDownloading) "Guardando..." else "⬇ Descargar", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = Color.White)
+                                }
+                            } else if (!mediaUrl.startsWith("data:")) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color(0xFF3B82F6),
+                                    modifier = Modifier.clickable {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                            data = android.net.Uri.parse(if (mediaUrl.startsWith("/")) "https://domux.onrender.com$mediaUrl" else mediaUrl)
+                                        }
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            onMessage("No se pudo abrir el enlace.")
+                                        }
+                                    }
+                                ) {
+                                    Text("🔗 Abrir", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = Color.White)
                                 }
                             }
                         }
@@ -232,7 +266,7 @@ fun DomuxAttachmentPreview(
                                         context, 
                                         fileName.ifBlank { "archivo_adjunto" },
                                         mime,
-                                        decodedBytes
+                                        decodedBytes!!
                                     )
                                     withContext(Dispatchers.Main) {
                                         if (uri != null) {

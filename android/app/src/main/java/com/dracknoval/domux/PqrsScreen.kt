@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -68,20 +69,20 @@ fun PqrsScreen(navController: NavController, targetResidentId: Int? = null) {
     var expandedId by remember { mutableStateOf<Int?>(null) }
     var selectedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var batchDialog by remember { mutableStateOf(false) }
-    var batchMessage by remember { mutableStateOf("") }
-    var batchStatus by remember { mutableStateOf("en_proceso") }
-    var batchMediaUrl by remember { mutableStateOf<String?>(null) }
-    var batchMediaType by remember { mutableStateOf<String?>(null) }
-    var batchMediaName by remember { mutableStateOf<String?>(null) }
-    var subject by remember { mutableStateOf("") }
-    var detail by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(pqrsCategories.first()) }
-    var incidentDate by remember { mutableStateOf("") }
-    var incidentTime by remember { mutableStateOf("") }
-    var mediaUrl by remember { mutableStateOf<String?>(null) }
-    var mediaType by remember { mutableStateOf<String?>(null) }
-    var mediaName by remember { mutableStateOf<String?>(null) }
+    var batchDialog by rememberSaveable { mutableStateOf(false) }
+    var batchMessage by rememberSaveable { mutableStateOf("") }
+    var batchStatus by rememberSaveable { mutableStateOf("en_proceso") }
+    var batchMediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var batchMediaType by rememberSaveable { mutableStateOf<String?>(null) }
+    var batchMediaName by rememberSaveable { mutableStateOf<String?>(null) }
+    var subject by rememberSaveable { mutableStateOf("") }
+    var detail by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf(pqrsCategories.first()) }
+    var incidentDate by rememberSaveable { mutableStateOf("") }
+    var incidentTime by rememberSaveable { mutableStateOf("") }
+    var mediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaType by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaName by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedResident by remember { mutableStateOf<ResidentSummary?>(null) }
     var attemptedSubmit by remember { mutableStateOf(false) }
     var selectedTab by remember {
@@ -521,14 +522,14 @@ private fun PqrsCard(
     var responseText by remember(pqrs.id, pqrs.adminResponse) {
         mutableStateOf(pqrs.adminResponse.orEmpty())
     }
-    var responseStatus by remember(pqrs.id, pqrs.status) { mutableStateOf(pqrs.status) }
-    var responseMediaUrl by remember(pqrs.id) { mutableStateOf<String?>(null) }
-    var responseMediaType by remember(pqrs.id) { mutableStateOf<String?>(null) }
-    var responseMediaName by remember(pqrs.id) { mutableStateOf<String?>(null) }
-    var replyText by remember(pqrs.id, pqrs.messages?.size) { mutableStateOf("") }
-    var replyMediaUrl by remember(pqrs.id) { mutableStateOf<String?>(null) }
-    var replyMediaType by remember(pqrs.id) { mutableStateOf<String?>(null) }
-    var replyMediaName by remember(pqrs.id) { mutableStateOf<String?>(null) }
+    var responseStatus by rememberSaveable(pqrs.id, pqrs.status) { mutableStateOf(pqrs.status) }
+    var responseMediaUrl by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
+    var responseMediaType by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
+    var responseMediaName by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
+    var replyText by rememberSaveable(pqrs.id, pqrs.messages?.size) { mutableStateOf("") }
+    var replyMediaUrl by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
+    var replyMediaType by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
+    var replyMediaName by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
     var rating by remember(pqrs.id, pqrs.satisfactionRating) {
         mutableIntStateOf(pqrs.satisfactionRating ?: 5)
     }

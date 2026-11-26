@@ -61,6 +61,7 @@ fun ResidentProfileScreen(navController: NavController) {
     var attemptedPasswordChange by remember { mutableStateOf(false) }
     var currentPasswordVisible by remember { mutableStateOf(false) }
     var newPasswordVisible by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var message by remember { mutableStateOf("") }
     var messageIsError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -232,6 +233,10 @@ fun ResidentProfileScreen(navController: NavController) {
                                         ChangePasswordRequest(currentPassword, newPassword)
                                     )
                                     if (response.isSuccessful) {
+                                        response.body()?.token?.takeIf { it.isNotBlank() }?.let { newToken ->
+                                            Session.token = newToken
+                                            Session.persist(context)
+                                        }
                                         message = response.body()?.message
                                             ?: "Contraseña actualizada exitosamente."
                                         messageIsError = false

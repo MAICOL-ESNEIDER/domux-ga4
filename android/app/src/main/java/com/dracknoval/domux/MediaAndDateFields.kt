@@ -39,7 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -155,8 +155,9 @@ private fun MediaAttachmentPickerFiltered(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var showDialog by remember { mutableStateOf(false) }
-    var currentCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+    var currentCameraUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentCameraUri = currentCameraUriString?.let { Uri.parse(it) }
     
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) {
@@ -222,7 +223,7 @@ private fun MediaAttachmentPickerFiltered(
         if (granted) {
             val file = File(context.cacheDir, "camera_capture_${System.currentTimeMillis()}.jpg")
             val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            currentCameraUri = uri
+            currentCameraUriString = uri.toString()
             cameraLauncher.launch(uri)
         } else {
             onError("Se requiere permiso de cámara para tomar fotos.")
@@ -270,7 +271,7 @@ private fun MediaAttachmentPickerFiltered(
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                             val file = File(context.cacheDir, "camera_capture_${System.currentTimeMillis()}.jpg")
                             val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                            currentCameraUri = uri
+                            currentCameraUriString = uri.toString()
                             cameraLauncher.launch(uri)
                         } else {
                             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -302,50 +303,58 @@ private fun MediaAttachmentPickerFiltered(
 }
 
 fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri): String? {
-    val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-    val bytes = inputStream.readBytes()
-    inputStream.close()
-    
-    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-    
-    var scale = 1
-    while (options.outWidth / scale > 1280 || options.outHeight / scale > 1280) {
-        scale *= 2
-    }
-    
-    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = scale }
-    var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions) ?: return null
-    
     try {
-        val exifStream = context.contentResolver.openInputStream(uri)
-        if (exifStream != null) {
-            val exif = ExifInterface(exifStream)
-            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-            val matrix = Matrix()
-            when (orientation) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
-            }
-            if (!matrix.isIdentity) {
-                val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                if (rotated != bitmap) {
-                    bitmap.recycle()
-                    bitmap = rotated
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            BitmapFactory.decodeStream(inputStream, null, options)
+        } ?: return null
+        
+        var scale = 1
+        while (options.outWidth / scale > 1280 || options.outHeight / scale > 1280) {
+            scale *= 2
+        }
+        
+        val decodeOptions = BitmapFactory.Options().apply { 
+            inSampleSize = scale 
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        
+        var bitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            BitmapFactory.decodeStream(inputStream, null, decodeOptions)
+        } ?: return null
+        
+        try {
+            context.contentResolver.openInputStream(uri)?.use { exifStream ->
+                val exif = ExifInterface(exifStream)
+                val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+                val matrix = Matrix()
+                when (orientation) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                    ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                    ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                }
+                if (!matrix.isIdentity) {
+                    val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    if (rotated != bitmap) {
+                        bitmap.recycle()
+                        bitmap = rotated
+                    }
                 }
             }
-            exifStream.close()
+        } catch (e: Exception) {
+            // Ignorar errores EXIF y continuar
         }
+        
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
+        bitmap.recycle()
+        
+        return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+    } catch (e: OutOfMemoryError) {
+        throw Exception("La imagen es demasiado grande para procesarla.")
     } catch (e: Exception) {
-        // Ignorar errores EXIF y continuar
+        throw Exception("No se pudo leer la imagen: ${e.message}")
     }
-    
-    val outputStream = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
-    bitmap.recycle()
-    
-    return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 }
 
 fun saveBase64FileToDownloads(

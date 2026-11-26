@@ -264,7 +264,7 @@ private fun SessionStartupScreen(
                     }
                 } else if (response.code() == 401) {
                     Session.clear(context)
-                    navController.navigate("login") { popUpTo("session") { inclusive = true } }
+                    navController.navigate("login") { popUpTo(navController.graph.startDestinationId) { inclusive = true } }
                 } else {
                     error = "No se pudo validar la sesión (${response.code()}). Revisa tu conexión."
                 }
@@ -290,7 +290,7 @@ private fun SessionStartupScreen(
             Button(onClick = ::validateSession) { Text("Reintentar") }
             Button(onClick = {
                 Session.clear(context)
-                navController.navigate("login") { popUpTo("session") { inclusive = true } }
+                navController.navigate("login") { popUpTo(navController.graph.startDestinationId) { inclusive = true } }
             }) { Text("Iniciar sesión") }
         } else CircularProgressIndicator()
     }

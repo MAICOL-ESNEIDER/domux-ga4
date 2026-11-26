@@ -384,4 +384,4 @@ interface ApiService {
     ): Response<GenericMessageResponse>
 }
 
-data class GenericMessageResponse(val message: String?)
+data class GenericMessageResponse(val message: String?, val token: String? = null)

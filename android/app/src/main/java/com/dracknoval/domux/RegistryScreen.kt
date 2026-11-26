@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -139,8 +140,8 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     var packageDescription by remember { mutableStateOf("") }
     var packageDate by remember { mutableStateOf("") }
     var packageTime by remember { mutableStateOf("") }
-    var mediaUrl by remember { mutableStateOf<String?>(null) }
-    var mediaType by remember { mutableStateOf<String?>(null) }
+    var mediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaType by rememberSaveable { mutableStateOf<String?>(null) }
     var mediaName by remember { mutableStateOf<String?>(null) }
     var attemptedPackage by remember { mutableStateOf(false) }
 
@@ -157,8 +158,8 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
 
     var deliveryPackage by remember { mutableStateOf<PackageItem?>(null) }
     var receiverName by remember { mutableStateOf("") }
-    var deliveryMediaUrl by remember { mutableStateOf<String?>(null) }
-    var deliveryMediaType by remember { mutableStateOf<String?>(null) }
+    var deliveryMediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var deliveryMediaType by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryMediaName by remember { mutableStateOf<String?>(null) }
     var pendingExit by remember { mutableStateOf<Visit?>(null) }
     var pendingQrExit by remember { mutableStateOf<Visit?>(null) }
@@ -1066,7 +1067,7 @@ private fun PackageRegistryCard(
             if (item.eventDate != null || item.eventTime != null) {
                 Text("Registro: ${item.eventDate.orEmpty()} ${item.eventTime.orEmpty()}")
             }
-            MediaAttachmentChip(item.mediaUrl, item.mediaType)
+            DomuxAttachmentPreview(item.mediaUrl, item.mediaType)
             if (item.status == "entregado" && !item.deliveredTo.isNullOrBlank()) {
                 Text("Recibido por: ${item.deliveredTo}")
             }
@@ -1074,7 +1075,6 @@ private fun PackageRegistryCard(
                 if (item.isDeleted) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TextButton(onClick = onRestore) { Text("Restaurar") }
-                        TextButton(onClick = onDeletePermanently) { Text("Eliminar definitivo") }
                     }
                 } else {
                     if (item.status != "entregado") {
@@ -1213,7 +1213,7 @@ private fun VisitRegistryCard(
                     } else if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
                         Text("Documento: ${visit.visitorDocument}")
                     }
-                    MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType)
+                    DomuxAttachmentPreview(visit.visitorPhotoUrl, visit.visitorPhotoType)
                     visit.description?.takeIf { it.isNotBlank() }?.let { Text("Pedido: $it") }
                     visit.enteredAt?.let { Text("Última entrada: $it") }
                     visit.exitedAt?.let { Text("Última salida: $it") }
@@ -1249,9 +1249,16 @@ private fun VisitRegistryCard(
                             ) { Text("Autorizar e ingresar") }
                             OutlinedButton(
                                 onClick = {
-                                    visit.residentPhone?.let { phone ->
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
-                                        context.startActivity(intent)
+                                    val phone = visit.residentPhone?.filter { it.isDigit() }
+                                    if (phone.isNullOrEmpty()) {
+                                        android.widget.Toast.makeText(context, "Este residente no tiene teléfono registrado", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        try {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            android.widget.Toast.makeText(context, "No se pudo iniciar la llamada: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -1267,9 +1274,16 @@ private fun VisitRegistryCard(
                             if (visit.overstayWarning) {
                                 OutlinedButton(
                                     onClick = {
-                                        visit.residentPhone?.let { phone ->
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
-                                            context.startActivity(intent)
+                                        val phone = visit.residentPhone?.filter { it.isDigit() }
+                                        if (phone.isNullOrEmpty()) {
+                                            android.widget.Toast.makeText(context, "Este residente no tiene teléfono registrado", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            try {
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                android.widget.Toast.makeText(context, "No se pudo iniciar la llamada: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)

@@ -3,6 +3,7 @@ package com.dracknoval.domux
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Canvas
@@ -34,13 +35,13 @@ fun AnnouncementsScreen(navController: NavController) {
     var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var title by remember { mutableStateOf("") }
-    var detail by remember { mutableStateOf("") }
-    var eventDate by remember { mutableStateOf("") }
-    var eventTime by remember { mutableStateOf("") }
-    var mediaUrl by remember { mutableStateOf<String?>(null) }
-    var mediaType by remember { mutableStateOf<String?>(null) }
-    var mediaName by remember { mutableStateOf<String?>(null) }
-    var message by remember { mutableStateOf("") }
+    var detail by rememberSaveable { mutableStateOf("") }
+    var eventDate by rememberSaveable { mutableStateOf("") }
+    var eventTime by rememberSaveable { mutableStateOf("") }
+    var mediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaType by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaName by rememberSaveable { mutableStateOf<String?>(null) }
+    var message by rememberSaveable { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<Announcement?>(null) }
     var publishing by remember { mutableStateOf(false) }
     var attemptedSubmit by remember { mutableStateOf(false) }

@@ -144,8 +144,8 @@ fun ExportsArchiveScreen(navController: NavController) {
                     item {
                         DomuxCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("Respaldo Legal de PQRS", style = MaterialTheme.typography.titleMedium)
-                                Text("Descarga el histórico de PQRS o archiva las resueltas para limpiar la bandeja principal.")
+                                Text("Respaldo y Archivo Histórico de PQRS", style = MaterialTheme.typography.titleMedium)
+                                Text("Descarga el histórico de PQRS o archiva las resueltas para limpiar la bandeja principal (por integridad de la información no se eliminan definitivamente).")
                                 
                                 OutlinedButton(
                                     enabled = !legalPqrsBusy,
@@ -234,8 +234,8 @@ fun ExportsArchiveScreen(navController: NavController) {
                     item {
                         DomuxCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("Respaldo Legal de Reservas", style = MaterialTheme.typography.titleMedium)
-                                Text("Descarga el histórico de Reservas o archiva las finalizadas para limpiar la bandeja principal.")
+                                Text("Respaldo y Archivo Histórico de Reservas", style = MaterialTheme.typography.titleMedium)
+                                Text("Descarga el histórico de reservas o archiva las finalizadas para limpiar el calendario principal (por integridad de la información no se eliminan definitivamente).")
                                 
                                 OutlinedButton(
                                     enabled = !legalReservationsBusy,

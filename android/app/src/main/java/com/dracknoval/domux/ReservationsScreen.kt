@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
@@ -158,10 +159,10 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var selectedResident by remember { mutableStateOf<ResidentSummary?>(null) }
     var date by remember { mutableStateOf("") }
     var slot by remember { mutableStateOf("") }
-    var requestMessage by remember { mutableStateOf("") }
-    var requestMediaUrl by remember { mutableStateOf<String?>(null) }
-    var requestMediaType by remember { mutableStateOf<String?>(null) }
-    var requestMediaName by remember { mutableStateOf<String?>(null) }
+    var requestMessage by rememberSaveable { mutableStateOf("") }
+    var requestMediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var requestMediaType by rememberSaveable { mutableStateOf<String?>(null) }
+    var requestMediaName by rememberSaveable { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var submitting by remember { mutableStateOf(false) }
     var paymentActionInProgress by remember { mutableStateOf(false) }

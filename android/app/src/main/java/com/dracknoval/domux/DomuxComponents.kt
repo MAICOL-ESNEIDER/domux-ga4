@@ -663,8 +663,11 @@ fun DomuxScreenScaffold(
                                 }
                                 try {
                                     Session.clear(context)
-                                    drawerState.close()
-                                    navController.navigate("login") { popUpTo(0) }
+                                    scope.launch { drawerState.snapTo(DrawerValue.Closed) }
+                                    navController.navigate("login") { 
+                                        popUpTo(navController.graph.startDestinationId) { inclusive = true } 
+                                        launchSingleTop = true
+                                    }
                                 } catch (exception: Exception) {
                                     Log.e("DomuxSession", "Could not clear the session during logout.", exception)
                                     logoutError = "No se pudo borrar la sesión segura: ${exception.message.orEmpty()}"
