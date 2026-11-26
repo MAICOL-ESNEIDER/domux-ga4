@@ -23,6 +23,9 @@
   {{ select("category", "Tipo", category_pairs, value=values.category, required=True) }}
   {{ field("subject", "Asunto", values.subject, required=True, maxlength=150,
            help="Una frase corta que diga de qué trata.") }}
+  {{ field("incidentDate", "¿Cuándo pasó? (fecha)", values.incidentDate, type="date",
+           help="Obligatoria en una queja, un reclamo o un daño. Solo de hoy hacia atrás.") }}
+  {{ field("incidentTime", "Hora aproximada (opcional)", values.incidentTime, type="time") }}
   {{ textarea("message", "Descripción", values.message, required=True, rows=6,
               help="Lo que contó el residente, con sus palabras. Queda como el primer mensaje de la conversación.") }}
   {{ attachment_field("media", "Adjuntar la foto, el video, el audio o el PDF que trajo el residente (opcional)") }}

@@ -523,7 +523,7 @@ class WebPqrsBatchTests(WebPqrsCase):
 class WebPqrsNewTests(WebPqrsCase):
     def form(self, **changes):
         form = {"residentId": str(self.resident.id), "category": "Queja", "subject": "Ruido nocturno",
-                "message": "Hay ruido todas las noches en el piso de arriba."}
+                "message": "Hay ruido todas las noches en el piso de arriba.", "incidentDate": "2026-01-02"}
         form.update(changes)
         return form
 
@@ -542,6 +542,13 @@ class WebPqrsNewTests(WebPqrsCase):
         self.assertNotIn("Lucía", options)
         for category in ("Petición", "Queja", "Reclamo", "Sugerencia", "Daño"):
             self.assertIn(f'<option value="{category}"', body)
+
+    def test_a_complaint_without_the_date_is_not_registered(self):
+        response = self.post("/web/pqrs/nueva", self.form(incidentDate=""))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Pqrs.query.count(), 0)
+        self.assertIn("cuándo pasó", response.get_data(as_text=True))
 
     def test_it_registers_the_pqrs_in_the_name_of_the_resident(self):
         response = self.post("/web/pqrs/nueva", self.form())

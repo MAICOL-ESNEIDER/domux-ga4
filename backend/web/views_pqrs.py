@@ -223,10 +223,11 @@ def pqrs_new():
     """Registra una PQRS a nombre de un residente; la app le avisa y queda anotado que la registró la administración."""
     api = Api(g.web_user)
     if request.method == "POST":
-        values = {key: text(key) for key in ("residentId", "category", "subject", "message")}
+        values = {key: text(key) for key in ("residentId", "category", "subject", "message", "incidentDate", "incidentTime")}
         body = compact({
             "residentId": number("residentId"), "category": values["category"],
             "subject": values["subject"], "message": values["message"],
+            "incidentDate": values["incidentDate"], "incidentTime": values["incidentTime"],
         })
         if problem := attach_media(body, request.files.get("media")):
             flash(problem, "error")
@@ -238,7 +239,9 @@ def pqrs_new():
             return redirect(url_for("web.pqrs_detail", pqrs_id=created) if created else url_for("web.pqrs_list"))
         flash(result.error, "error")
         return _new_page(api, values, result.status)
-    return _new_page(api, {"residentId": "", "category": CATEGORIES[0], "subject": "", "message": ""})
+    return _new_page(api, {
+        "residentId": "", "category": CATEGORIES[0], "subject": "", "message": "", "incidentDate": "", "incidentTime": "",
+    })
 
 
 # --- Adjuntos ------------------------------------------------------------------------------------------
