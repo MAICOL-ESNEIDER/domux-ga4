@@ -190,7 +190,8 @@ administración.
   cambió nada de lo que se ve.
 
 ### Cambiado
-- El Excel se maneja solo en la web de administración; la app no guarda archivos en el celular.
+
+- Se quitaron de la app y la web los avisos que decían que algo llegaría «en la versión completa» o que era «de demostración». En los textos legales, el aviso del principio ahora dice que lo preparó el equipo de DOMUX, que no es asesoría legal y que la unidad debe revisarlo con su asesor jurídico.- El Excel se maneja solo en la web de administración; la app no guarda archivos en el celular.
 - Las horas se muestran y se comparan en hora de Colombia (TT-031, DEF-002).
 - Errores del servidor en español y un solo registro de auditoría para todo el servidor (TT-013).
 - Las listas del administrador (PQRS, reservas, resumen y reporte legal) cargan sus datos
