@@ -35,7 +35,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,7 +62,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dracknoval.domux.data.AdminSummaryResponse
 import com.dracknoval.domux.data.ComplexInfoStore
-import com.dracknoval.domux.data.NotificationItem
 import com.dracknoval.domux.data.Reservation
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.Visit
@@ -174,7 +172,6 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel = viewMode
         if (state.showNotifications) {
             NotificationsDialog(
                 state = state,
-                onMarkRead = viewModel::markRead,
                 onDismissMessage = viewModel::dismissMessage,
                 onOpenInbox = {
                     viewModel.closeNotifications()
@@ -284,7 +281,10 @@ private fun WelcomeCard(context: Context) {
             Text(roleLine, color = DomuxColor.TextSoft, style = MaterialTheme.typography.bodyMedium)
             val portalPhone = ComplexInfoStore.info?.portalPhone
             if (portalPhone != null && !Session.isGuard) {
-                TextButton(onClick = { dialPortal(context, portalPhone) }) {
+                OutlinedButton(
+                    onClick = { dialPortal(context, portalPhone) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
                     Text("Llamar a portería · $portalPhone")
                 }
             }
@@ -379,7 +379,10 @@ private fun ResidentHome(
             detail = listOfNotNull(first?.carrier, first?.arrivedAt?.let { "llegó $it" }).joinToString(" · "),
             onClick = { navController.navigate("registry?tab=paquetes") }
         ) {
-            TextButton(onClick = { navController.navigate("registry?tab=paquetes") }) { Text("Ver código de entrega") }
+            OutlinedButton(
+                onClick = { navController.navigate("registry?tab=paquetes") },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) { Text("Ver código de entrega") }
         }
     }
     if (state.unreadAnnouncementsTotal > 0) {
@@ -391,7 +394,10 @@ private fun ResidentHome(
             else "${state.unreadAnnouncementsTotal} comunicados sin leer",
             onClick = { navController.openMainDestination("announcements") }
         ) {
-            TextButton(onClick = { navController.openMainDestination("announcements") }) { Text("Leer") }
+            OutlinedButton(
+                onClick = { navController.openMainDestination("announcements") },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) { Text(if (state.unreadAnnouncementsTotal > 1) "Ver los comunicados" else "Leer el comunicado") }
         }
     }
     val nothingPending = state.pendingVisits.isEmpty() && state.waitingPackagesTotal == 0 && state.unreadAnnouncementsTotal == 0
@@ -649,7 +655,10 @@ private fun GuardHome(state: HomeUiState, navController: NavController, onShift:
         }
     }
     if (state.guardInsideTotal > state.guardInside.size) {
-        TextButton(onClick = { navController.navigate("registry?tab=visitas") }) { Text("Ver todas las visitas") }
+        OutlinedButton(
+            onClick = { navController.navigate("registry?tab=visitas") },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) { Text("Ver todas las visitas") }
     }
 }
 
@@ -657,7 +666,6 @@ private fun GuardHome(state: HomeUiState, navController: NavController, onShift:
 @Composable
 private fun NotificationsDialog(
     state: HomeUiState,
-    onMarkRead: (NotificationItem) -> Unit,
     onDismissMessage: () -> Unit,
     onOpenInbox: () -> Unit,
     onClose: () -> Unit
@@ -699,18 +707,16 @@ private fun NotificationsDialog(
                                     modifier = Modifier.padding(14.dp),
                                     verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Text(item.title, fontWeight = FontWeight.SemiBold)
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(item.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                        if (item.id in state.newNotificationIds) DomuxStatusBadge("Nueva", DomuxBadgeTone.PROGRESS)
+                                    }
                                     Text(item.message, color = DomuxColor.TextSoft)
                                     Text(
                                         item.createdAt.orEmpty(),
                                         color = DomuxColor.TextMuted,
                                         style = MaterialTheme.typography.bodySmall
                                     )
-                                    if (!item.isRead) {
-                                        TextButton(onClick = { onMarkRead(item) }, enabled = !state.busy) {
-                                            Text("Marcar como leída")
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -718,11 +724,11 @@ private fun NotificationsDialog(
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onOpenInbox) { Text("Ver bandeja completa") }
-                    TextButton(onClick = onClose) { Text("Cerrar") }
+                    OutlinedButton(onClick = onOpenInbox, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Ver todas") }
+                    Button(onClick = onClose, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Cerrar") }
                 }
             }
         }

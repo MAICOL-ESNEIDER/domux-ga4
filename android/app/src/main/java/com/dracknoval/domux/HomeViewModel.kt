@@ -42,6 +42,8 @@ data class HomeUiState(
     val guardPendingTotal: Int = 0,
     val guardInside: List<Visit> = emptyList(),
     val guardInsideTotal: Int = 0,
+    // Las que estaban sin leer cuando se abrió la bandeja: se marcan «Nueva» aunque ya queden leídas.
+    val newNotificationIds: Set<Int> = emptySet(),
     val busy: Boolean = false,
     val message: String = "",
     val messageIsError: Boolean = false
@@ -77,8 +79,16 @@ class HomeViewModel : DomuxViewModel() {
         _state.update { it.copy(message = "") }
     }
 
+    /** Abre la bandeja y marca como leídas las que traía sin leer: verlas ya es leerlas. */
     fun openNotifications() {
-        _state.update { it.copy(showNotifications = true, message = "") }
+        val unread = _state.value.notifications.filter { !it.isRead }.map { it.id }.toSet()
+        _state.update { it.copy(showNotifications = true, message = "", newNotificationIds = unread) }
+        if (unread.isNotEmpty()) {
+            viewModelScope.launch {
+                quietly { api.markAllNotificationsRead(auth()) } ?: return@launch
+                _state.update { current -> current.copy(notifications = current.notifications.map { it.copy(isRead = true) }) }
+            }
+        }
     }
 
     fun closeNotifications() {

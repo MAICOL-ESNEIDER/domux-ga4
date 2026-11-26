@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -195,7 +197,7 @@ private fun AnnouncementList(
                 if (state.page.total > 0) "Mostrando ${state.items.size} de ${state.page.total}" else "",
                 style = MaterialTheme.typography.bodySmall
             )
-            TextButton(onClick = onRefresh) { Text("Actualizar") }
+            OutlinedButton(onClick = onRefresh) { Text("Actualizar") }
         }
         if (state.loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         LazyColumn(
@@ -230,10 +232,10 @@ private fun AnnouncementList(
             }
             if (state.page.page < state.page.totalPages) {
                 item {
-                    TextButton(
+                    OutlinedButton(
                         onClick = onLoadMore,
                         enabled = !state.loadingMore,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     ) { Text(if (state.loadingMore) "Cargando..." else "Ver más comunicados") }
                 }
             }
@@ -276,6 +278,13 @@ private fun AnnouncementCard(
                 maxLines = if (expanded) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Ellipsis
             )
+            // «Leer más»: un mensaje largo se ve cortado y este botón lo abre (y lo marca como leído).
+            if (announcement.message.length > 120 || announcement.message.count { it == '\n' } >= 3) {
+                OutlinedButton(
+                    onClick = onToggle,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+                ) { Text(if (expanded) "Ver menos" else "Leer más") }
+            }
             if (announcement.eventDate != null || announcement.eventTime != null) {
                 Text("Evento: ${announcement.eventDate.orEmpty()} ${announcement.eventTime.orEmpty()}".trim())
             }

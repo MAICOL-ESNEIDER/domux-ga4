@@ -56,8 +56,13 @@ class NotificationsViewModel : DomuxViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(loading = true) }
             val response = attempt("No se pudieron cargar las notificaciones") { api.getNotifications(auth()) }
+            val fresh = response?.body()?.notifications
+            // Abrir la bandeja es leerla: en el servidor quedan leídas, y aquí siguen marcadas «Nueva».
+            if (fresh != null && fresh.any { !it.isRead }) {
+                runCatching { api.markAllNotificationsRead(auth()) }
+            }
             _state.update { current ->
-                current.copy(loading = false, items = response?.body()?.notifications ?: current.items)
+                current.copy(loading = false, items = fresh ?: current.items)
             }
         }
     }
