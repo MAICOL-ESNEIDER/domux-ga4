@@ -1,6 +1,7 @@
 import os
 import unittest
 from datetime import timedelta
+from unittest.mock import patch
 
 os.environ["DATABASE_URL"] = "sqlite://"
 
@@ -68,9 +69,10 @@ class AdminResidentActionTests(unittest.TestCase):
         return {"Authorization": f"Bearer {generate_token(user)}"}
 
     def test_resident_can_change_password_and_audit_the_action(self):
+        old_token = generate_token(self.resident)
         response = self.client.post(
             "/api/auth/change-password",
-            headers=self.headers(self.resident),
+            headers={"Authorization": f"Bearer {old_token}"},
             json={
                 "currentPassword": "Resident123*",
                 "newPassword": "UpdatedResident123*",
@@ -79,12 +81,20 @@ class AdminResidentActionTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.get_json(),
-            {
-                "message": "Contraseña actualizada exitosamente.",
-                "user": self.resident.to_dict(),
-            },
+            response.json["message"],
+            "Contraseña actualizada exitosamente.",
         )
+        self.assertIsInstance(response.json["token"], str)
+        old_session = self.client.get(
+            "/api/auth/session",
+            headers={"Authorization": f"Bearer {old_token}"},
+        )
+        new_session = self.client.get(
+            "/api/auth/session",
+            headers={"Authorization": f"Bearer {response.json['token']}"},
+        )
+        self.assertEqual(old_session.status_code, 401)
+        self.assertEqual(new_session.status_code, 200)
         self.assertTrue(check_password_hash(self.resident.password_hash, "UpdatedResident123*"))
         audit = AuditLog.query.filter_by(
             entity_type="USER",
@@ -165,6 +175,122 @@ class AdminResidentActionTests(unittest.TestCase):
         self.assertEqual(audit.actor_id, self.admin.id)
         self.assertEqual(audit.actor_role, "ADMIN")
 
+    def test_user_creation_and_update_require_a_valid_role(self):
+        create_base = {
+            "name": "Cuenta",
+            "email": "required-role@test.local",
+            "password": "RequiredRole123*",
+        }
+        for role_value in ("missing", "INVALID"):
+            with self.subTest(operation="create", role=role_value):
+                body = dict(create_base)
+                if role_value != "missing":
+                    body["role"] = role_value
+                response = self.client.post(
+                    "/api/admin/users",
+                    headers=self.headers(self.admin),
+                    json=body,
+                )
+                self.assertEqual(response.status_code, 400)
+
+        for role_value in ("missing", "INVALID"):
+            with self.subTest(operation="update", role=role_value):
+                body = {"phone": "3001234567"}
+                if role_value != "missing":
+                    body["role"] = role_value
+                response = self.client.put(
+                    f"/api/admin/users/{self.resident.id}",
+                    headers=self.headers(self.admin),
+                    json=body,
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_admin_can_create_and_edit_an_account_with_admin_role(self):
+        created = self.client.post(
+            "/api/admin/users",
+            headers=self.headers(self.admin),
+            json={
+                "name": "Segundo",
+                "email": "second-admin@test.local",
+                "password": "SecondAdmin123*",
+                "role": "ADMIN",
+            },
+        )
+
+        self.assertEqual(created.status_code, 201)
+        second_admin_id = created.json["user"]["id"]
+        second_admin = db.session.get(User, second_admin_id)
+        self.assertEqual(second_admin.role, "ADMIN")
+        self.assertIsNone(second_admin.apartment)
+
+        edited = self.client.put(
+            f"/api/admin/users/{second_admin_id}",
+            headers=self.headers(self.admin),
+            json={"role": "GUARD"},
+        )
+        self.assertEqual(edited.status_code, 200)
+        self.assertEqual(second_admin.role, "GUARD")
+        self.assertIsNone(second_admin.apartment)
+
+        restored = self.client.put(
+            f"/api/admin/users/{second_admin_id}",
+            headers=self.headers(self.admin),
+            json={"role": "ADMIN"},
+        )
+        self.assertEqual(restored.status_code, 200)
+        self.assertEqual(second_admin.role, "ADMIN")
+
+    def test_admin_cannot_deactivate_or_change_own_role(self):
+        for payload in (
+            {"role": "ADMIN", "isActive": False},
+            {"role": "GUARD"},
+        ):
+            with self.subTest(payload=payload):
+                response = self.client.put(
+                    f"/api/admin/users/{self.admin.id}",
+                    headers=self.headers(self.admin),
+                    json=payload,
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json["error"],
+                    "No puedes desactivar ni cambiar el rol de tu propia cuenta.",
+                )
+                self.assertEqual(self.admin.role, "ADMIN")
+                self.assertTrue(self.admin.is_active)
+
+    def test_last_active_admin_cannot_be_deactivated_or_demoted(self):
+        last_admin = User(
+            name="Último",
+            email="last-admin@test.local",
+            password_hash=generate_password_hash("LastAdmin123*"),
+            role="ADMIN",
+            is_active=True,
+        )
+        db.session.add(last_admin)
+        db.session.commit()
+
+        for payload in (
+            {"role": "ADMIN", "isActive": False},
+            {"role": "GUARD", "isActive": True},
+        ):
+            with self.subTest(payload=payload):
+                with patch.object(User, "query") as user_query:
+                    user_query.filter_by.return_value.count.return_value = 1
+                    response = self.client.put(
+                        f"/api/admin/users/{last_admin.id}",
+                        headers=self.headers(self.admin),
+                        json=payload,
+                    )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json["error"],
+                    "Debe existir al menos un administrador activo en el sistema.",
+                )
+                self.assertEqual(last_admin.role, "ADMIN")
+                self.assertTrue(last_admin.is_active)
+
     def test_admin_password_reset_requires_password_change_and_is_audited(self):
         old_token = generate_token(self.resident)
         response = self.client.post(
@@ -178,6 +304,7 @@ class AdminResidentActionTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertNotIn("token", response.json)
         self.assertEqual(old_session.status_code, 401)
         self.assertTrue(self.resident.must_change_password)
         self.assertEqual(self.resident.token_version, 2)
@@ -196,12 +323,12 @@ class AdminResidentActionTests(unittest.TestCase):
         updated = self.client.put(
             f"/api/users/{self.resident.id}",
             headers=self.headers(self.admin),
-            json={"email": "replacement@test.local"},
+            json={"email": "replacement@test.local", "role": "RESIDENT"},
         )
         duplicate = self.client.put(
             f"/api/users/{self.resident.id}",
             headers=self.headers(self.admin),
-            json={"email": self.other_resident.email},
+            json={"email": self.other_resident.email, "role": "RESIDENT"},
         )
 
         self.assertEqual(updated.status_code, 200)

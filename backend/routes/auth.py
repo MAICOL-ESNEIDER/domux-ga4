@@ -155,5 +155,6 @@ def change_password():
     db.session.commit()
     return jsonify({
         "message": "Contraseña actualizada exitosamente.",
+        "token": generate_token(user),
         "user": user.to_dict(),
     })

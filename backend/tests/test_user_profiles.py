@@ -150,13 +150,13 @@ class UserProfileTests(unittest.TestCase):
         invalid_update = self.client.put(
             f"/api/users/{new_user.id}",
             headers=self.headers(self.admin),
-            json={"phone": "123"},
+            json={"phone": "123", "role": "RESIDENT"},
         )
         self.assertEqual(invalid_update.status_code, 400)
         valid_update = self.client.put(
             f"/api/users/{new_user.id}",
             headers=self.headers(self.admin),
-            json={"phone": "300 765 4321"},
+            json={"phone": "300 765 4321", "role": "RESIDENT"},
         )
         self.assertEqual(valid_update.status_code, 200)
         self.assertEqual(new_user.phone, "3007654321")

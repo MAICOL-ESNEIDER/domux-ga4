@@ -294,8 +294,10 @@ def create_user():
     role = _normalize_role(data.get("role"))
     apartment = data.get("apartment")
     occupancy_type = data.get("occupancyType", "propietario")
-    if "@" not in email or role not in ROLES:
-        return error_response(400, "Correo o rol inválido")
+    if role not in ROLES:
+        return error_response(400, "El rol es obligatorio y debe ser ADMIN, GUARD o RESIDENT.")
+    if "@" not in email:
+        return error_response(400, "Correo inválido")
     password_error = validate_strong_password(data["password"])
     if password_error:
         return error_response(400, password_error)
@@ -378,6 +380,30 @@ def update_user(user_id):
     if user is None:
         return error_response(404, "Usuario no encontrado")
 
+    role = _normalize_role(data.get("role"))
+    if role not in ROLES:
+        return error_response(400, "El rol es obligatorio y debe ser ADMIN, GUARD o RESIDENT.")
+    if "isActive" in data and not isinstance(data["isActive"], bool):
+        return error_response(400, "isActive debe ser verdadero o falso")
+
+    role_changed = role != user.role
+    deactivating = user.is_active is True and data.get("isActive") is False
+    if user.id == g.current_user.id and (role_changed or deactivating):
+        return error_response(
+            400,
+            "No puedes desactivar ni cambiar el rol de tu propia cuenta.",
+        )
+    if (
+        user.role == "ADMIN"
+        and user.is_active is True
+        and (role_changed or deactivating)
+        and User.query.filter_by(role="ADMIN", is_active=True).count() <= 1
+    ):
+        return error_response(
+            400,
+            "Debe existir al menos un administrador activo en el sistema.",
+        )
+
     if "birthDate" in data:
         if error := validate_iso_date(data["birthDate"]):
             return error_response(400, error)
@@ -420,19 +446,15 @@ def update_user(user_id):
             return error_response(400, "El documento debe ser texto")
         user.document_id = data["documentId"].strip()
 
-    if "role" in data:
-        role = _normalize_role(data["role"])
-        if role not in ROLES:
-            return error_response(400, "Rol inválido")
-        if role == "RESIDENT" and user.role != "RESIDENT":
-            if data.get("dataProcessingConsent") is not True:
-                return error_response(
-                    400,
-                    "Debes registrar la autorización de tratamiento de datos del residente.",
-                )
-            user.data_processing_consent = True
-            user.data_processing_consent_at = now_colombia()
-        user.role = role
+    if role == "RESIDENT" and user.role != "RESIDENT":
+        if data.get("dataProcessingConsent") is not True:
+            return error_response(
+                400,
+                "Debes registrar la autorización de tratamiento de datos del residente.",
+            )
+        user.data_processing_consent = True
+        user.data_processing_consent_at = now_colombia()
+    user.role = role
     if "occupancyType" in data:
         error = validate_occupancy_type(data["occupancyType"])
         if error:
@@ -454,8 +476,6 @@ def update_user(user_id):
         if unit is None:
             db.session.add(ResidentialUnit(apartment=user.apartment))
     if "isActive" in data:
-        if not isinstance(data["isActive"], bool):
-            return error_response(400, "isActive debe ser verdadero o falso")
         if user.is_active is True and data["isActive"] is False:
             user.token_version = (user.token_version or 1) + 1
         user.is_active = data["isActive"]

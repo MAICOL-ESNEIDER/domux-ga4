@@ -164,7 +164,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         response = self.client.put(
             f"/api/users/{self.resident.id}",
             headers=self.auth(self.admin),
-            json={"isActive": False},
+            json={"isActive": False, "role": "RESIDENT"},
         )
         old_session = self.client.get(
             "/api/auth/session",
