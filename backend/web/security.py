@@ -79,6 +79,13 @@ def configure(app):
 
     @app.after_request
     def add_security_headers(response):
+        if request.path.startswith("/api/") and not is_web_path(request.path):
+            # La API también lleva datos de personas: no se guardan en cachés y el navegador no adivina tipos.
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            response.headers.setdefault("Cache-Control", "no-store")
+            if is_production():
+                response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+            return response
         if not is_web_path(request.path):
             return response
         # Una ruta puede traer una política más estricta propia (los adjuntos de las PQRS); esa no se pisa.
