@@ -30,7 +30,9 @@ android {
         applicationId = "com.dracknoval.domux"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
+        // El número de versión sube solo con cada armado en GitHub: así cada APK nueva se puede
+        // instalar encima de la anterior sin borrar nada. En el computador de uno vale 1.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0"
 
         // URL base del backend. Cambia aquí o sobreescribe en distintos builds si lo necesitas.
@@ -43,8 +45,23 @@ android {
         }
     }
 
+    // Firma de la APK. La llave y sus claves NO están en el repositorio: GitHub las entrega como
+    // secretos al armar la app (ver .github/workflows/ci.yml). Sin ellas no hay APK firmada.
+    val llaveDeFirma = System.getenv("DOMUX_LLAVE_ARCHIVO")?.takeIf { it.isNotBlank() }
+    signingConfigs {
+        if (llaveDeFirma != null) {
+            create("domux") {
+                storeFile = file(llaveDeFirma)
+                storePassword = System.getenv("DOMUX_LLAVE_CLAVE")
+                keyAlias = System.getenv("DOMUX_LLAVE_ALIAS")
+                keyPassword = System.getenv("DOMUX_LLAVE_CLAVE")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (llaveDeFirma != null) signingConfig = signingConfigs.getByName("domux")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
