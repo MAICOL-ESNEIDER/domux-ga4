@@ -12,12 +12,18 @@ y para que la auditoría diga exactamente qué se cambió.
 from flask import flash, g, redirect, render_template, request, url_for
 
 from services.unit_rules import (
+    ARCHIVE_DAYS_LIMITS,
+    AUTO_QR_LIMITS,
+    MOTOS_PER_SPOT_LIMITS,
     PACKAGE_ORANGE_LIMITS,
     PACKAGE_RED_LIMITS,
     PARKING_DAYS_LIMITS,
     PQRS_CATEGORIES,
     PQRS_TERM_LIMITS,
     PQRS_WARNING_LIMITS,
+    QR_PEOPLE_LIMITS,
+    QR_VALID_LIMITS,
+    VISIT_STAY_LIMITS,
     default_rules,
 )
 from web import bp
@@ -28,6 +34,8 @@ from web.security import login_required
 #: Las reglas de un solo número, con el nombre con que las recibe la API.
 SIMPLE_FIELDS = (
     "pqrsTermDays", "pqrsWarningDays", "packageOrangeHours", "packageRedHours", "visitorParkingMaxDays",
+    "visitMaxStayDays", "qrMaxPeople", "qrMaxValidDays", "autoQrMinStayDays", "deliveredArchiveDays",
+    "motosPerCarSpot",
 )
 #: Un campo por cada tipo de PQRS, en el orden de la app: («term_0», «Petición»), («term_1», «Queja»)…
 CATEGORY_FIELDS = tuple((f"term_{index}", name) for index, name in enumerate(PQRS_CATEGORIES))
@@ -38,6 +46,12 @@ LIMITS = {
     "packageOrangeHours": PACKAGE_ORANGE_LIMITS,
     "packageRedHours": PACKAGE_RED_LIMITS,
     "visitorParkingMaxDays": PARKING_DAYS_LIMITS,
+    "visitMaxStayDays": VISIT_STAY_LIMITS,
+    "qrMaxPeople": QR_PEOPLE_LIMITS,
+    "qrMaxValidDays": QR_VALID_LIMITS,
+    "autoQrMinStayDays": AUTO_QR_LIMITS,
+    "deliveredArchiveDays": ARCHIVE_DAYS_LIMITS,
+    "motosPerCarSpot": MOTOS_PER_SPOT_LIMITS,
 }
 #: Para el plazo de un solo tipo de PQRS rige el mismo límite que para el plazo general.
 CATEGORY_LIMITS = PQRS_TERM_LIMITS

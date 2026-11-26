@@ -178,11 +178,11 @@ class VisitTests(unittest.TestCase):
         self.assertFalse(response.get_json()["visit"]["isOverstay"])
 
     def test_an_invalid_expected_stay_is_refused(self):
-        for value in (0, -30, 10081, 1.5, "dos horas", True, [60]):
+        for value in (0, -30, 43201, 1.5, "dos horas", True, [60]):
             with self.subTest(value=value):
                 self.assertEqual(self.register(expectedStayMinutes=value).status_code, 400)
         self.assertEqual(Visit.query.count(), 0)
-        self.assertEqual(self.register(expectedStayMinutes=10080).status_code, 201)
+        self.assertEqual(self.register(expectedStayMinutes=43200).status_code, 201)
 
     def test_the_stay_can_also_be_noted_when_the_visitor_enters(self):
         visit = self.make_visit()

@@ -507,6 +507,8 @@ class ContractContentTests(unittest.TestCase):
         self.call(admin, "PUT", "/api/admin/unit-rules", json={
             "pqrsTermDays": None, "pqrsWarningDays": None, "pqrsTermsByCategory": None,
             "packageOrangeHours": None, "packageRedHours": None, "visitorParkingMaxDays": None,
+            "visitMaxStayDays": None, "qrMaxPeople": None, "qrMaxValidDays": None,
+            "autoQrMinStayDays": None, "deliveredArchiveDays": None, "motosPerCarSpot": None,
         })
 
         template = self.data(admin, "GET", "/api/admin/census-template")

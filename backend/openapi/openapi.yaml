@@ -8819,6 +8819,12 @@ components:
       - packageOrangeHours
       - packageRedHours
       - visitorParkingMaxDays
+      - visitMaxStayDays
+      - qrMaxPeople
+      - qrMaxValidDays
+      - autoQrMinStayDays
+      - deliveredArchiveDays
+      - motosPerCarSpot
       properties:
         pqrsTermDays:
           type: integer
@@ -8859,6 +8865,42 @@ components:
           minimum: 1
           maximum: 30
           example: 3
+        visitMaxStayDays:
+          type: integer
+          description: Días máximos de estadía que se pueden anotar en una visita (de 1 a 90; por defecto 30)
+          minimum: 1
+          maximum: 90
+          example: 30
+        qrMaxPeople:
+          type: integer
+          description: Personas que caben en un QR de visita (de 1 a 20; por defecto 5)
+          minimum: 1
+          maximum: 20
+          example: 5
+        qrMaxValidDays:
+          type: integer
+          description: Vigencia máxima de un QR de visita en días (de 1 a 90; por defecto 30)
+          minimum: 1
+          maximum: 90
+          example: 30
+        autoQrMinStayDays:
+          type: integer
+          description: Desde cuántos días de estadía el QR de la visita se crea solo (de 1 a 30; por defecto 2)
+          minimum: 1
+          maximum: 30
+          example: 2
+        deliveredArchiveDays:
+          type: integer
+          description: Días que un paquete entregado tarda en archivarse solo (de 1 a 90; por defecto 7)
+          minimum: 1
+          maximum: 90
+          example: 7
+        motosPerCarSpot:
+          type: integer
+          description: Motos que caben en un parqueadero de carro de visitantes (de 1 a 10; por defecto 6)
+          minimum: 1
+          maximum: 10
+          example: 6
     UnitRulesInput:
       type: object
       description: Al menos una regla. Una regla enviada como `null` vuelve al valor de DOMUX; `pqrsTermsByCategory` reemplaza la lista completa (con `null` o `{}` se quitan todos los plazos propios).
@@ -8897,6 +8939,36 @@ components:
           nullable: true
           minimum: 1
           maximum: 30
+        visitMaxStayDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 90
+        qrMaxPeople:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 20
+        qrMaxValidDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 90
+        autoQrMinStayDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 30
+        deliveredArchiveDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 90
+        motosPerCarSpot:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 10
     UnitRulesView:
       type: object
       description: Lo que ve la administración al revisar las reglas de la unidad.

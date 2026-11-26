@@ -12,10 +12,8 @@ from sqlalchemy.orm import selectinload
 from errors import ApiError
 from extensions import db
 from models import User, Visit, VisitEvent
+from services.unit_rules import current_rules
 from time_utils import colombia_day_to_utc
-
-#: La estadía prevista puede ir de 1 minuto a 7 días (RN-012).
-MAX_EXPECTED_STAY_MINUTES = 7 * 24 * 60
 
 #: Largo máximo del nombre de un visitante, igual que el de la visita.
 MAX_VISITOR_NAME_LENGTH = 120
@@ -28,16 +26,21 @@ VISIT_STATUSES = ("pendiente", "aprobada", "rechazada")
 # ---------------------------------------------------------------------------
 
 def expected_stay(value):
-    """Lee la estadía prevista en minutos; None si no se indicó. Un valor inválido da error 400."""
+    """Lee la estadía prevista en minutos; None si no se indicó. Un valor inválido da error 400.
+
+    El máximo lo fija la administración (reglas de la unidad: ``visitMaxStayDays``).
+    """
     if value is None:
         return None
+    max_days = current_rules().visit_max_stay_days
+    max_minutes = max_days * 24 * 60
     if (
         not isinstance(value, int)
         or isinstance(value, bool)
-        or not 1 <= value <= MAX_EXPECTED_STAY_MINUTES
+        or not 1 <= value <= max_minutes
     ):
         raise ApiError(
-            f"La estadía prevista debe ser un número entero de minutos entre 1 y {MAX_EXPECTED_STAY_MINUTES} (7 días)."
+            f"La estadía prevista debe ser un número entero de minutos entre 1 y {max_minutes} ({max_days} días)."
         )
     return value
 

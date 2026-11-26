@@ -14,7 +14,8 @@ from web_testing import WebTestCase
 #: Lo que manda el formulario sin tocar nada (los valores de DOMUX).
 UNTOUCHED = {
     "pqrsTermDays": "15", "pqrsWarningDays": "5", "packageOrangeHours": "48", "packageRedHours": "72",
-    "visitorParkingMaxDays": "3", "term_0": "", "term_1": "", "term_2": "", "term_3": "", "term_4": "",
+    "visitorParkingMaxDays": "3", "visitMaxStayDays": "30", "qrMaxPeople": "5", "qrMaxValidDays": "30",
+    "autoQrMinStayDays": "2", "deliveredArchiveDays": "7", "motosPerCarSpot": "6", "term_0": "", "term_1": "", "term_2": "", "term_3": "", "term_4": "",
 }
 
 

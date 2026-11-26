@@ -22,6 +22,7 @@ from services import package_service, package_view, visit_service, visit_view
 from services.alert_service import run_alerts
 from services.list_view import parse_view
 from services.notification_service import notify_user
+from services.unit_rules import current_rules
 from validators import (
     require_non_empty_fields,
     validate_iso_date,
@@ -50,7 +51,7 @@ def _package_metadata_error(data):
 
 
 def _cleanup_expired_packages():
-    """Archiva los paquetes entregados hace más de 7 días.
+    """Archiva los paquetes entregados hace más días de los que fija la unidad (7 por defecto).
 
     Solo los oculta de la lista diaria del guardia: siguen en la base y se pueden
     restaurar. Ningún paquete se borra (DEC-090), para responder si alguien
@@ -60,7 +61,7 @@ def _cleanup_expired_packages():
     expired_packages = PackageItem.query.filter(
         PackageItem.status == "entregado",
         PackageItem.is_deleted.is_(False),
-        PackageItem.delivered_at < now - timedelta(days=7),
+        PackageItem.delivered_at < now - timedelta(days=current_rules().delivered_archive_days),
     ).all()
     for package in expired_packages:
         package.is_deleted = True
@@ -689,15 +690,20 @@ def create_visit_qr_pass():
     today = colombia_today()
     if valid_from < today or valid_until < valid_from:
         return error_response(400, "El período del QR debe ser actual o futuro.")
-    if (valid_until - valid_from).days >= 30:
-        return error_response(400, "El QR puede tener una duración máxima de 30 días.")
+    rules = current_rules()
+    if (valid_until - valid_from).days >= rules.qr_max_valid_days:
+        return error_response(400, f"El QR puede tener una duración máxima de {rules.qr_max_valid_days} días.")
     max_people = data.get("maxPeople")
     if (
         not isinstance(max_people, int)
         or isinstance(max_people, bool)
-        or not 1 <= max_people <= 2_147_483_647
+        or not 1 <= max_people <= rules.qr_max_people
     ):
-        return error_response(400, "El límite de personas debe ser un entero positivo válido.")
+        return error_response(
+            400,
+            f"Un QR sirve para entre 1 y {rules.qr_max_people} personas. "
+            f"Para más personas crea otro QR.",
+        )
     names = visit_service.clean_visitor_names(data.get("visitorNames"), max_people)
     qr_pass = VisitQrPass(
         resident_id=g.current_user.id,
