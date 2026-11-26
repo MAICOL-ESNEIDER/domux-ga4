@@ -1,5 +1,9 @@
 """Create demo accounts and community data for an empty database."""
 
+import os
+import secrets
+
+from flask import current_app
 from werkzeug.security import generate_password_hash
 
 from extensions import db
@@ -11,11 +15,30 @@ def seed_if_empty():
     if User.query.first() is not None:
         return
 
+    if current_app.config.get("TESTING"):
+        passwords = {
+            "admin": secrets.token_urlsafe(24),
+            "guard": secrets.token_urlsafe(24),
+            "resident": secrets.token_urlsafe(24),
+        }
+    else:
+        passwords = {
+            "admin": os.environ.get("SEED_ADMIN_PASSWORD"),
+            "guard": os.environ.get("SEED_GUARD_PASSWORD"),
+            "resident": os.environ.get("SEED_RESIDENT_PASSWORD"),
+        }
+        if not all(passwords.values()):
+            current_app.logger.info(
+                "Seed inicial omitido: configura SEED_ADMIN_PASSWORD, "
+                "SEED_GUARD_PASSWORD y SEED_RESIDENT_PASSWORD."
+            )
+            return
+
     admin = User(
         name="Administración",
         last_name="Domux",
         email="admin@domux.com",
-        password_hash=generate_password_hash("Admin123*"),
+        password_hash=generate_password_hash(passwords["admin"]),
         role="ADMIN",
         occupancy_type="propietario",
     )
@@ -23,7 +46,7 @@ def seed_if_empty():
         name="Guardia",
         last_name="Principal",
         email="guardia@domux.com",
-        password_hash=generate_password_hash("Guardia123*"),
+        password_hash=generate_password_hash(passwords["guard"]),
         role="GUARD",
         occupancy_type="propietario",
     )
@@ -31,7 +54,7 @@ def seed_if_empty():
         name="María",
         last_name="Gómez",
         email="maria@domux.com",
-        password_hash=generate_password_hash("Residente123*"),
+        password_hash=generate_password_hash(passwords["resident"]),
         role="RESIDENT",
         apartment="Torre 1 · Apto 101",
         phone="3000000001",
@@ -42,7 +65,7 @@ def seed_if_empty():
         name="Carlos",
         last_name="Pérez",
         email="carlos@domux.com",
-        password_hash=generate_password_hash("Residente123*"),
+        password_hash=generate_password_hash(passwords["resident"]),
         role="RESIDENT",
         apartment="Torre 2 · Apto 202",
         phone="3000000002",
@@ -92,8 +115,4 @@ def seed_if_empty():
     ])
     db.session.commit()
 
-    print("Datos de prueba creados:")
-    print("  Admin     -> admin@domux.com / Admin123*")
-    print("  Guardia   -> guardia@domux.com / Guardia123*")
-    print("  Residente -> maria@domux.com / Residente123* (Torre 1 · Apto 101)")
-    print("  Residente -> carlos@domux.com / Residente123* (Torre 2 · Apto 202)")
+    current_app.logger.info("Cuentas iniciales y datos comunitarios creados.")

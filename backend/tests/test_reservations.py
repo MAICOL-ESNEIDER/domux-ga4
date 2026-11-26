@@ -3,7 +3,6 @@ import unittest
 from datetime import datetime, timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
 from app import create_app, migrate_common_area_names
 from auth import generate_token
@@ -21,7 +20,7 @@ from time_utils import now_colombia
 class ReservationWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = create_app()
+        cls.app = create_app({"TESTING": True})
         cls.app.config.update(TESTING=True)
 
     def setUp(self):

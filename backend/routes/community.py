@@ -21,7 +21,12 @@ from models import (
     User,
 )
 from time_utils import COLOMBIA_TIMEZONE, now_colombia
-from services.notification_service import notify_admins, notify_residents, notify_user
+from services.notification_service import (
+    notify_admins,
+    notify_residents,
+    notify_role,
+    notify_user,
+)
 from services.excel_service import (
     MIME_XLSX,
     generate_legal_report_xlsx,
@@ -44,6 +49,7 @@ from validators import (
     validate_iso_date,
     validate_media_fields,
     validate_no_empty_strings,
+    validate_media_url,
     validate_time,
     validate_time_slot,
 )
@@ -120,6 +126,10 @@ def _json_body():
     message = validate_no_empty_strings(data)
     if message:
         return None, error_response(400, message)
+    if "mediaUrl" in data and (
+        media_error := validate_media_url(data["mediaUrl"])
+    ):
+        return None, error_response(400, media_error)
     return data, None
 
 
@@ -199,6 +209,12 @@ def create_announcement():
     db.session.add(announcement)
     notify_residents(
         "Nuevo anuncio",
+        announcement.title,
+        "announcement",
+    )
+    notify_role(
+        "GUARD",
+        "Nuevo anuncio publicado",
         announcement.title,
         "announcement",
     )

@@ -26,6 +26,9 @@ class User(db.Model):
     document_id = db.Column(db.String(40), nullable=True, default="")
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)
+    token_version = db.Column(
+        db.Integer, nullable=False, default=1, server_default="1"
+    )
     must_change_password = db.Column(db.Boolean, default=False, nullable=False)
     recovery_email = db.Column(db.String(120), nullable=True)
     apartment = db.Column(db.String(60), nullable=True)
@@ -624,6 +627,11 @@ class Visit(db.Model):
             "createdAt": _fmt(self.created_at),
             "events": [event.to_dict() for event in self.events],
             "residentName": self.resident.full_name if self.resident else None,
+            "residentPhone": (
+                self.resident.phone
+                if self.resident and self.resident.phone
+                else None
+            ),
             "apartment": self.resident.apartment if self.resident else None,
             "registeredByName": self.guard.full_name if self.guard else None,
         }

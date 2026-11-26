@@ -168,3 +168,15 @@ def notify_admins(title, message, notification_type):
         notify_user(admin_id, title, message, notification_type)
         for (admin_id,) in admin_ids
     ]
+
+
+def notify_role(role, title, message, notification_type):
+    """Create notifications for active users with the requested role."""
+    user_ids = db.session.query(User.id).filter_by(
+        role=role,
+        is_active=True,
+    ).all()
+    return [
+        notify_user(user_id, title, message, notification_type)
+        for (user_id,) in user_ids
+    ]

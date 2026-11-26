@@ -3,7 +3,6 @@ import unittest
 from datetime import timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
 from app import create_app, migrate_pqrs_conversations
 from auth import generate_token
@@ -16,7 +15,7 @@ from werkzeug.security import generate_password_hash
 class PqrsWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = create_app()
+        cls.app = create_app({"TESTING": True})
         cls.app.config.update(TESTING=True)
 
     def setUp(self):

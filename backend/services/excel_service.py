@@ -4,6 +4,8 @@ import csv
 import io
 import json
 import re
+import secrets
+import string
 import unicodedata
 from datetime import date, datetime
 from zipfile import BadZipFile
@@ -127,6 +129,14 @@ def _cell_text(value):
     return str(value).strip()
 
 
+def _temporary_password():
+    alphabet = string.ascii_letters + string.digits
+    characters = [secrets.choice(alphabet) for _ in range(12)]
+    characters.append(secrets.choice("@$!%*?&#._-"))
+    secrets.SystemRandom().shuffle(characters)
+    return "".join(characters)
+
+
 def _parse_bool(value, default=False):
     if value is None or value == "":
         return default
@@ -232,14 +242,17 @@ def _upsert_census_row(row):
         raise ValueError("Correo y Documento pertenecen a usuarios distintos.")
     user = matches[0] if matches else None
     created = user is None
+    temporary_password = None
     if user is None:
         if email is None:
             email = f"censo-{document_id}@domux.invalid"
+        temporary_password = _temporary_password()
         user = User(
             name=name,
             email=email,
-            password_hash=generate_password_hash("Domux2026*"),
+            password_hash=generate_password_hash(temporary_password),
             role="RESIDENT",
+            must_change_password=True,
         )
         db.session.add(user)
     elif email and User.query.filter(
@@ -349,7 +362,16 @@ def _upsert_census_row(row):
             existing_vehicle.registered_owner = user.full_name[:120]
             existing_vehicle.color = row.get("vehicle_color", "").strip() or None
 
-    return created, apartment
+    credentials = (
+        {
+            "email": user.email,
+            "temporaryPassword": temporary_password,
+            "apartment": apartment,
+        }
+        if created
+        else None
+    )
+    return created, apartment, credentials
 
 
 def import_census_from_bytes(
@@ -360,16 +382,18 @@ def import_census_from_bytes(
     updated_users = 0
     units = set()
     errors = []
+    created_credentials = []
     row_count = 0
     try:
         for row_number, row in _normalized_rows(file_bytes, filename):
             row_count += 1
             try:
                 with db.session.begin_nested():
-                    created, apartment = _upsert_census_row(row)
+                    created, apartment, credentials = _upsert_census_row(row)
                     db.session.flush()
                 if created:
                     created_users += 1
+                    created_credentials.append(credentials)
                 else:
                     updated_users += 1
                 units.add(apartment)
@@ -389,6 +413,7 @@ def import_census_from_bytes(
             details=json.dumps({
                 "filename": filename,
                 "createdUsers": created_users,
+                "createdCredentials": created_credentials,
                 "updatedUsers": updated_users,
                 "unitsProcessed": len(units),
                 "rowCount": row_count,
@@ -401,6 +426,7 @@ def import_census_from_bytes(
         raise
     return {
         "createdUsers": created_users,
+        "createdCredentials": created_credentials,
         "updatedUsers": updated_users,
         "unitsProcessed": len(units),
         "errors": errors,

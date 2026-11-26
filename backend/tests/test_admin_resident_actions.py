@@ -3,7 +3,6 @@ import unittest
 from datetime import timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
 from app import create_app
 from auth import generate_token
@@ -16,7 +15,7 @@ from time_utils import now_colombia
 class AdminResidentActionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = create_app()
+        cls.app = create_app({"TESTING": True})
         cls.app.config.update(TESTING=True)
 
     def setUp(self):
@@ -167,14 +166,21 @@ class AdminResidentActionTests(unittest.TestCase):
         self.assertEqual(audit.actor_role, "ADMIN")
 
     def test_admin_password_reset_requires_password_change_and_is_audited(self):
+        old_token = generate_token(self.resident)
         response = self.client.post(
             f"/api/users/{self.resident.id}/reset-password",
             headers=self.headers(self.admin),
             json={"password": "Temporary123*"},
         )
+        old_session = self.client.get(
+            "/api/auth/session",
+            headers={"Authorization": f"Bearer {old_token}"},
+        )
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(old_session.status_code, 401)
         self.assertTrue(self.resident.must_change_password)
+        self.assertEqual(self.resident.token_version, 2)
         self.assertTrue(
             check_password_hash(self.resident.password_hash, "Temporary123*")
         )

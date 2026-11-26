@@ -6,12 +6,13 @@ from flask import Flask, request
 from flask_cors import CORS
 from sqlalchemy import inspect
 
+from auth import get_jwt_secret
 from errors import error_response, register_error_handlers
 from extensions import db
 from logging_config import configure_logging
 from models import Pqrs, PqrsMessage, ResidentialUnit, User
 from routes.admin import bp as admin_bp
-from routes.auth import bp as auth_bp
+from routes.auth import bp as auth_bp, limiter
 from routes.community import bp as community_bp
 from routes.security import bp as security_bp
 from seed import seed_if_empty
@@ -169,6 +170,7 @@ def migrate_profile_columns():
     existing_columns = {column["name"] for column in inspector.get_columns("users")}
     dialect = db.engine.dialect.name
     column_types = {
+        "token_version": "INTEGER NOT NULL DEFAULT 1",
         "apartment_number": "INTEGER",
         "social_networks": "VARCHAR(500)",
         "birth_date": "VARCHAR(20)",
@@ -351,11 +353,27 @@ def migrate_pqrs_conversations():
     db.session.commit()
 
 
-def create_app():
+def create_app(test_config=None):
+    get_jwt_secret()
     app = Flask(__name__)
+    if test_config:
+        app.config.update(test_config)
     app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
+    app.config.setdefault("RATELIMIT_ENABLED", not app.config.get("TESTING", False))
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
     configure_logging(app)
-    CORS(app)
+    cors_origins = [
+        origin.strip()
+        for origin in os.environ.get("CORS_ORIGINS", "").split(",")
+        if origin.strip() and origin.strip() != "*"
+    ]
+    if not cors_origins:
+        cors_origins = [
+            "https://domux-api-lein.onrender.com",
+            "http://localhost:3000",
+        ]
+    CORS(app, origins=cors_origins)
+    limiter.init_app(app)
 
     database_url = os.environ.get("DATABASE_URL", "sqlite:///domux.db")
     if database_url.startswith("postgres://"):

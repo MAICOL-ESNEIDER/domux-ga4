@@ -1,7 +1,11 @@
 """Shared request validation for text, credentials, dates, and reservation slots."""
 
+import base64
+import binascii
+import os
 import re
 from datetime import datetime
+from urllib.parse import unquote, urlsplit
 
 from time_utils import now_colombia
 
@@ -183,6 +187,62 @@ def validate_media_fields(data):
     if media_url and not media_type:
         return "Debes indicar mediaType cuando proporcionas mediaUrl."
     return None
+
+
+def validate_media_url(media_url):
+    """Allow only approved data URLs, upload paths, and explicitly trusted HTTPS hosts."""
+    if media_url is None or media_url == "":
+        return None
+    if not isinstance(media_url, str):
+        return "La URL del contenido multimedia no es válida."
+
+    allowed_data_types = (
+        "data:image/jpeg;base64,",
+        "data:image/jpg;base64,",
+        "data:image/png;base64,",
+        "data:image/webp;base64,",
+        "data:application/pdf;base64,",
+    )
+    for prefix in allowed_data_types:
+        if media_url.startswith(prefix):
+            payload = media_url[len(prefix):]
+            try:
+                if payload:
+                    base64.b64decode(payload, validate=True)
+                    return None
+            except (binascii.Error, ValueError):
+                break
+            return "La URL de datos multimedia no contiene Base64 válido."
+
+    if media_url.startswith("/uploads/"):
+        parsed_path = urlsplit(media_url).path
+        decoded_path = unquote(parsed_path)
+        if (
+            "\\" not in decoded_path
+            and all(part not in (".", "..") for part in decoded_path.split("/"))
+        ):
+            return None
+        return "La ruta del contenido multimedia no es válida."
+
+    try:
+        parsed_url = urlsplit(media_url)
+        hostname = (parsed_url.hostname or "").rstrip(".").lower()
+        trusted_domains = {
+            domain.strip().rstrip(".").lower()
+            for domain in os.environ.get("TRUSTED_MEDIA_DOMAINS", "").split(",")
+            if domain.strip()
+        }
+        if (
+            parsed_url.scheme.lower() == "https"
+            and hostname in trusted_domains
+            and parsed_url.username is None
+            and parsed_url.password is None
+            and parsed_url.port in (None, 443)
+        ):
+            return None
+    except ValueError:
+        pass
+    return "La URL del contenido multimedia no está permitida."
 
 
 def validate_occupancy_type(value):

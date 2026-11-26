@@ -16,7 +16,7 @@ from models import (
     VisitEvent,
     VisitQrPass,
 )
-from services.notification_service import notify_user
+from services.notification_service import notify_role, notify_user
 from services.reservation_service import finalize_expired_reservations
 from time_utils import now_colombia
 from validators import (
@@ -25,6 +25,7 @@ from validators import (
     require_non_empty_fields,
     validate_iso_date,
     validate_media_fields,
+    validate_media_url,
     validate_no_empty_strings,
     validate_time,
 )
@@ -44,6 +45,10 @@ def _json_body():
     message = validate_no_empty_strings(data)
     if message:
         return None, error_response(400, message)
+    if "mediaUrl" in data and (
+        media_error := validate_media_url(data["mediaUrl"])
+    ):
+        return None, error_response(400, media_error)
     return data, None
 
 
@@ -70,16 +75,10 @@ def _cleanup_expired_packages():
         PackageItem.is_deleted.is_(False),
         PackageItem.delivered_at < now - timedelta(days=7),
     ).all()
-    expired_trash = PackageItem.query.filter(
-        PackageItem.is_deleted.is_(True),
-        PackageItem.deleted_at < now - timedelta(days=30),
-    ).all()
     for package in expired_packages:
         package.is_deleted = True
         package.deleted_at = now
-    for package in expired_trash:
-        db.session.delete(package)
-    if expired_packages or expired_trash:
+    if expired_packages:
         db.session.commit()
 
 
@@ -269,9 +268,11 @@ def delete_package(pkg_id):
         return error_response(404, "Paquete no encontrado")
     force = (request.args.get("force") or "").lower() == "true"
     if package.is_deleted or force:
-        db.session.delete(package)
-        db.session.commit()
-        return jsonify({"message": "Paquete eliminado permanentemente."})
+        return error_response(
+            403,
+            "Por reglas operativas e integridad de la información, los registros "
+            "de paquetería no pueden eliminarse definitivamente; solo pueden archivarse.",
+        )
     package.is_deleted = True
     package.deleted_at = now_colombia()
     package.deleted_by_id = g.current_user.id
@@ -566,11 +567,19 @@ def register_visit_exit(visit_id):
 @token_required
 @role_required("RESIDENT")
 def create_visit_qr_pass():
-    if g.current_user.role != "RESIDENT":
-        return error_response(403, "Solo un residente puede crear códigos QR.")
     data, failure = _json_body()
     if failure:
         return failure
+    resident = g.current_user
+    if g.current_user.role == "ADMIN":
+        resident_id = data.get("residentId")
+        if not isinstance(resident_id, int) or isinstance(resident_id, bool):
+            return error_response(400, "Selecciona un residente válido.")
+        resident = User.query.filter_by(id=resident_id, role="RESIDENT").first()
+        if resident is None:
+            return error_response(400, "Selecciona un residente válido.")
+    elif g.current_user.role != "RESIDENT":
+        return error_response(403, "Solo un residente o administrador puede crear códigos QR.")
     required_fields = [("validFrom", "fecha de inicio")]
     has_guests = "guests" in data
     if not has_guests:
@@ -651,7 +660,7 @@ def create_visit_qr_pass():
         return error_response(400, "La vigencia del QR no puede superar las 72 horas desde el inicio.")
 
     qr_pass = VisitQrPass(
-        resident_id=g.current_user.id,
+        resident_id=resident.id,
         token=secrets.token_urlsafe(32),
         valid_from=valid_from.isoformat(),
         valid_until=valid_until.isoformat(),
@@ -665,6 +674,12 @@ def create_visit_qr_pass():
         max_guests=max_guests,
     )
     db.session.add(qr_pass)
+    notify_role(
+        "GUARD",
+        "Nuevo pase QR de visita",
+        f"{resident.full_name} generó un pase QR para visitantes.",
+        "visit",
+    )
     db.session.commit()
     result = qr_pass.to_dict(include_token=True)
     result["qrData"] = f"DOMUX:{qr_pass.token}"

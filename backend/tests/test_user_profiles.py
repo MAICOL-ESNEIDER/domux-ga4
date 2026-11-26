@@ -1,7 +1,6 @@
 import os
 import unittest
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
 from app import create_app
 from auth import generate_token
@@ -14,7 +13,7 @@ from time_utils import now_colombia
 class UserProfileTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = create_app()
+        cls.app = create_app({"TESTING": True})
         cls.app.config.update(TESTING=True)
 
     def setUp(self):

@@ -7,7 +7,6 @@ from google.auth.exceptions import DefaultCredentialsError
 from sqlalchemy import inspect
 
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
 from app import (
     create_app,
@@ -17,6 +16,7 @@ from app import (
 from auth import generate_token
 from extensions import db
 from models import (
+    AuditLog,
     Announcement,
     DevicePushToken,
     Notification,
@@ -25,15 +25,17 @@ from models import (
     Visit,
     VisitQrPass,
 )
+from routes.auth import limiter
 from services import notification_service
 from werkzeug.security import generate_password_hash
 from time_utils import now_colombia
+from validators import validate_media_url
 
 
 class SecurityWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = create_app()
+        cls.app = create_app({"TESTING": True})
         cls.app.config.update(TESTING=True)
 
     def setUp(self):
@@ -54,6 +56,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             password_hash=generate_password_hash("Resident123*"),
             role="RESIDENT",
             apartment="Torre 1 · Apto 101",
+            phone="3001234567",
             document_id="123456",
             is_active=True,
         )
@@ -137,6 +140,41 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(old_token.json["error"], expected)
         self.assertEqual(login.json["error"], expected)
 
+    def test_password_change_invalidates_the_previous_token(self):
+        old_token = self.auth(self.resident)["Authorization"]
+        response = self.client.post(
+            "/api/auth/change-password",
+            headers={"Authorization": old_token},
+            json={
+                "currentPassword": "Resident123*",
+                "newPassword": "UpdatedResident123*",
+            },
+        )
+        old_session = self.client.get(
+            "/api/auth/session",
+            headers={"Authorization": old_token},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(old_session.status_code, 401)
+        self.assertEqual(self.resident.token_version, 2)
+
+    def test_deactivation_invalidates_the_previous_token(self):
+        old_token = self.auth(self.resident)["Authorization"]
+        response = self.client.put(
+            f"/api/users/{self.resident.id}",
+            headers=self.auth(self.admin),
+            json={"isActive": False},
+        )
+        old_session = self.client.get(
+            "/api/auth/session",
+            headers={"Authorization": old_token},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(old_session.status_code, 401)
+
+    def test_visit_photo_is_saved_when_consent_is_given(self):
         response = self.register_visit(
             visitorDocument="1234",
             documentRefused=False,
@@ -444,8 +482,126 @@ class SecurityWorkflowTests(unittest.TestCase):
             f"/api/packages/{package_id}?force=true",
             headers=self.auth(self.admin),
         )
-        self.assertEqual(forced_delete.status_code, 200)
-        self.assertIsNone(db.session.get(PackageItem, package_id))
+        self.assertEqual(forced_delete.status_code, 403)
+        self.assertIn("no pueden eliminarse definitivamente", forced_delete.json["error"])
+        self.assertIsNotNone(db.session.get(PackageItem, package_id))
+
+    def test_visit_serializer_includes_resident_phone(self):
+        visit = Visit(
+            resident_id=self.resident.id,
+            registered_by=self.guard.id,
+            visitor_name="Visitante",
+            type="visitante",
+            resident=self.resident,
+        )
+
+        self.assertEqual(visit.to_dict()["residentPhone"], "3001234567")
+
+    def test_login_rate_limit_is_scoped_by_ip_and_normalized_email(self):
+        self.app.config["RATELIMIT_ENABLED"] = True
+        limiter.enabled = True
+        try:
+            responses = [
+                self.client.post(
+                    "/api/auth/login",
+                    json={
+                        "email": (
+                            "LOCKOUT@test.local"
+                            if attempt % 2
+                            else " lockout@test.local "
+                        ),
+                        "password": "WrongPassword123*",
+                    },
+                )
+                for attempt in range(6)
+            ]
+        finally:
+            limiter.enabled = False
+            self.app.config["RATELIMIT_ENABLED"] = False
+
+        self.assertEqual([response.status_code for response in responses[:5]], [401] * 5)
+        self.assertEqual(responses[5].status_code, 429)
+        self.assertEqual(
+            responses[5].json["error"],
+            "Demasiados intentos de inicio de sesión. Intenta nuevamente en un minuto.",
+        )
+        self.assertEqual(
+            AuditLog.query.filter_by(action="login_rate_limited").count(),
+            1,
+        )
+
+    def test_media_url_validation_and_rejection_of_external_hosts(self):
+        valid_image = "data:image/png;base64,AA=="
+        valid_pdf = "data:application/pdf;base64,JVBERiQ="
+        self.assertIsNone(validate_media_url(valid_image))
+        self.assertIsNone(validate_media_url(valid_pdf))
+
+        accepted = self.client.post(
+            "/api/announcements",
+            headers=self.auth(self.admin),
+            json={
+                "title": "Anuncio con imagen",
+                "message": "Contenido válido",
+                "mediaUrl": valid_image,
+                "mediaType": "image",
+            },
+        )
+        rejected = self.client.post(
+            "/api/announcements",
+            headers=self.auth(self.admin),
+            json={
+                "title": "Anuncio externo",
+                "message": "URL no permitida",
+                "mediaUrl": "https://arbitrary.example/image.png",
+                "mediaType": "image",
+            },
+        )
+
+        self.assertEqual(accepted.status_code, 201)
+        self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(Announcement.query.count(), 1)
+
+    def test_qr_pass_and_announcement_notify_active_guards(self):
+        inactive_guard = User(
+            name="Inactive Guard",
+            email="inactive-guard@test.local",
+            password_hash=generate_password_hash("Guard123*"),
+            role="GUARD",
+            is_active=False,
+        )
+        db.session.add(inactive_guard)
+        db.session.commit()
+        start = now_colombia().date().isoformat()
+        qr_payload = {
+            "visitorName": "Invitado",
+            "visitorDocument": "QR-123",
+            "validFrom": start,
+        }
+
+        resident_qr = self.client.post(
+            "/api/visits/qr-passes",
+            headers=self.auth(self.resident),
+            json=qr_payload,
+        )
+        admin_qr = self.client.post(
+            "/api/visits/qr-passes",
+            headers=self.auth(self.admin),
+            json={**qr_payload, "residentId": self.resident.id},
+        )
+        announcement = self.client.post(
+            "/api/announcements",
+            headers=self.auth(self.admin),
+            json={"title": "Aviso", "message": "Nuevo anuncio"},
+        )
+
+        self.assertEqual(resident_qr.status_code, 201)
+        self.assertEqual(admin_qr.status_code, 201)
+        self.assertEqual(announcement.status_code, 201)
+        self.assertEqual(Notification.query.filter_by(user_id=self.guard.id).count(), 3)
+        self.assertEqual(
+            Notification.query.filter_by(user_id=inactive_guard.id).count(),
+            0,
+        )
 
     def test_app_migrates_legacy_package_statuses(self):
         package = PackageItem(
@@ -481,7 +637,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertIn("delivery_media_url", package_columns)
         self.assertIn("guests_json", qr_columns)
 
-    def test_package_listing_automatically_trashes_and_purges_expired_items(self):
+    def test_package_listing_archives_expired_items_without_purging_history(self):
         expired_delivery = PackageItem(
             resident_id=self.resident.id,
             registered_by=self.guard.id,
@@ -508,11 +664,11 @@ class SecurityWorkflowTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            [item["id"] for item in response.get_json()["packages"]],
-            [expired_delivery_id],
+            {item["id"] for item in response.get_json()["packages"]},
+            {expired_delivery_id, expired_trash_id},
         )
         self.assertTrue(db.session.get(PackageItem, expired_delivery_id).is_deleted)
-        self.assertIsNone(db.session.get(PackageItem, expired_trash_id))
+        self.assertIsNotNone(db.session.get(PackageItem, expired_trash_id))
 
 
     def test_qr_limits_new_people_allows_same_day_reentry_and_revokes(self):
@@ -755,14 +911,14 @@ class SecurityWorkflowTests(unittest.TestCase):
         visits[0].exited_at = now_colombia()
         self.assertFalse(visits[0].to_dict()["overstayWarning"])
 
-    def test_admin_cannot_create_a_resident_owned_qr_pass(self):
+    def test_admin_must_select_a_resident_before_creating_a_qr_pass(self):
         today = now_colombia().date().isoformat()
         response = self.client.post(
             "/api/visits/qr-passes",
             headers=self.auth(self.admin),
             json={"validFrom": today, "validUntil": today, "maxPeople": 1},
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(VisitQrPass.query.count(), 0)
 
     def test_push_tokens_are_scoped_to_authenticated_user(self):

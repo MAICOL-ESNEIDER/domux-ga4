@@ -19,22 +19,25 @@ from models import User
 
 load_dotenv()
 
-JWT_SECRET = os.environ.get(
-    "JWT_SECRET",
-    "domux-super-secret-jwt-key-2026",
-)
-
 JWT_ALGORITHM = "HS256"
 JWT_EXP_HOURS = 24 * 7  # el token dura 7 días
+
+
+def get_jwt_secret():
+    secret = os.environ.get("JWT_SECRET", "").strip()
+    if not secret:
+        raise RuntimeError("JWT_SECRET no configurado en el entorno")
+    return secret
 
 
 def generate_token(user: User) -> str:
     payload = {
         "user_id": user.id,
         "role": user.role,
+        "tv": user.token_version,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXP_HOURS),
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 def _extraer_token():
@@ -51,7 +54,7 @@ def token_required(f):
         if not token:
             return error_response(401, "Falta el token de autenticación")
         try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
         except jwt.ExpiredSignatureError:
             return error_response(401, "Tu sesión venció, inicia sesión de nuevo")
         except jwt.PyJWTError:
@@ -60,6 +63,8 @@ def token_required(f):
         user = db.session.get(User, payload.get("user_id"))
         if user is None:
             return error_response(401, "El usuario del token ya no existe")
+        if payload.get("tv") != user.token_version:
+            return error_response(401, "Token inválido")
         if user.is_active is not True:
             return error_response(
                 403,

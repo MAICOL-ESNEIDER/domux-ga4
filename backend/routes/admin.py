@@ -456,6 +456,8 @@ def update_user(user_id):
     if "isActive" in data:
         if not isinstance(data["isActive"], bool):
             return error_response(400, "isActive debe ser verdadero o falso")
+        if user.is_active is True and data["isActive"] is False:
+            user.token_version = (user.token_version or 1) + 1
         user.is_active = data["isActive"]
 
     db.session.commit()
@@ -483,6 +485,7 @@ def reset_user_password(user_id):
     if user is None:
         return error_response(404, "Usuario no encontrado")
     user.password_hash = generate_password_hash(data["password"])
+    user.token_version = (user.token_version or 1) + 1
     user.must_change_password = True
     db.session.add(AuditLog(
         entity_type="USER",

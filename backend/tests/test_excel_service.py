@@ -5,7 +5,6 @@ import unittest
 from datetime import timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["JWT_SECRET"] = "unit-test-only-secret-with-enough-bytes"
 
 from openpyxl import load_workbook
 
@@ -29,14 +28,14 @@ from services.excel_service import (
     generate_legal_report_xlsx,
     import_census_from_bytes,
 )
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from time_utils import now_colombia
 
 
 class ExcelServiceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = create_app()
+        cls.app = create_app({"TESTING": True})
         cls.app.config.update(TESTING=True)
 
     def setUp(self):
@@ -125,6 +124,19 @@ class ExcelServiceTests(unittest.TestCase):
         self.assertEqual(result["updatedUsers"], 0)
         self.assertEqual(result["unitsProcessed"], 2)
         self.assertEqual(result["errors"], [])
+        credentials = result["createdCredentials"]
+        self.assertEqual(len(credentials), 2)
+        self.assertEqual(len({entry["temporaryPassword"] for entry in credentials}), 2)
+        for credential in credentials:
+            imported_user = User.query.filter_by(email=credential["email"]).one()
+            self.assertTrue(imported_user.must_change_password)
+            self.assertTrue(
+                check_password_hash(
+                    imported_user.password_hash,
+                    credential["temporaryPassword"],
+                )
+            )
+            self.assertEqual(imported_user.apartment, credential["apartment"])
         self.assertEqual(User.query.filter_by(role="RESIDENT").count(), 3)
         imported = User.query.filter_by(email="maria.perez@example.com").one()
         self.assertTrue(imported.data_processing_consent)
@@ -182,6 +194,20 @@ class ExcelServiceTests(unittest.TestCase):
         self.assertEqual(
             result["errors"],
             ["Fila 2: Se requiere Correo o Documento para identificar al residente."],
+        )
+
+    def test_census_import_allows_missing_optional_unit_columns(self):
+        csv_bytes = (
+            "Apartamento,Nombre,Correo\n"
+            "Torre 3 Apto 303,Residente Nuevo,new-resident@test.local\n"
+        ).encode("utf-8")
+
+        result = import_census_from_bytes(csv_bytes, "censo.csv", self.admin)
+
+        self.assertEqual(result["createdUsers"], 1)
+        self.assertEqual(result["errors"], [])
+        self.assertIsNotNone(
+            ResidentialUnit.query.filter_by(apartment="Torre 3 Apto 303").first()
         )
 
     def test_legal_report_contains_all_sheets_and_expected_counts(self):

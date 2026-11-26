@@ -1,6 +1,8 @@
 import re
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from auth import generate_token, token_required
@@ -15,6 +17,39 @@ from validators import (
 
 bp = Blueprint("auth", __name__, url_prefix="/api")
 RECOVERY_EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+LOGIN_RATE_LIMIT_ERROR = (
+    "Demasiados intentos de inicio de sesión. Intenta nuevamente en un minuto."
+)
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri="memory://",
+)
+
+
+def _login_rate_limit_key():
+    data = request.get_json(silent=True)
+    email = data.get("email", "") if isinstance(data, dict) else ""
+    normalized_email = email.strip().lower() if isinstance(email, str) else ""
+    return f"{get_remote_address()}:{normalized_email}"
+
+
+@bp.errorhandler(429)
+def handle_rate_limit_exceeded(_error):
+    current_app.logger.warning("Login rate limit exceeded: %s", _error)
+    data = request.get_json(silent=True)
+    email = data.get("email", "") if isinstance(data, dict) else ""
+    normalized_email = email.strip().lower() if isinstance(email, str) else ""
+    user = User.query.filter(db.func.lower(User.email) == normalized_email).first()
+    db.session.add(AuditLog(
+        entity_type="AUTH",
+        entity_id=user.id if user else None,
+        action="login_rate_limited",
+        actor_id=user.id if user else None,
+        actor_role=user.role if user else None,
+        details=f"Intento de inicio de sesión limitado desde {get_remote_address()}.",
+    ))
+    db.session.commit()
+    return jsonify({"error": LOGIN_RATE_LIMIT_ERROR}), 429
 
 
 @bp.get("/health")
@@ -23,6 +58,7 @@ def health():
 
 
 @bp.post("/auth/login")
+@limiter.limit("5 per minute", key_func=_login_rate_limit_key)
 def login():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -106,6 +142,7 @@ def change_password():
         user.recovery_email = recovery_email
 
     user.password_hash = generate_password_hash(data["newPassword"])
+    user.token_version = (user.token_version or 1) + 1
     user.must_change_password = False
     db.session.add(AuditLog(
         entity_type="USER",
