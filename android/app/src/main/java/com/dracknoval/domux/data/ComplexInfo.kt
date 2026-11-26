@@ -118,3 +118,13 @@ object ComplexInfoStore {
         rules = UnitRules()
     }
 }
+
+/** Lo que responde «Reglas de la unidad» a la administración: las vigentes, las de DOMUX y cuáles se cambiaron. */
+data class UnitRulesView(
+    val rules: Map<String, Any?>? = null,
+    val defaults: Map<String, Any?>? = null,
+    val customized: Map<String, Boolean>? = null,
+    val updatedAt: String? = null,
+    val updatedByName: String? = null,
+    val message: String? = null
+)

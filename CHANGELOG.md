@@ -18,6 +18,8 @@ administración.
 
 ### Añadido
 
+- App de administración: nueva pantalla «Reglas de la unidad» (en «Más») para cambiar desde el celular los mismos plazos y límites que ya se cambiaban en la web.
+
 **Nuevo ícono de DOMUX**
 - El logo nuevo (edificios azules con una D) es el ícono de la app en el celular (adaptable, con fondo azul noche, resplandor celeste y versión monocromática para Android 13), la marca dentro de la app y el logo y el favicon de la web de administración.
 
