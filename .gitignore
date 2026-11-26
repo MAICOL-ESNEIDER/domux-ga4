@@ -46,3 +46,8 @@ backend/htmlcov/
 # ---------- Notas locales de herramientas de IA o del editor ----------
 .artifacts/
 android/.artifacts/
+
+# Llaves de firma de la app: van como secreto en GitHub, nunca al repositorio
+*.p12
+*.jks
+*.keystore

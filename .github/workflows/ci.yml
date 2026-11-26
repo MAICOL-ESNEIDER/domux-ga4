@@ -78,6 +78,8 @@ jobs:
   app:
     name: App Android (APK)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: android
@@ -106,6 +108,47 @@ jobs:
           name: domux-apk-${{ github.run_number }}
           path: android/app/build/outputs/apk/prod/debug/*.apk
           retention-days: 14
+      # APK firmada con la llave de DOMUX. Solo se arma si los cuatro secretos están guardados en GitHub
+      # (Settings > Secrets and variables > Actions); si faltan, esto se salta y todo lo demás sigue igual.
+      - name: Armar el APK firmado (si están los secretos de la llave)
+        id: firmada
+        env:
+          LLAVE_BASE64: ${{ secrets.DOMUX_LLAVE_BASE64 }}
+          DOMUX_LLAVE_CLAVE: ${{ secrets.DOMUX_LLAVE_CLAVE }}
+          DOMUX_LLAVE_ALIAS: ${{ secrets.DOMUX_LLAVE_ALIAS }}
+        run: |
+          if [ -z "$LLAVE_BASE64" ] || [ -z "$DOMUX_LLAVE_CLAVE" ] || [ -z "$DOMUX_LLAVE_ALIAS" ]; then
+            echo "Sin los secretos de la llave: no se arma el APK firmado."
+            echo "armada=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$LLAVE_BASE64" | base64 -d > "$RUNNER_TEMP/domux-firma.p12"
+          export DOMUX_LLAVE_ARCHIVO="$RUNNER_TEMP/domux-firma.p12"
+          ./gradlew :app:assembleProdRelease --no-daemon
+          cp app/build/outputs/apk/prod/release/*.apk "$RUNNER_TEMP/domux.apk"
+          echo "armada=si" >> "$GITHUB_OUTPUT"
+      - name: Guardar el APK firmado
+        if: steps.firmada.outputs.armada == 'si'
+        uses: actions/upload-artifact@v7
+        with:
+          name: domux-apk-firmada-${{ github.run_number }}
+          path: ${{ runner.temp }}/domux.apk
+          retention-days: 30
+      # Página de versiones de GitHub con un enlace que nunca cambia (el del QR del póster):
+      #   https://github.com/MAICOL-ESNEIDER/domux-ga4/releases/download/ultima/domux.apk
+      # Solo se publica al subir cambios a la rama de la versión reducida, nunca desde una propuesta (PR).
+      - name: Publicar el APK firmado en la página de versiones
+        if: steps.firmada.outputs.armada == 'si' && github.event_name == 'push' && github.ref == 'refs/heads/release/v1.0-reducida'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ultima --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true
+          gh release create ultima "$RUNNER_TEMP/domux.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --latest \
+            --title "DOMUX, la última versión de la app" \
+            --notes "APK firmada de la versión reducida de DOMUX. Se reemplaza sola con cada cambio aprobado. Cambio: ${GITHUB_SHA::7}, armado número ${GITHUB_RUN_NUMBER}."
 
   # Fotos de pantalla de la app: se dibuja cada pantalla con datos de mentira en un celular simulado
   # (Robolectric) y se guarda una foto. Sirven para ver cómo queda la app sin un celular y, desde la
