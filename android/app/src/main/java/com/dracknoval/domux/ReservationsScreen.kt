@@ -434,46 +434,45 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
             }
         }
         if (selectedTab == 0) {
-        var residentReservationFilter by remember { mutableStateOf("Activas y pendientes") }
-        if (Session.isResident) {
+            var reservationFilter by remember { mutableStateOf("Activas y pendientes") }
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf("Activas y pendientes", "Historial").forEach { filterOption ->
                     FilterChip(
-                        selected = residentReservationFilter == filterOption,
-                        onClick = { residentReservationFilter = filterOption },
+                        selected = reservationFilter == filterOption,
+                        onClick = { reservationFilter = filterOption },
                         label = { Text(filterOption) }
                     )
                 }
             }
-        }
-        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        val activeReservations = reservations.filter { !it.isArchived && it.status != "finalizada" && it.status != "cancelada" && it.status != "rechazada" && it.status != "expirada" }
-        val archivedReservations = reservations.filter { it.isArchived || it.status == "finalizada" || it.status == "cancelada" || it.status == "rechazada" || it.status == "expirada" }
-        val visibleReservations = if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) activeReservations else archivedReservations
+            
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            val activeReservations = reservations.filter { !it.isArchived && it.status != "finalizada" && it.status != "cancelada" && it.status != "rechazada" && it.status != "expirada" }
+            val archivedReservations = reservations.filter { it.isArchived || it.status == "finalizada" || it.status == "cancelada" || it.status == "rechazada" || it.status == "expirada" }
+            val visibleReservations = if (reservationFilter == "Activas y pendientes") activeReservations else archivedReservations
 
-        if (visibleReservations.isEmpty() && !loading) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) "📅" else "🗄️", fontSize = 48.sp)
-                Text(
-                    if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) "No hay reservas activas" else "No hay reservas en el historial",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    if (selectedTab == 0 || (Session.isResident && residentReservationFilter == "Activas y pendientes")) "Las próximas reservas aparecerán aquí." else "Las reservas canceladas o finalizadas se agrupan aquí.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF94A3B8)
-                )
-            }
-        } else {
-            LazyColumn(Modifier.weight(1f)) {
-                items(visibleReservations, key = { it.id }) { reservation ->
+            if (visibleReservations.isEmpty() && !loading) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(if (reservationFilter == "Activas y pendientes") "📅" else "🗄️", fontSize = 48.sp)
+                    Text(
+                        if (reservationFilter == "Activas y pendientes") "No hay reservas activas" else "No hay reservas en el historial",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        if (reservationFilter == "Activas y pendientes") "Las próximas reservas aparecerán aquí." else "Las reservas canceladas o finalizadas se agrupan aquí.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+            } else {
+                LazyColumn(Modifier.weight(1f)) {
+                    items(visibleReservations, key = { it.id }) { reservation ->
                 DomuxCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)

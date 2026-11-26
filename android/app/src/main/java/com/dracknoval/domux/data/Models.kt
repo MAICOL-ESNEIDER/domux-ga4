@@ -443,6 +443,7 @@ data class VisitQrPass(
 )
 data class VisitQrPassListResponse(val qrPasses: List<VisitQrPass>?)
 data class CreateVisitQrRequest(
+    val residentId: Int? = null,
     val validFrom: String,
     val validUntil: String,
     val visitorName: String,

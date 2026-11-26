@@ -27,6 +27,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.rounded.Pets
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.TwoWheeler
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Visibility
@@ -276,25 +284,50 @@ fun ResidentProfileScreen(navController: NavController) {
             }
             profile.members.forEach { member ->
                 DomuxCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text("${member.name} ${member.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "Parentesco: ${(member.otherRelationship ?: member.relationship).toDomuxDisplayLabel()}"
-                        )
-                        Text("Fecha de nacimiento: ${member.birthDate}")
+                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${member.name} ${member.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+                                Text((member.otherRelationship ?: member.relationship).toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                            }
+                            Text("Doc: ${member.documentId} · Nac: ${member.birthDate}", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
             if (profile.pets.isNotEmpty()) {
                 Text("Mascotas registradas", style = MaterialTheme.typography.titleMedium)
                 profile.pets.forEach { pet ->
-                    Text("• ${pet.name} (${pet.species.toDomuxDisplayLabel()})")
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Pets, contentDescription = "Mascota", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                            Column(Modifier.weight(1f)) {
+                                Text(pet.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) {
+                                    Text(pet.species.toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                Text("Raza: ${pet.breed} · Edad: ${pet.ageYears} años", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                 }
             }
             if (profile.vehicles.isNotEmpty()) {
                 Text("Vehículos registrados", style = MaterialTheme.typography.titleMedium)
                 profile.vehicles.forEach { vehicle ->
-                    Text("• ${vehicle.type.toDomuxDisplayLabel()}: ${vehicle.plate}")
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            val vIcon = if (vehicle.type == "moto" || vehicle.type == "bicicleta" || vehicle.type == "scooter") Icons.Rounded.TwoWheeler else Icons.Rounded.DirectionsCar
+                            Icon(vIcon, contentDescription = "Vehículo", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                            Column(Modifier.weight(1f)) {
+                                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)) {
+                                    Text(vehicle.plate, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                }
+                                Text(vehicle.makeModel, style = MaterialTheme.typography.titleSmall)
+                                Text("${vehicle.type.toDomuxDisplayLabel()} · ${vehicle.year} · ${vehicle.color ?: ""}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                 }
             }
         }

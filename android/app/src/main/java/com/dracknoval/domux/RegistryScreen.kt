@@ -118,20 +118,40 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     var statusFilter by remember { mutableStateOf<String?>(null) }
     val isVisitsModule = if (Session.isResident) initialTab >= 1 else initialTab >= 2
 
-    val tabs = if (Session.isGuard) {
-        emptyList()
-    } else if (isVisitsModule) {
-        if (Session.isResident) listOf("Mis visitas", "Crear QR") else listOf("Visitas", "Crear QR", "Registrar visita")
+    val tabs = if (isVisitsModule) {
+        if (Session.isResident) {
+            listOf("Mis visitas", "Crear QR")
+        } else if (Session.isAdmin) {
+            listOf("Visitas", "Crear QR", "Registrar visita")
+        } else {
+            listOf("Visitas activas", "Registrar visita")
+        }
     } else {
-        if (Session.isResident) listOf("Mis paquetes") else listOf("Paquetes", "Registrar paquete")
+        if (Session.isResident) {
+            listOf("Mis paquetes")
+        } else {
+            listOf("Paquetes", "Registrar paquete")
+        }
     }
 
-    var selectedTab by remember(initialTab) { mutableStateOf(0) }
+    var selectedTab by remember(initialTab) {
+        mutableStateOf(
+            if (Session.isGuard) {
+                if (isVisitsModule) (initialTab - 2).coerceAtLeast(0) else initialTab
+            } else {
+                0
+            }
+        )
+    }
 
-    val currentView = if (Session.isGuard) {
-        initialTab
-    } else if (isVisitsModule) {
-        if (Session.isResident) selectedTab + 1 else selectedTab + 2
+    val currentView = if (isVisitsModule) {
+        if (Session.isResident) {
+            selectedTab + 1
+        } else if (Session.isAdmin) {
+            if (selectedTab == 0) 2 else if (selectedTab == 1) 4 else 3
+        } else {
+            selectedTab + 2
+        }
     } else {
         selectedTab
     }
@@ -444,17 +464,19 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                 }
                             }
                         },
-                        onDeletePermanently = { item ->
-                            confirmation = "¿Eliminar permanentemente este paquete? Esta acción no se puede deshacer." to {
+                        onArchiveAllDelivered = {
+                            confirmation = "¿Archivar todos los paquetes entregados? Desaparecerán de la vista activa." to {
                                 scope.launch {
-                                    runRegistryAction({ message = "No se pudo eliminar el paquete: $it" }) {
-                                        val response = RetrofitClient.api.deletePackage(
-                                            Session.bearer(), item.id, force = true
-                                        )
-                                        message = if (response.isSuccessful) {
-                                            response.body()?.message ?: "Paquete eliminado permanentemente."
-                                        } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                        if (response.isSuccessful) load()
+                                    val delivered = packages.filter { it.status == "entregado" && !it.isDeleted }
+                                    if (delivered.isEmpty()) return@launch
+                                    var count = 0
+                                    runRegistryAction({ message = "Error al archivar en bloque: $it" }) {
+                                        for (pkg in delivered) {
+                                            val response = RetrofitClient.api.deletePackage(Session.bearer(), pkg.id, force = false)
+                                            if (response.isSuccessful) count++
+                                        }
+                                        message = "Se han archivado $count paquetes entregados."
+                                        load()
                                     }
                                 }
                             }
@@ -683,7 +705,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         onDeliver = {},
                         onMoveToTrash = {},
                         onRestore = {},
-                        onDeletePermanently = {}
+                        onArchiveAllDelivered = {}
                     )
                 }
 
@@ -712,7 +734,114 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     )
                 }
 
-                Session.isResident && currentView == 2 -> {
+                Session.isAdmin && currentView == 4 -> {
+        ResidentQrPassSection(
+            modifier = Modifier.weight(1f),
+            resident = selectedVisitResident,
+            onResidentChange = { selectedVisitResident = it },
+            startDate = qrStartDate,
+            onStartDateChange = { newStartDate ->
+                qrStartDate = newStartDate
+                val latestEndDate = shiftQrDate(newStartDate, 3)
+                if (qrEndDate < newStartDate || qrEndDate > latestEndDate) {
+                    qrEndDate = shiftQrDate(newStartDate, 1)
+                }
+            },
+            endDate = qrEndDate,
+            onEndDateChange = { qrEndDate = it },
+            visitorNames = qrVisitorNames,
+            onVisitorNameChange = { index, name ->
+                qrVisitorNames = qrVisitorNames.toMutableList().apply { set(index, name) }
+            },
+            visitorDocuments = qrVisitorDocuments,
+            onVisitorDocumentChange = { index, doc ->
+                qrVisitorDocuments = qrVisitorDocuments.toMutableList().apply { set(index, doc) }
+            },
+            maxGuests = qrMaxGuests,
+            onMaxGuestsChange = { qrMaxGuests = it },
+            attemptedCreate = attemptedQrCreate,
+            passes = qrPasses,
+            activePass = activeQrPass,
+            qrBitmap = qrBitmap,
+            onCreate = {
+                attemptedQrCreate = true
+                if (qrVisitorNames.take(qrMaxGuests).any { it.isBlank() } ||
+                    qrVisitorDocuments.take(qrMaxGuests).any { it.isBlank() } ||
+                    selectedVisitResident == null
+                ) {
+                    message = "Selecciona residente y escribe datos de los visitantes."
+                    messageIsError = true
+                } else if (qrEndDate < qrStartDate || qrEndDate > shiftQrDate(qrStartDate, 3)) {
+                    message = "La vigencia del QR no puede superar 72 horas desde el inicio."
+                    messageIsError = true
+                } else if (qrMaxGuests !in 1..5) {
+                    message = "La cantidad de personas debe estar entre 1 y 5."
+                    messageIsError = true
+                } else {
+                    scope.launch {
+                        runRegistryAction({ message = "No se pudo crear el QR: $it"; messageIsError = true }) {
+                            val response = RetrofitClient.api.createVisitQrPass(
+                                Session.bearer(),
+                                CreateVisitQrRequest(
+                                    residentId = selectedVisitResident?.id,
+                                    validFrom = qrStartDate,
+                                    validUntil = qrEndDate,
+                                    visitorName = qrVisitorNames.take(qrMaxGuests).joinToString(" / "),
+                                    visitorDocument = qrVisitorDocuments.take(qrMaxGuests).joinToString(" / "),
+                                    maxGuests = qrMaxGuests
+                                )
+                            )
+                            if (response.isSuccessful) {
+                                activeQrPass = response.body()?.qrPass
+                                qrVisitorNames = List(5) { "" }
+                                qrVisitorDocuments = List(5) { "" }
+                                attemptedQrCreate = false
+                                message = "Código QR creado."
+                                messageIsError = false
+                                load()
+                            } else {
+                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                messageIsError = true
+                            }
+                        }
+                    }
+                }
+            },
+            onSelectPass = {
+                scope.launch {
+                    try {
+                        qrBitmap = it.qrData?.let { data -> 
+                            com.journeyapps.barcodescanner.BarcodeEncoder().encodeBitmap(data, com.google.zxing.BarcodeFormat.QR_CODE, 640, 640)
+                        }
+                        activeQrPass = it
+                    } catch (e: Exception) {
+                        message = "Error generando QR: ${e.message}"
+                        messageIsError = true
+                    }
+                }
+            },
+            onRevokePass = { pass ->
+                scope.launch {
+                    runRegistryAction({ message = "Error revocando QR: $it"; messageIsError = true }) {
+                        val response = RetrofitClient.api.revokeVisitQrPass(Session.bearer(), pass.id)
+                        if (response.isSuccessful) {
+                            message = "Pase QR revocado."
+                            messageIsError = false
+                            activeQrPass = null
+                            qrBitmap = null
+                            load()
+                        } else {
+                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                            messageIsError = true
+                        }
+                    }
+                }
+            },
+            onClosePass = { activeQrPass = null; qrBitmap = null }
+        )
+    }
+
+    Session.isResident && currentView == 2 -> {
                     ResidentQrPassSection(
                         modifier = Modifier.weight(1f),
                         startDate = qrStartDate,
@@ -799,7 +928,8 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                     }
                                 }
                             }
-                        }
+                        },
+                        onClosePass = { activeQrPass = null; qrBitmap = null }
                     )
                 }
             }
@@ -957,7 +1087,7 @@ private fun PackageListSection(
     onDeliver: (PackageItem) -> Unit,
     onMoveToTrash: (PackageItem) -> Unit,
     onRestore: (PackageItem) -> Unit,
-    onDeletePermanently: (PackageItem) -> Unit
+    onArchiveAllDelivered: () -> Unit
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -983,6 +1113,16 @@ private fun PackageListSection(
             }
         }
         TextButton(onClick = onRefresh) { Text("Actualizar registros") }
+        val isTrash = statusFilter == "papelera"
+        val countDelivered = packages.count { it.status == "entregado" && !it.isDeleted }
+        if (canRegister && countDelivered > 0 && !isTrash) {
+            Button(
+                onClick = onArchiveAllDelivered,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
+            ) {
+                Text("Archivar entregados ($countDelivered)")
+            }
+        }
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1019,8 +1159,7 @@ private fun PackageListSection(
                     canRegister = canRegister,
                     onDeliver = { onDeliver(item) },
                     onMoveToTrash = { onMoveToTrash(item) },
-                    onRestore = { onRestore(item) },
-                    onDeletePermanently = { onDeletePermanently(item) }
+                    onRestore = { onRestore(item) }
                 )
             }
         }
@@ -1033,8 +1172,7 @@ private fun PackageRegistryCard(
     canRegister: Boolean,
     onDeliver: () -> Unit,
     onMoveToTrash: () -> Unit,
-    onRestore: () -> Unit,
-    onDeletePermanently: () -> Unit
+    onRestore: () -> Unit
 ) {
     DomuxCard(Modifier.fillMaxWidth()) {
         Column(
@@ -1623,6 +1761,8 @@ private fun RegistrationAndQrSection(
 @Composable
 private fun ResidentQrPassSection(
     modifier: Modifier,
+    resident: ResidentSummary? = null,
+    onResidentChange: (ResidentSummary?) -> Unit = {},
     startDate: String,
     onStartDateChange: (String) -> Unit,
     endDate: String,
@@ -1639,7 +1779,8 @@ private fun ResidentQrPassSection(
     qrBitmap: android.graphics.Bitmap?,
     onCreate: () -> Unit,
     onSelectPass: (VisitQrPass) -> Unit,
-    onRevokePass: (VisitQrPass) -> Unit
+    onRevokePass: (VisitQrPass) -> Unit,
+    onClosePass: () -> Unit
 ) {
     Column(
         modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -1651,7 +1792,15 @@ private fun ResidentQrPassSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Código QR para visitas", style = MaterialTheme.typography.titleMedium)
-                Text("Vigencia máxima: 72 horas (por defecto 24 h).")
+            
+            if (Session.isAdmin) {
+                DomuxResidentSearchField(
+                    selectedResident = resident,
+                    onSelectResident = onResidentChange
+                )
+            }
+            
+            Text("Vigencia máxima: 72 horas (por defecto 24 h).")
                 Text("Cantidad de personas")
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -1712,7 +1861,7 @@ private fun ResidentQrPassSection(
                 val context = LocalContext.current
                 activePass?.let { pass ->
                     androidx.compose.material3.AlertDialog(
-                        onDismissRequest = { onSelectPass(pass.copy(id = -1)) }, // Hack to close: parent should handle it. Actually I will change parent to `onSelectPass(null)` in another chunk.
+                        onDismissRequest = onClosePass,
                         confirmButton = {
                             TextButton(onClick = { 
                                 qrBitmap?.let { bmp ->
@@ -1754,7 +1903,7 @@ private fun ResidentQrPassSection(
                                 }
                             }) { Text("Compartir QR") }
                         },
-                        dismissButton = { TextButton(onClick = { onSelectPass(pass.copy(id = -1)) }) { Text("Cerrar") } },
+                        dismissButton = { TextButton(onClick = onClosePass) { Text("Cerrar") } },
                         title = { Text("Pase de acceso") },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {

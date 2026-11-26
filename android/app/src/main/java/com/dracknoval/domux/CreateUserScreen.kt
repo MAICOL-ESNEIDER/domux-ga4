@@ -201,11 +201,11 @@ fun CreateUserScreen(navController: NavController) {
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("RESIDENT", "GUARD", "ADMIN").forEach { option ->
+                    listOf("Residente" to "RESIDENT", "Guardia de seguridad" to "GUARD", "Administración" to "ADMIN").forEach { (label, option) ->
                         FilterChip(
                             selected = role == option,
                             onClick = { role = option },
-                            label = { Text(option.toDomuxDisplayLabel()) }
+                            label = { Text(label) }
                         )
                     }
                 }
@@ -472,11 +472,11 @@ fun CreateUserScreen(navController: NavController) {
                                         Text("Tu cuenta (gestionar en Mi Perfil)", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF10B981))
                                     } else {
                                         TextButton(onClick = { editUser = user }) { Text("Editar") }
+                                        OutlinedButton(onClick = {
+                                            resetUser = user
+                                            resetPassword = ""
+                                        }) { Text("Asignar nueva clave") }
                                     }
-                                    OutlinedButton(onClick = {
-                                        resetUser = user
-                                        resetPassword = ""
-                                    }) { Text("Asignar nueva clave") }
                                     if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
                                         Button(onClick = {
                                             navController.navigate("unitProfile/${Uri.encode(user.apartment)}")
@@ -546,11 +546,11 @@ fun CreateUserScreen(navController: NavController) {
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        listOf("RESIDENT", "GUARD", "ADMIN").forEach { option ->
+                        listOf("Residente" to "RESIDENT", "Guardia de seguridad" to "GUARD", "Administración" to "ADMIN").forEach { (label, option) ->
                             FilterChip(
                                 selected = eRole == option,
                                 onClick = { eRole = option },
-                                label = { Text(option.toDomuxDisplayLabel()) }
+                                label = { Text(label) }
                             )
                         }
                     }

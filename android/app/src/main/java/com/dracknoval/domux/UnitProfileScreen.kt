@@ -27,6 +27,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Pets
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.TwoWheeler
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -214,39 +226,74 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text("Agregar integrante") }
             members.forEachIndexed { index, member ->
-                TextButton(onClick = { members.removeAt(index) }) {
-                    Text(
-                        "Quitar ${member.name} ${member.lastName} · " +
-                            member.relationship.toDomuxDisplayLabel()
-                    )
+                DomuxCard(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${member.name} ${member.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+                                Text((member.otherRelationship ?: member.relationship).toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                            }
+                            Text("Doc: ${member.documentId} · Nac: ${member.birthDate}", style = MaterialTheme.typography.bodySmall)
+                            member.phone?.takeIf(String::isNotBlank)?.let { phone -> Text("Tel: $phone", style = MaterialTheme.typography.bodySmall) }
+                        }
+                        IconButton(onClick = { members.removeAt(index) }) {
+                            Icon(Icons.Rounded.DeleteOutline, contentDescription = "Quitar integrante")
+                        }
+                    }
                 }
             }
 
             Text("Mascotas", style = MaterialTheme.typography.titleMedium)
             var petName by remember { mutableStateOf("") }
-            var petSpecies by remember { mutableStateOf("") }
+            var petSpecies by remember { mutableStateOf("Perro") }
             var petBreed by remember { mutableStateOf("") }
             var petAge by remember { mutableStateOf("") }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(petName, { petName = it }, label = { Text("Nombre") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
-                OutlinedTextField(petSpecies, { petSpecies = it }, label = { Text("Especie") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
+            
+            OutlinedTextField(petName, { petName = it }, label = { Text("Nombre *") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), modifier = Modifier.fillMaxWidth())
+            Text("Especie *", style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf("Perro", "Gato", "Ave", "Otro").forEach { option ->
+                    androidx.compose.material3.FilterChip(
+                        selected = petSpecies == option,
+                        onClick = { petSpecies = option },
+                        label = { Text(option) }
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(petBreed, { petBreed = it }, label = { Text("Raza") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
-                OutlinedTextField(petAge, { petAge = it.filter(Char::isDigit) }, label = { Text("Edad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(petBreed, { petBreed = it }, label = { Text("Raza (Opcional)") }, placeholder = { Text("Ej. Criollo, Siamés") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(petAge, { petAge = it.filter(Char::isDigit).take(2) }, label = { Text("Edad (años)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
             }
             Button(onClick = {
                 val age = petAge.toIntOrNull()
-                if (petName.isBlank() || petSpecies.isBlank() || petBreed.isBlank() || age == null || age > 100) {
-                    message = "Completa nombre, especie, raza y una edad válida."
+                if (petName.isBlank() || petSpecies.isBlank()) {
+                    message = "El nombre y especie son obligatorios."
+                } else if (age == null || age !in 0..40) {
+                    message = "Ingresa una edad válida (0-40 años)."
                 } else {
-                    pets.add(PetData(name = petName.trim(), species = petSpecies.trim(), breed = petBreed.trim(), ageYears = age))
-                    petName = ""; petSpecies = ""; petBreed = ""; petAge = ""
+                    pets.add(PetData(name = petName.trim(), species = petSpecies.trim(), breed = petBreed.trim().ifBlank { "No especificada" }, ageYears = age))
+                    petName = ""; petSpecies = "Perro"; petBreed = ""; petAge = ""
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text("Agregar mascota") }
+            
             pets.forEachIndexed { index, pet ->
-                TextButton(onClick = { pets.removeAt(index) }) {
-                    Text("Quitar ${pet.name} · ${pet.species.toDomuxDisplayLabel()}")
+                DomuxCard(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Pets, contentDescription = "Mascota", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f)) {
+                            Text(pet.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) {
+                                Text(pet.species.toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text("Raza: ${pet.breed} · Edad: ${pet.ageYears} años", style = MaterialTheme.typography.bodySmall)
+                        }
+                        IconButton(onClick = { pets.removeAt(index) }) {
+                            Icon(Icons.Rounded.DeleteOutline, contentDescription = "Quitar mascota")
+                        }
+                    }
                 }
             }
 
@@ -261,7 +308,7 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                listOf("carro", "moto").forEach { type ->
+                listOf("carro", "moto", "bicicleta", "scooter").forEach { type ->
                     androidx.compose.material3.FilterChip(
                         selected = vehicleType == type,
                         onClick = { vehicleType = type },
@@ -269,16 +316,17 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                     )
                 }
             }
-            OutlinedTextField(plate, { plate = it.uppercase() }, label = { Text("Placa colombiana") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(plate, { plate = it.uppercase() }, label = { Text("Placa") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(makeModel, { makeModel = it }, label = { Text("Marca y modelo") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(vehicleYear, { vehicleYear = it.filter(Char::isDigit) }, label = { Text("Año") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(vehicleYear, { vehicleYear = it.filter(Char::isDigit) }, label = { Text("Año") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(color, { color = it }, label = { Text("Color (opcional)") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.weight(1f))
+            }
             OutlinedTextField(registeredOwner, { registeredOwner = it }, label = { Text("A nombre de") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(color, { color = it }, label = { Text("Color (opcional)") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), singleLine = true, modifier = Modifier.fillMaxWidth())
             Button(onClick = {
                 val year = vehicleYear.toIntOrNull()
-                if (!plate.matches(Regex("[A-Z]{3}\\d{3}|[A-Z]{3}\\d{2}[A-Z]")) ||
-                    makeModel.isBlank() || year == null || registeredOwner.isBlank()
-                ) {
+                val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+                if (plate.isBlank() || makeModel.isBlank() || year == null || registeredOwner.isBlank() || year !in 1900..(currentYear + 1)) {
                     message = "Revisa placa, marca/modelo, año y titular del vehículo."
                 } else {
                     vehicles.add(VehicleData(
@@ -288,8 +336,25 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                     plate = ""; makeModel = ""; vehicleYear = ""; registeredOwner = ""; color = ""
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text("Agregar vehículo") }
+            
             vehicles.forEachIndexed { index, vehicle ->
-                TextButton(onClick = { vehicles.removeAt(index) }) { Text("Quitar ${vehicle.plate} · ${vehicle.makeModel}") }
+                DomuxCard(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        val vIcon = if (vehicle.type == "moto" || vehicle.type == "bicicleta" || vehicle.type == "scooter") Icons.Rounded.TwoWheeler else Icons.Rounded.DirectionsCar
+                        Icon(vIcon, contentDescription = "Vehículo", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f)) {
+                            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)) {
+                                Text(vehicle.plate, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                            Text(vehicle.makeModel, style = MaterialTheme.typography.titleSmall)
+                            Text("${vehicle.type.toDomuxDisplayLabel()} · ${vehicle.year} · ${vehicle.color ?: ""}", style = MaterialTheme.typography.bodySmall)
+                            Text("Titular: ${vehicle.registeredOwner}", style = MaterialTheme.typography.bodySmall)
+                        }
+                        IconButton(onClick = { vehicles.removeAt(index) }) {
+                            Icon(Icons.Rounded.DeleteOutline, contentDescription = "Quitar vehículo")
+                        }
+                    }
+                }
             }
             Button(
                 enabled = !busy && !loading && unit != null,
@@ -359,42 +424,47 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                 Text("Integrantes del hogar", style = MaterialTheme.typography.titleMedium)
                 profile.members.forEach {
                     DomuxCard(Modifier.fillMaxWidth()) {
-                        Column(
-                            Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Text("${it.name} ${it.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleSmall)
-                            Text("Parentesco: ${(it.otherRelationship ?: it.relationship).toDomuxDisplayLabel()}")
-                            Text("Documento: ${it.documentId}")
-                            Text("Fecha de nacimiento: ${it.birthDate}")
-                            it.phone?.takeIf(String::isNotBlank)?.let { phone -> Text("Teléfono: $phone") }
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("${it.name} ${it.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+                                    Text((it.otherRelationship ?: it.relationship).toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                }
+                                Text("Doc: ${it.documentId} · Nac: ${it.birthDate}", style = MaterialTheme.typography.bodySmall)
+                                it.phone?.takeIf(String::isNotBlank)?.let { phone -> Text("Tel: $phone", style = MaterialTheme.typography.bodySmall) }
+                            }
                         }
                     }
                 }
                 Text("Mascotas", style = MaterialTheme.typography.titleMedium)
                 profile.pets.forEach {
                     DomuxCard(Modifier.fillMaxWidth()) {
-                        Column(
-                            Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Text(it.name, style = MaterialTheme.typography.titleSmall)
-                            Text("Especie: ${it.species.toDomuxDisplayLabel()}")
-                            Text("Raza: ${it.breed} · Edad: ${it.ageYears} años")
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Pets, contentDescription = "Mascota", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                            Column(Modifier.weight(1f)) {
+                                Text(it.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) {
+                                    Text(it.species.toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                Text("Raza: ${it.breed} · Edad: ${it.ageYears} años", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
                 Text("Vehículos", style = MaterialTheme.typography.titleMedium)
                 profile.vehicles.forEach {
                     DomuxCard(Modifier.fillMaxWidth()) {
-                        Column(
-                            Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Text("${it.type.toDomuxDisplayLabel()} · ${it.plate}", style = MaterialTheme.typography.titleSmall)
-                            Text("Marca y modelo: ${it.makeModel} · Año: ${it.year}")
-                            Text("A nombre de: ${it.registeredOwner}")
-                            it.color?.takeIf(String::isNotBlank)?.let { color -> Text("Color: $color") }
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            val vIcon = if (it.type == "moto" || it.type == "bicicleta" || it.type == "scooter") Icons.Rounded.TwoWheeler else Icons.Rounded.DirectionsCar
+                            Icon(vIcon, contentDescription = "Vehículo", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                            Column(Modifier.weight(1f)) {
+                                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)) {
+                                    Text(it.plate, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                }
+                                Text(it.makeModel, style = MaterialTheme.typography.titleSmall)
+                                Text("${it.type.toDomuxDisplayLabel()} · ${it.year} · ${it.color ?: ""}", style = MaterialTheme.typography.bodySmall)
+                                Text("Titular: ${it.registeredOwner}", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
