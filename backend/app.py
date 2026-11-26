@@ -25,6 +25,7 @@ from routes.structure import bp as structure_bp
 from routes.unit import bp as unit_bp
 from routes.vehicles import bp as vehicles_bp
 from demo_data import add_demo_data
+from expo_data import run_requested_action as run_expo_action
 from seed import seed_if_empty, sync_demo_passwords
 from validators import OCCUPANCY_TYPES, validate_no_empty_strings
 from web import init_web
@@ -384,6 +385,8 @@ def create_app():
         # Agrega lo que falta para probar cada opción, sin tocar lo que ya hay (demo_data.py).
         add_demo_data()
         sync_demo_passwords()
+        # Con DOMUX_EXPO_ACCION=inspeccionar solo escribe en el registro lo que hay en la base (expo_data.py).
+        run_expo_action()
         # Limpia los intentos fallidos de inicio de sesión que ya no sirven (no hay tarea programada).
         purge_login_attempts()
         db.session.commit()
