@@ -28,6 +28,12 @@ DEFAULTS = {
     "packageOrangeHours": 48,
     "packageRedHours": 72,
     "visitorParkingMaxDays": 3,
+    "visitMaxStayDays": 30,
+    "qrMaxPeople": 5,
+    "qrMaxValidDays": 30,
+    "autoQrMinStayDays": 2,
+    "deliveredArchiveDays": 7,
+    "motosPerCarSpot": 6,
 }
 
 
@@ -206,6 +212,12 @@ class LimitsTests(UnitRulesTestCase):
             ("packageOrangeHours", 1, 720, "El aviso naranja de un paquete"),
             ("packageRedHours", 2, 1440, "El aviso rojo de un paquete"),
             ("visitorParkingMaxDays", 1, 30, "El tiempo máximo de un vehículo visitante"),
+            ("visitMaxStayDays", 1, 90, "La estadía máxima que se puede anotar"),
+            ("qrMaxPeople", 1, 20, "Las personas que caben en un solo QR"),
+            ("qrMaxValidDays", 1, 90, "La vigencia máxima de un QR"),
+            ("autoQrMinStayDays", 1, 30, "Los días de estadía desde los que el QR"),
+            ("deliveredArchiveDays", 1, 90, "Los días que un paquete entregado"),
+            ("motosPerCarSpot", 1, 10, "Las motos que caben"),
         ):
             for bad in (low - 1, high + 1):
                 with self.subTest(rule=key, value=bad):
@@ -219,6 +231,9 @@ class LimitsTests(UnitRulesTestCase):
             {"packageOrangeHours": 720, "packageRedHours": 1440},
             {"visitorParkingMaxDays": 1},
             {"visitorParkingMaxDays": 30},
+            {"qrMaxPeople": 1},
+            {"qrMaxPeople": 20},
+            {"motosPerCarSpot": 10},
         ):
             with self.subTest(body=body):
                 self.assertEqual(self.save_rules(body).status_code, 200)
@@ -515,3 +530,30 @@ class ReadingOncePerRequestTests(UnitRulesTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PortersRulesTests(UnitRulesTestCase):
+    """Las reglas de visitas, QR y paquetes entregados que la administración puede cambiar."""
+
+    def test_the_automatic_qr_cannot_start_after_the_longest_stay(self):
+        self.assert_refused({"visitMaxStayDays": 3, "autoQrMinStayDays": 5}, "no puede ser mayor que la estadía máxima")
+        self.assertEqual(self.save_rules({"visitMaxStayDays": 5, "autoQrMinStayDays": 5}).status_code, 200)
+
+    def assert_refused(self, body, text):
+        response = self.save_rules(body)
+        self.assertEqual(response.status_code, 400, body)
+        self.assertIn(text, response.get_json()["error"], body)
+
+    def test_the_longest_visit_stay_follows_the_rule(self):
+        from services import visit_service
+        from errors import ApiError
+
+        with self.app.app_context():
+            self.assertEqual(visit_service.expected_stay(30 * 24 * 60), 30 * 24 * 60)
+            with self.assertRaises(ApiError):
+                visit_service.expected_stay(30 * 24 * 60 + 1)
+        self.assertEqual(self.save_rules({"visitMaxStayDays": 2}).status_code, 200)
+        with self.app.app_context():
+            self.assertEqual(visit_service.expected_stay(2 * 24 * 60), 2 * 24 * 60)
+            with self.assertRaises(ApiError):
+                visit_service.expected_stay(2 * 24 * 60 + 1)

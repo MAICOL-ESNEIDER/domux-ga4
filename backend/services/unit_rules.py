@@ -7,7 +7,11 @@ desde la web, y no en el código:
 * PQRS: los días hábiles para responder (el general y uno por tipo) y cuántos días antes de vencer el
   semáforo pasa a amarillo (RN-025).
 * Paquetes: las horas sin reclamar para que se pongan naranja y rojo (RN-018).
-* Parqueadero de visitantes: los días que un vehículo puede quedarse (RN-015).
+* Parqueadero de visitantes: los días que un vehículo puede quedarse (RN-015) y cuántas motos caben en un
+  parqueadero de carro cuando faltan los de moto.
+* Visitas y QR: los días máximos de una estadía, las personas por QR, la vigencia de un QR y desde cuántos días
+  de estadía el QR se crea solo.
+* Paquetes entregados: los días que tardan en archivarse solos.
 
 Una regla que la administración nunca tocó usa el valor de DOMUX (el de ``DEFAULT_RULES``); así, mientras la
 fila no exista todo se comporta como hasta ahora.
@@ -34,6 +38,12 @@ DEFAULT_PQRS_TERM_DAYS = 15
 DEFAULT_PQRS_WARNING_DAYS = 5
 DEFAULT_PACKAGE_ORANGE_HOURS = 48
 DEFAULT_PACKAGE_RED_HOURS = 72
+DEFAULT_VISIT_MAX_STAY_DAYS = 30
+DEFAULT_QR_MAX_PEOPLE = 5
+DEFAULT_QR_MAX_VALID_DAYS = 30
+DEFAULT_AUTO_QR_MIN_STAY_DAYS = 2
+DEFAULT_DELIVERED_ARCHIVE_DAYS = 7
+DEFAULT_MOTOS_PER_CAR_SPOT = 6
 
 #: (mínimo, máximo) que se acepta de cada regla: sirven para que nadie guarde un valor absurdo por error.
 PQRS_TERM_LIMITS = (1, 90)
@@ -41,6 +51,12 @@ PQRS_WARNING_LIMITS = (1, 30)
 PACKAGE_ORANGE_LIMITS = (1, 720)
 PACKAGE_RED_LIMITS = (2, 1440)
 PARKING_DAYS_LIMITS = (1, 30)
+VISIT_STAY_LIMITS = (1, 90)
+QR_PEOPLE_LIMITS = (1, 20)
+QR_VALID_LIMITS = (1, 90)
+AUTO_QR_LIMITS = (1, 30)
+ARCHIVE_DAYS_LIMITS = (1, 90)
+MOTOS_PER_SPOT_LIMITS = (1, 10)
 
 _CACHE_KEY = "_unit_rules"
 
@@ -55,6 +71,12 @@ class UnitRules:
     package_orange_hours: int = DEFAULT_PACKAGE_ORANGE_HOURS
     package_red_hours: int = DEFAULT_PACKAGE_RED_HOURS
     visitor_parking_max_days: int = 3
+    visit_max_stay_days: int = DEFAULT_VISIT_MAX_STAY_DAYS
+    qr_max_people: int = DEFAULT_QR_MAX_PEOPLE
+    qr_max_valid_days: int = DEFAULT_QR_MAX_VALID_DAYS
+    auto_qr_min_stay_days: int = DEFAULT_AUTO_QR_MIN_STAY_DAYS
+    delivered_archive_days: int = DEFAULT_DELIVERED_ARCHIVE_DAYS
+    motos_per_car_spot: int = DEFAULT_MOTOS_PER_CAR_SPOT
 
     def pqrs_term_for(self, category):
         """Días hábiles para responder una PQRS de ese tipo (el general si el tipo no tiene plazo propio)."""
@@ -69,6 +91,12 @@ class UnitRules:
             "packageOrangeHours": self.package_orange_hours,
             "packageRedHours": self.package_red_hours,
             "visitorParkingMaxDays": self.visitor_parking_max_days,
+            "visitMaxStayDays": self.visit_max_stay_days,
+            "qrMaxPeople": self.qr_max_people,
+            "qrMaxValidDays": self.qr_max_valid_days,
+            "autoQrMinStayDays": self.auto_qr_min_stay_days,
+            "deliveredArchiveDays": self.delivered_archive_days,
+            "motosPerCarSpot": self.motos_per_car_spot,
         }
 
 
@@ -81,6 +109,12 @@ def default_rules():
         package_orange_hours=DEFAULT_PACKAGE_ORANGE_HOURS,
         package_red_hours=DEFAULT_PACKAGE_RED_HOURS,
         visitor_parking_max_days=visitor_parking_max_days(),
+        visit_max_stay_days=DEFAULT_VISIT_MAX_STAY_DAYS,
+        qr_max_people=DEFAULT_QR_MAX_PEOPLE,
+        qr_max_valid_days=DEFAULT_QR_MAX_VALID_DAYS,
+        auto_qr_min_stay_days=DEFAULT_AUTO_QR_MIN_STAY_DAYS,
+        delivered_archive_days=DEFAULT_DELIVERED_ARCHIVE_DAYS,
+        motos_per_car_spot=DEFAULT_MOTOS_PER_CAR_SPOT,
     )
 
 
@@ -121,6 +155,12 @@ def rules_from_row(row):
         package_orange_hours=row.package_orange_hours or base.package_orange_hours,
         package_red_hours=row.package_red_hours or base.package_red_hours,
         visitor_parking_max_days=row.visitor_parking_max_days or base.visitor_parking_max_days,
+        visit_max_stay_days=row.visit_max_stay_days or base.visit_max_stay_days,
+        qr_max_people=row.qr_max_people or base.qr_max_people,
+        qr_max_valid_days=row.qr_max_valid_days or base.qr_max_valid_days,
+        auto_qr_min_stay_days=row.auto_qr_min_stay_days or base.auto_qr_min_stay_days,
+        delivered_archive_days=row.delivered_archive_days or base.delivered_archive_days,
+        motos_per_car_spot=row.motos_per_car_spot or base.motos_per_car_spot,
     )
 
 

@@ -18,6 +18,9 @@ administración.
 
 ### Añadido
 
+**Más reglas de la unidad que la administración puede cambiar**
+- En «Reglas de la unidad» (web y API) se pueden ajustar seis reglas que estaban fijas en el código: la estadía máxima de una visita (30 días por defecto, antes 7), las personas por QR (5, antes sin tope), la vigencia de un QR (30 días), desde cuántos días de estadía el QR se crea solo (2), los días para archivar un paquete entregado (7) y las motos que caben en un parqueadero de carro de visitantes (6). Cada una tiene mínimo y máximo, valor de DOMUX y queda en la auditoría.
+
 **Documentación de la API**
 - Página `/docs` (Swagger UI) en el propio servidor: se abre sin sesión, muestra todas las rutas del contrato y permite probarlas con «Try it out» contra el mismo servidor.
 

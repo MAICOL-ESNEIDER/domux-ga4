@@ -17,9 +17,15 @@ from extensions import db
 from models import UnitSettings, User
 from services.audit_service import add_audit_log
 from services.unit_rules import (
+    ARCHIVE_DAYS_LIMITS,
+    AUTO_QR_LIMITS,
+    MOTOS_PER_SPOT_LIMITS,
     PACKAGE_ORANGE_LIMITS,
     PACKAGE_RED_LIMITS,
     PARKING_DAYS_LIMITS,
+    QR_PEOPLE_LIMITS,
+    QR_VALID_LIMITS,
+    VISIT_STAY_LIMITS,
     PQRS_CATEGORIES,
     PQRS_TERM_LIMITS,
     PQRS_WARNING_LIMITS,
@@ -42,6 +48,18 @@ SIMPLE_RULES = (
      "El aviso rojo de un paquete sin reclamar", "horas"),
     ("visitorParkingMaxDays", "visitor_parking_max_days", PARKING_DAYS_LIMITS,
      "El tiempo máximo de un vehículo visitante en el parqueadero", "días"),
+    ("visitMaxStayDays", "visit_max_stay_days", VISIT_STAY_LIMITS,
+     "La estadía máxima que se puede anotar en una visita", "días"),
+    ("qrMaxPeople", "qr_max_people", QR_PEOPLE_LIMITS,
+     "Las personas que caben en un solo QR de visita", "personas"),
+    ("qrMaxValidDays", "qr_max_valid_days", QR_VALID_LIMITS,
+     "La vigencia máxima de un QR de visita", "días"),
+    ("autoQrMinStayDays", "auto_qr_min_stay_days", AUTO_QR_LIMITS,
+     "Los días de estadía desde los que el QR de la visita se crea solo", "días"),
+    ("deliveredArchiveDays", "delivered_archive_days", ARCHIVE_DAYS_LIMITS,
+     "Los días que un paquete entregado tarda en archivarse solo", "días"),
+    ("motosPerCarSpot", "motos_per_car_spot", MOTOS_PER_SPOT_LIMITS,
+     "Las motos que caben en un parqueadero de carro de visitantes", "motos"),
 )
 
 CATEGORY_KEY = "pqrsTermsByCategory"
@@ -87,6 +105,11 @@ def _check_together(rules):
             f"El semáforo no puede pasar a amarillo con {rules.pqrs_warning_days} días hábiles por vencer "
             f"si el plazo general es de {rules.pqrs_term_days}. "
             f"Baja los días del aviso amarillo (máximo {rules.pqrs_term_days}) o sube el plazo."
+        )
+    if rules.auto_qr_min_stay_days > rules.visit_max_stay_days:
+        raise ApiError(
+            f"El QR automático desde {rules.auto_qr_min_stay_days} días de estadía no puede ser mayor que la "
+            f"estadía máxima ({rules.visit_max_stay_days} días)."
         )
     if rules.package_red_hours <= rules.package_orange_hours:
         raise ApiError(

@@ -670,6 +670,13 @@ class UnitSettings(db.Model):
     package_orange_hours = db.Column(db.Integer, nullable=True)
     package_red_hours = db.Column(db.Integer, nullable=True)
     visitor_parking_max_days = db.Column(db.Integer, nullable=True)
+    # Reglas de portería que antes estaban fijas en el código (ver services/unit_rules.py).
+    visit_max_stay_days = db.Column(db.Integer, nullable=True)
+    qr_max_people = db.Column(db.Integer, nullable=True)
+    qr_max_valid_days = db.Column(db.Integer, nullable=True)
+    auto_qr_min_stay_days = db.Column(db.Integer, nullable=True)
+    delivered_archive_days = db.Column(db.Integer, nullable=True)
+    motos_per_car_spot = db.Column(db.Integer, nullable=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     updated_by_id = db.Column(
         db.Integer,

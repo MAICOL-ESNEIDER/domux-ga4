@@ -55,6 +55,30 @@
            extra={"min": limits.visitorParkingMaxDays[0], "max": limits.visitorParkingMaxDays[1], "inputmode": "numeric"},
            help=help_with_default("Pasado este tiempo, la portería recibe un aviso para hablar con el visitante.", "visitorParkingMaxDays", "días")) }}
 
+  {{ field("motosPerCarSpot", "Motos en un parqueadero de carro de visitantes", values.motosPerCarSpot, type="number", required=True,
+           extra={"min": limits.motosPerCarSpot[0], "max": limits.motosPerCarSpot[1], "inputmode": "numeric"},
+           help=help_with_default("Cuando se acaban los parqueaderos de moto de visitantes, en uno de carro caben tantas motos como indique este número.", "motosPerCarSpot", "motos")) }}
+
+  <h2>Visitas y códigos QR</h2>
+  <p class="muted">Lo que pueden anotar el guardia y el residente al registrar visitas y crear QR. Las visitas de {{ rules.autoQrMinStayDays }} días o más reciben su QR solas si el residente da el acceso.</p>
+  {{ field("visitMaxStayDays", "Estadía máxima de una visita (días)", values.visitMaxStayDays, type="number", required=True,
+           extra={"min": limits.visitMaxStayDays[0], "max": limits.visitMaxStayDays[1], "inputmode": "numeric"},
+           help=help_with_default("Lo más que el guardia puede anotar como estadía prevista de una visita.", "visitMaxStayDays", "días")) }}
+  {{ field("autoQrMinStayDays", "El QR se crea solo desde (días de estadía)", values.autoQrMinStayDays, type="number", required=True,
+           extra={"min": limits.autoQrMinStayDays[0], "max": limits.autoQrMinStayDays[1], "inputmode": "numeric"},
+           help=help_with_default("Desde esta estadía, la visita tiene un QR para entrar y salir sin repetir datos. No puede ser mayor que la estadía máxima.", "autoQrMinStayDays", "días")) }}
+  {{ field("qrMaxPeople", "Personas por cada QR", values.qrMaxPeople, type="number", required=True,
+           extra={"min": limits.qrMaxPeople[0], "max": limits.qrMaxPeople[1], "inputmode": "numeric"},
+           help=help_with_default("Un QR sirve para esta cantidad de personas como máximo. Para más personas se crean varios QR.", "qrMaxPeople", "personas")) }}
+  {{ field("qrMaxValidDays", "Vigencia máxima de un QR (días)", values.qrMaxValidDays, type="number", required=True,
+           extra={"min": limits.qrMaxValidDays[0], "max": limits.qrMaxValidDays[1], "inputmode": "numeric"},
+           help=help_with_default("Lo más que puede durar un QR creado por un residente.", "qrMaxValidDays", "días")) }}
+
+  <h2>Paquetes entregados</h2>
+  {{ field("deliveredArchiveDays", "Archivar un paquete entregado después de (días)", values.deliveredArchiveDays, type="number", required=True,
+           extra={"min": limits.deliveredArchiveDays[0], "max": limits.deliveredArchiveDays[1], "inputmode": "numeric"},
+           help=help_with_default("Pasado este tiempo, el paquete entregado sale de la lista diaria, pero se puede buscar y nunca se borra.", "deliveredArchiveDays", "días")) }}
+
   <div class="form-actions">
     <button type="submit" class="btn">Guardar las reglas</button>
     <a class="btn btn-quiet" href="{{ url_for('web.panel') }}">Cancelar</a>
