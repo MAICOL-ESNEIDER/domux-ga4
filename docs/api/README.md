@@ -28,6 +28,10 @@ No incluye la web de administración (`/web/...`): son páginas HTML para un nav
 El archivo se puede leer como texto, pero se entiende mejor en un visor de OpenAPI:
 
 - En Visual Studio Code, con la extensión «OpenAPI (Swagger) Editor».
+- En el propio servidor, en la dirección `/docs` (Swagger UI): se abre sin iniciar sesión, muestra cada ruta y permite
+  probarla con «Try it out». Para las rutas protegidas se entra con `POST /api/auth/login` y se pega el token en
+  «Authorize». Después de cambiar el contrato hay que correr `python backend/scripts/sync_openapi.py`, que copia el
+  archivo a `backend/openapi` (el servidor se despliega solo con la carpeta `backend`).
 - En el navegador, abriendo el archivo en el editor de Swagger (`editor.swagger.io`). El contrato no tiene
   claves ni datos privados, así que se puede pegar ahí sin problema.
 

@@ -25,12 +25,13 @@ from extensions import db
 from models import User
 from web import security
 
-#: Rutas públicas a propósito (inicio de sesión, estado del servicio, archivos de diseño, logo de la web y los
-#: documentos legales, que se leen antes de entrar).
+#: Rutas públicas a propósito (inicio de sesión, estado del servicio, archivos de diseño, logo de la web, los
+#: documentos legales, que se leen antes de entrar, y la documentación Swagger, que no trae datos de nadie).
 PUBLIC_ENDPOINTS = {
     "root", "static", "auth.login", "auth.health",
     "web.static", "web.login", "web.login_submit", "web.unit_logo",
     "legal.list_documents", "legal.get_document", "web.legal_index", "web.legal_document",
+    "docs.swagger_page", "docs.openapi_spec",
 }
 
 #: Rutas de la API que sirven a cualquier persona con sesión, sea cual sea su rol.

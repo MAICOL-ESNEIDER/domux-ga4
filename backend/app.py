@@ -16,6 +16,7 @@ from services.history_archive_service import purge_login_attempts
 from routes.admin import bp as admin_bp
 from routes.auth import bp as auth_bp
 from routes.community import bp as community_bp
+from routes.docs import bp as docs_bp
 from routes.documents import bp as documents_bp
 from routes.legal import bp as legal_bp
 from routes.search import bp as search_bp
@@ -334,6 +335,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(community_bp)
+    app.register_blueprint(docs_bp)
     app.register_blueprint(documents_bp)
     app.register_blueprint(legal_bp)
     app.register_blueprint(search_bp)
