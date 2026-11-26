@@ -11,7 +11,7 @@ import expo_data
 import seed
 from app import create_app
 from extensions import db
-from models import User
+from models import Announcement, Pqrs, Reservation, PackageItem, User, Visit
 
 
 class ExpoReportTests(unittest.TestCase):
@@ -59,6 +59,49 @@ class ExpoReportTests(unittest.TestCase):
         self.assertTrue(logs.records)
         self.assertTrue(all(record.getMessage().startswith("[EXPO]") for record in logs.records))
         self.assertEqual(expo_data.table_counts(), before)
+
+
+class ExpoActivityTests(ExpoReportTests):
+    # Hereda solo la preparación de la base; las pruebas de arriba no se repiten.
+    test_sin_la_variable_no_hace_nada = test_el_resumen_separa_los_usuarios_que_no_son_de_prueba = test_revisar_no_cambia_la_base = None
+
+    def load(self):
+        with mock.patch.dict(os.environ, {expo_data.ACTION_VAR: "cargar"}):
+            return expo_data.run_requested_action()
+
+    def test_agrega_actividad_con_adjuntos_y_solo_una_vez(self):
+        before = {"u": User.query.count()}
+        self.assertTrue(self.load())
+        self.assertEqual(User.query.count(), before["u"])
+        self.assertGreaterEqual(Announcement.query.count(), 9 + 5)
+        self.assertGreaterEqual(Pqrs.query.count(), 8 + 5)
+        self.assertGreaterEqual(Reservation.query.count(), 6)
+        self.assertGreaterEqual(PackageItem.query.count(), 8)
+        self.assertGreaterEqual(Visit.query.count(), 11)
+        kinds = {a.media_type for a in Announcement.query if a.media_url}
+        self.assertEqual(kinds, {"image", "video", "audio", "document"})
+        self.assertFalse(self.load())  # no se repite
+
+    def test_todos_los_adjuntos_pasan_la_revision_del_servidor(self):
+        from services.media import check_attachment
+        self.load()
+        rows = [(a.media_url, a.media_type) for a in Announcement.query if a.media_url]
+        rows += [(p.media_url, p.media_type) for p in Pqrs.query if p.media_url]
+        self.assertTrue(rows)
+        for url, kind in rows:
+            checked, error = check_attachment(url, kind, allow_document=True)
+            self.assertIsNone(error, kind)
+            self.assertEqual(checked, url)
+
+    def test_la_api_los_entrega_como_cualquier_dato(self):
+        self.load()
+        client = self.app.test_client()
+        login = client.post("/api/auth/login", json={"email": "jorge@domux.com", "password": os.environ["SEED_RESIDENT_PASSWORD"]})
+        self.assertEqual(login.status_code, 200, login.get_json())
+        headers = {"Authorization": f"Bearer {login.get_json()['token']}"}
+        for path in ("/api/announcements", "/api/pqrs", "/api/reservations", "/api/packages"):
+            response = client.get(path, headers=headers)
+            self.assertEqual(response.status_code, 200, path)
 
 
 if __name__ == "__main__":

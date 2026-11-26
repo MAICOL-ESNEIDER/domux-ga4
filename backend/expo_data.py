@@ -91,8 +91,13 @@ def report():
 
 
 def run_requested_action():
-    """Si la variable pide ``inspeccionar``, escribe el resumen en el registro. No cambia la base."""
-    if requested_action() != "inspeccionar":
+    """Hace lo que pide la variable: ``inspeccionar`` (solo lee) o ``cargar`` (solo agrega)."""
+    action = requested_action()
+    if action == "cargar":
+        from expo_activity import add_expo_activity
+
+        return add_expo_activity()
+    if action != "inspeccionar":
         return False
     try:
         for text in report():
