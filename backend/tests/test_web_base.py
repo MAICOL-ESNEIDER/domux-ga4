@@ -81,10 +81,16 @@ class WebBaseTests(unittest.TestCase):
 
     # --- La dirección principal y las cabeceras ---------------------------------------------------
 
-    def test_root_redirects_to_the_web(self):
+    def test_root_shows_the_welcome_page_without_asking_for_login(self):
         response = self.client.get("/")
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.headers["Location"].endswith("/web/"))
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        for text in ("Descargar la app (Android)", "Entrar a la administración", "Documentación de la API",
+                     "releases/download/ultima/domux.apk", 'href="/web/login"', 'href="/docs"'):
+            self.assertIn(text, body)
+        # Es pública y no trae datos de nadie: ni cuentas de prueba ni contraseñas.
+        self.assertNotIn("@domux.com", body)
+        self.assertNotIn("Admin12345", body)
 
     def test_panel_asks_for_login(self):
         response = self.client.get("/web/")

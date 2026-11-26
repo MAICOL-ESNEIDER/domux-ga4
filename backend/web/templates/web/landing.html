@@ -1,0 +1,42 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import brand_parts, legal_links %}
+{% set page_title = "Bienvenida" %}
+{% set wide_card = true %}
+
+{% block content %}
+<div class="brand">{{ brand_parts() }}</div>
+
+<h1>La administración de tu conjunto residencial, en el celular y en el computador</h1>
+<p class="lead">DOMUX junta en un solo lugar lo que hoy se hace con cuadernos, grupos de mensajes y papeles: paquetes, visitas, reservas de zonas comunes, solicitudes (PQRS), comunicados y documentos de la unidad.</p>
+
+<div class="grid grid-3">
+  <section class="card" aria-labelledby="para-residentes">
+    <h2 id="para-residentes">Residentes</h2>
+    <p>Reciben aviso cuando llega un paquete y lo retiran con un código. Crean el QR de sus visitas, reservan zonas comunes, radican solicitudes y leen los comunicados.</p>
+  </section>
+  <section class="card" aria-labelledby="para-porteria">
+    <h2 id="para-porteria">Portería</h2>
+    <p>Registra paquetes, visitas y vehículos en segundos, lee los QR y deja constancia de quién entra, quién sale y quién recibe cada paquete.</p>
+  </section>
+  <section class="card" aria-labelledby="para-administracion">
+    <h2 id="para-administracion">Administración</h2>
+    <p>Atiende las solicitudes a tiempo, publica comunicados, administra zonas, estructura y documentos, y ajusta las reglas de la unidad sin tocar el programa.</p>
+  </section>
+</div>
+
+<h2>Entrar a DOMUX</h2>
+<p class="muted">La app es solo para Android. La página de administración es para el computador.</p>
+<p>
+  <a class="btn" href="https://github.com/MAICOL-ESNEIDER/domux-ga4/releases/download/ultima/domux.apk">Descargar la app (Android)</a>
+  <a class="btn btn-quiet" href="{{ url_for('web.login') }}">Entrar a la administración</a>
+</p>
+<p class="small muted">Si Android avisa que la app es de un origen desconocido, es porque aún no está en la tienda de aplicaciones; hay que permitir la instalación para este archivo.</p>
+
+<h2>Para quien revisa el proyecto</h2>
+<ul>
+  <li><a href="{{ url_for('docs.swagger_page') }}">Documentación de la API (Swagger)</a>: todas las rutas del servidor, con la posibilidad de probarlas.</li>
+  <li><a href="https://github.com/MAICOL-ESNEIDER/domux-ga4">Código y documentación en GitHub</a></li>
+</ul>
+
+{{ legal_links() }}
+{% endblock %}
