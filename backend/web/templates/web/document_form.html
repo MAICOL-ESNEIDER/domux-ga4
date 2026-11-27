@@ -29,7 +29,7 @@
   {% if document %}
   <div class="field">
     <p><strong>Archivo:</strong> {{ document.fileName }} · {{ size_text(document.sizeBytes) }}
-      · <a href="{{ url_for('web.document_file', document_id=document.id) }}">Abrir</a></p>
+      <a class="btn btn-outline btn-small" href="{{ url_for('web.document_file', document_id=document.id) }}">Abrir</a></p>
   </div>
   {% else %}
   <div class="field">

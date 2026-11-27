@@ -347,6 +347,13 @@ td.actions form { display: inline; }
 .btn-danger { background: transparent; border-color: var(--bad-line); color: var(--bad); }
 .btn-danger:hover { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
 .btn-small { min-height: 36px; padding: .3rem .75rem; font-size: .9rem; }
+/* «‹ Volver a la lista» también es un botón, no texto azul suelto. */
+.back-link {
+  display: inline-flex; align-items: center; gap: .3rem; min-height: 36px; padding: .3rem .8rem; margin-bottom: .75rem;
+  border: 1px solid var(--line); border-radius: 12px; color: var(--soft); text-decoration: none; font-weight: 600; font-size: .9rem;
+}
+.back-link:hover { background: var(--tint-1); color: var(--text); border-color: var(--muted); }
+.attachment figcaption, .attachment-document { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .btn-block { width: 100%; }
 
 form.inline { display: inline; margin: 0; }

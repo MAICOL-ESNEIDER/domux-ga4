@@ -48,7 +48,7 @@
           <td class="nowrap mono"><strong>{{ entry.plate }}</strong></td>
           <td data-label="Visitante">
             {{ entry.visitorName or "—" }}
-            {% if entry.visitId %}<br><small><a href="{{ url_for('web.registry_visit_detail', visit_id=entry.visitId) }}">Ver la visita</a></small>{% endif %}
+            {% if entry.visitId %}<br><a class="btn btn-outline btn-small" href="{{ url_for('web.registry_visit_detail', visit_id=entry.visitId) }}">Ver la visita</a>{% endif %}
           </td>
           <td data-label="Apartamento"><span class="nowrap">{{ entry.apartment or "—" }}</span>{% if entry.residentName %}<br><small class="muted">{{ entry.residentName }}</small>{% endif %}</td>
           <td data-label="Parqueadero">

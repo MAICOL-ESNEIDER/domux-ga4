@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.dracknoval.domux
 
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -222,7 +223,7 @@ fun UnitAndZonesScreen(navController: NavController, viewModel: UnitAndZonesView
                             style = MaterialTheme.typography.bodySmall
                         )
                         zone.closedReason?.takeIf { zone.isClosed }?.let { Text("Motivo: $it", style = MaterialTheme.typography.bodySmall) }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { editing = zone }, enabled = !state.busy) { Text("Cambiar reglas") }
                             if (zone.isClosed) {
                                 Button(onClick = { viewModel.openZone(zone) }, enabled = !state.busy) { Text("Reabrir") }

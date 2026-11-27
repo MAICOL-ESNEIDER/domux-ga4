@@ -18,6 +18,10 @@ administración.
 
 ### Añadido
 
+**Toda acción se ve como botón**
+- En la app, las acciones que eran texto azul (en tarjetas, listas y ventanas) ahora son botones con borde, en todos los roles: administración, portería y residentes (propietarios y arrendatarios). El botón lleno sigue siendo la acción principal de cada pantalla. Las filas con varios botones bajan de renglón cuando no caben.
+- En la web, «Volver a la lista», abrir y descargar adjuntos, «Ver la visita», «Ver todos» y los accesos de la página de descargas también son botones.
+
 **Paquetes: siempre en portería y entrega con PIN**
 - Un paquete para un residente se registra cuando ya llegó y queda guardado en portería, sin que el residente tenga que aceptarlo. La app le avisa «Llegó un paquete para ti… pasa a recogerlo». La portería ya no ve la opción «En portería / Por llegar» para los paquetes de los residentes; «por llegar» queda solo para lo que espera la unidad.
 - El servidor no deja registrar ni pasar a «por llegar» un paquete de un residente. Los que habían quedado así pasan a «en portería» con la migración 0030.
