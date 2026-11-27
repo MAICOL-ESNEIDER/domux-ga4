@@ -24,10 +24,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import android.content.Context
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -40,6 +42,7 @@ import com.dracknoval.domux.data.mensajeDeError
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) {
     val context = LocalContext.current
@@ -118,21 +121,52 @@ fun LoginScreen(navController: NavController, onLoginComplete: () -> Unit = {}) 
             modifier = Modifier.fillMaxWidth()
         )
         if (recentEmails.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                recentEmails.forEach { recentEmail ->
-                    Surface(
-                        modifier = Modifier.clickable { email = recentEmail },
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text(
-                            recentEmail,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                Text(
+                    "Cuentas recientes",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    recentEmails.forEach { recentEmail ->
+                        val isSelected = email.trim().equals(recentEmail.trim(), ignoreCase = true)
+                        Surface(
+                            modifier = Modifier.clickable { 
+                                email = recentEmail 
+                                if (attemptedLogin) attemptedLogin = false 
+                                result = ""
+                            }.height(36.dp),
+                            color = Color(0xFF111C30),
+                            shape = RoundedCornerShape(10.dp),
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.7f)) else androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.PersonOutline, 
+                                    contentDescription = null, 
+                                    modifier = Modifier.size(15.dp), 
+                                    tint = if (isSelected) Color(0xFF38BDF8) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = recentEmail,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
                     }
                 }
             }
