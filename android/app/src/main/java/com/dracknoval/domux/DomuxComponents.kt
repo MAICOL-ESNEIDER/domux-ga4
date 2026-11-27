@@ -283,13 +283,16 @@ fun DomuxBrandMark(size: Dp = 54.dp) {
 fun DomuxFeedbackBanner(message: String, isError: Boolean? = null, onDismiss: (() -> Unit)? = null) {
         if (message.isBlank()) return
 
+        val autoErrorWords = listOf("error", "no se pudo", "no es un", "inválid", "falló", "máximo", "obligatorio", "no coinciden", "denegado", "rechazad", "expirad", "vencid", "incorrect", "requiere", "no tiene", "no encontrad")
+        val isErrorInferred = autoErrorWords.any { message.contains(it, ignoreCase = true) }
+        
         val confirmations = listOf(
             "creada", "creado", "actualizado", "actualizada", "actualizadas", "publicado", "eliminado",
             "enviada", "enviado", "guardada", "guardado", "registrado", "registrada",
             "entregado", "restaurado", "restablecida", "revocado", "autorizado",
             "aprobada", "vinculado", "papelera", "archivada", "exitosamente"
         )
-        val isSuccess = if (isError != null) !isError else confirmations.any { message.contains(it, ignoreCase = true) }
+        val isSuccess = if (isError != null) !isError else (!isErrorInferred && confirmations.any { message.contains(it, ignoreCase = true) })
         val background = if (isSuccess) Color(0xFF052E16) else Color(0xFF450A0A)
         val foreground = if (isSuccess) Color(0xFF34D399) else Color(0xFFF87171)
         val outline = if (isSuccess) Color(0xFF10B981) else Color(0xFFEF4444)

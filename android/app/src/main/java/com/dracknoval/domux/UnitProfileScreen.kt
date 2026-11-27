@@ -80,6 +80,8 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
     val vehicles = remember { mutableStateListOf<VehicleData>() }
     val scope = rememberCoroutineScope()
 
+    var confirmationDialog by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    
     suspend fun load() {
         loading = true
         try {
@@ -236,7 +238,9 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                             Text("Doc: ${member.documentId} · Nac: ${member.birthDate}", style = MaterialTheme.typography.bodySmall)
                             member.phone?.takeIf(String::isNotBlank)?.let { phone -> Text("Tel: $phone", style = MaterialTheme.typography.bodySmall) }
                         }
-                        IconButton(onClick = { members.removeAt(index) }) {
+                        IconButton(onClick = {
+                            confirmationDialog = "¿Quitar integrante?" to { members.removeAt(index) }
+                        }) {
                             Icon(Icons.Rounded.DeleteOutline, contentDescription = "Quitar integrante")
                         }
                     }
@@ -290,7 +294,9 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                             }
                             Text("Raza: ${pet.breed} · Edad: ${pet.ageYears} años", style = MaterialTheme.typography.bodySmall)
                         }
-                        IconButton(onClick = { pets.removeAt(index) }) {
+                        IconButton(onClick = {
+                            confirmationDialog = "¿Quitar mascota?" to { pets.removeAt(index) }
+                        }) {
                             Icon(Icons.Rounded.DeleteOutline, contentDescription = "Quitar mascota")
                         }
                     }
@@ -350,7 +356,9 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
                             Text("${vehicle.type.toDomuxDisplayLabel()} · ${vehicle.year} · ${vehicle.color ?: ""}", style = MaterialTheme.typography.bodySmall)
                             Text("Titular: ${vehicle.registeredOwner}", style = MaterialTheme.typography.bodySmall)
                         }
-                        IconButton(onClick = { vehicles.removeAt(index) }) {
+                        IconButton(onClick = {
+                            confirmationDialog = "¿Quitar vehículo?" to { vehicles.removeAt(index) }
+                        }) {
                             Icon(Icons.Rounded.DeleteOutline, contentDescription = "Quitar vehículo")
                         }
                     }
@@ -472,5 +480,24 @@ fun UnitProfileScreen(navController: NavController, apartment: String) {
         }
         Spacer(Modifier.height(4.dp))
         }
+    }
+
+    confirmationDialog?.let { (title, action) ->
+        val itemDetails = when (title) {
+            "¿Quitar integrante?" -> "Se quitará a un integrante de la ficha del apartamento. Recuerda guardar la ficha para aplicar el cambio."
+            "¿Quitar mascota?" -> "Se quitará a la mascota de la ficha del apartamento. Recuerda guardar la ficha para aplicar el cambio."
+            else -> "Se quitará el vehículo de la ficha del apartamento. Recuerda guardar la ficha para aplicar el cambio."
+        }
+        DomuxConfirmDialog(
+            title = title,
+            message = itemDetails,
+            confirmLabel = "Quitar",
+            danger = true,
+            onConfirm = {
+                action()
+                confirmationDialog = null
+            },
+            onDismiss = { confirmationDialog = null }
+        )
     }
 }

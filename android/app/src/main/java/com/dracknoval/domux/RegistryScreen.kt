@@ -207,13 +207,20 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
             .takeIf { raw.startsWith("DOMUX:") && it.isNotBlank() }
         if (token == null) {
             message = "El código leído no es un QR válido de DOMUX."
+            messageIsError = true
         } else {
             scannedQrToken = token
             scope.launch {
-                runRegistryAction({ message = "No se pudo consultar el QR: $it" }) {
+                runRegistryAction({ message = "No se pudo consultar el QR: $it"; messageIsError = true }) {
                     val response = RetrofitClient.api.inspectVisitQr(Session.bearer(), token)
-                    if (response.isSuccessful) qrInspection = response.body()
-                    else message = mensajeDeError(response.code(), response.errorBody()?.string())
+                    if (response.isSuccessful) {
+                        qrInspection = response.body()
+                        messageIsError = false
+                    }
+                    else {
+                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                        messageIsError = true
+                    }
                 }
             }
         }
@@ -231,6 +238,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                 packages = packageResponse.body()?.packages.orEmpty()
             } else {
                 message = mensajeDeError(packageResponse.code(), packageResponse.errorBody()?.string())
+                messageIsError = true
             }
 
             val visitsResponse = RetrofitClient.api.getVisits(Session.bearer())
@@ -238,6 +246,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                 visits = visitsResponse.body()?.visits.orEmpty()
             } else {
                 message = mensajeDeError(visitsResponse.code(), visitsResponse.errorBody()?.string())
+                messageIsError = true
             }
 
             if (Session.isResident) {
@@ -246,6 +255,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                     qrPasses = qrResponse.body()?.qrPasses.orEmpty()
                 } else {
                     message = mensajeDeError(qrResponse.code(), qrResponse.errorBody()?.string())
+                    messageIsError = true
                 }
             }
         } catch (exception: Exception) {
@@ -253,6 +263,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                 if (exception is CancellationException) throw exception else return
             }
             message = "No se pudieron cargar los registros: ${exception.message}"
+            messageIsError = true
         } finally {
             loading = false
         }
@@ -273,6 +284,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                 if (exception is CancellationException) throw exception else return@LaunchedEffect
             }
             message = "No se pudo generar la imagen del QR: ${exception.message}"
+            messageIsError = true
             null
         }
     }
@@ -281,18 +293,19 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
         val visit = pendingQrExit ?: return
         val token = scannedQrToken ?: return
         scope.launch {
-            runRegistryAction({ message = "No se pudo registrar la salida QR: $it" }) {
+            runRegistryAction({ message = "No se pudo registrar la salida QR: $it"; messageIsError = true }) {
                 val response = RetrofitClient.api.exitVisitQr(
                     Session.bearer(), token, QrVisitorExitRequest(visit.id, returningToday)
                 )
-                message = if (response.isSuccessful) {
-                    if (returningToday) "Salida registrada; puede regresar hoy."
-                    else "Salida definitiva registrada."
-                } else mensajeDeError(response.code(), response.errorBody()?.string())
                 if (response.isSuccessful) {
+                    message = if (returningToday) "Salida registrada; puede regresar hoy." else "Salida definitiva registrada."
+                    messageIsError = false
                     pendingQrExit = null
                     refreshQrInspection(token) { qrInspection = it }
                     load()
+                } else {
+                    message = mensajeDeError(response.code(), response.errorBody()?.string())
+                    messageIsError = true
                 }
             }
         }
@@ -310,18 +323,21 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     fun enterQrVisitor(name: String) {
         val token = scannedQrToken ?: return
         scope.launch {
-            runRegistryAction({ message = "No se pudo registrar el ingreso QR: $it" }) {
+            runRegistryAction({ message = "No se pudo registrar el ingreso QR: $it"; messageIsError = true }) {
                 val response = RetrofitClient.api.enterVisitQr(
                     Session.bearer(),
                     token,
                     QrVisitorEntryRequest(visitorName = name.trim())
                 )
-                message = if (response.isSuccessful) "Entrada por QR registrada."
-                else mensajeDeError(response.code(), response.errorBody()?.string())
                 if (response.isSuccessful) {
+                    message = "Entrada por QR registrada."
+                    messageIsError = false
                     qrVisitorName = ""
                     refreshQrInspection(token) { qrInspection = it }
                     load()
+                } else {
+                    message = mensajeDeError(response.code(), response.errorBody()?.string())
+                    messageIsError = true
                 }
             }
         }
@@ -330,18 +346,20 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     fun linkVisitToQr(visit: Visit) {
         val token = scannedQrToken ?: return
         scope.launch {
-            runRegistryAction({ message = "No se pudo vincular al QR: $it" }) {
+            runRegistryAction({ message = "No se pudo vincular al QR: $it"; messageIsError = true }) {
                 val response = RetrofitClient.api.enterVisitQr(
                     Session.bearer(),
                     token,
                     QrVisitorEntryRequest(visitId = visit.id)
                 )
-                message = if (response.isSuccessful) {
-                    "${visit.visitorName} vinculado al QR."
-                } else mensajeDeError(response.code(), response.errorBody()?.string())
                 if (response.isSuccessful) {
+                    message = "${visit.visitorName} vinculado al QR."
+                    messageIsError = false
                     refreshQrInspection(token) { qrInspection = it }
                     load()
+                } else {
+                    message = mensajeDeError(response.code(), response.errorBody()?.string())
+                    messageIsError = true
                 }
             }
         }
@@ -350,18 +368,20 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     fun reenterVisitByQr(visit: Visit) {
         val token = scannedQrToken ?: return
         scope.launch {
-            runRegistryAction({ message = "No se pudo registrar el reingreso: $it" }) {
+            runRegistryAction({ message = "No se pudo registrar el reingreso: $it"; messageIsError = true }) {
                 val response = RetrofitClient.api.enterVisitQr(
                     Session.bearer(),
                     token,
                     QrVisitorEntryRequest(visitId = visit.id)
                 )
-                message = if (response.isSuccessful) {
-                    "Reingreso de ${visit.visitorName} registrado."
-                } else mensajeDeError(response.code(), response.errorBody()?.string())
                 if (response.isSuccessful) {
+                    message = "Reingreso de ${visit.visitorName} registrado."
+                    messageIsError = false
                     refreshQrInspection(token) { qrInspection = it }
                     load()
+                } else {
+                    message = mensajeDeError(response.code(), response.errorBody()?.string())
+                    messageIsError = true
                 }
             }
         }
@@ -369,17 +389,23 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
 
     fun authorizeAndEnterByCall(visit: Visit) {
         scope.launch {
-            runRegistryAction({ message = "No se pudo autorizar el ingreso: $it" }) {
+            runRegistryAction({ message = "No se pudo autorizar el ingreso: $it"; messageIsError = true }) {
                 val authorization = RetrofitClient.api.authorizeVisitByCall(
                     Session.bearer(), visit.id
                 )
                 if (!authorization.isSuccessful) {
                     message = mensajeDeError(authorization.code(), authorization.errorBody()?.string())
+                    messageIsError = true
                     return@runRegistryAction
                 }
                 val entry = RetrofitClient.api.registerVisitEntry(Session.bearer(), visit.id)
-                message = if (entry.isSuccessful) "Visita autorizada e ingreso registrado."
-                else mensajeDeError(entry.code(), entry.errorBody()?.string())
+                if (entry.isSuccessful) {
+                    message = "Visita autorizada e ingreso registrado."
+                    messageIsError = false
+                } else {
+                    message = mensajeDeError(entry.code(), entry.errorBody()?.string())
+                    messageIsError = true
+                }
                 load()
             }
         }
@@ -455,12 +481,16 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         },
                         onRestore = { item ->
                             scope.launch {
-                                runRegistryAction({ message = "No se pudo restaurar el paquete: $it" }) {
+                                runRegistryAction({ message = "No se pudo restaurar el paquete: $it"; messageIsError = true }) {
                                     val response = RetrofitClient.api.restorePackage(Session.bearer(), item.id)
-                                    message = if (response.isSuccessful) {
-                                        response.body()?.message ?: "Paquete restaurado."
-                                    } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                    if (response.isSuccessful) load()
+                                    if (response.isSuccessful) {
+                                        message = response.body()?.message ?: "Paquete restaurado."
+                                        messageIsError = false
+                                        load()
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
+                                    }
                                 }
                             }
                         },
@@ -518,10 +548,11 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                             attemptedPackage = true
                             if (selectedPackageResident == null || packageDescription.isBlank()) {
                                 message = "Selecciona residente y escribe la descripción del paquete."
+                                messageIsError = true
                             } else {
                                 confirmation = "¿Estás seguro de guardar este paquete?" to {
                                     scope.launch {
-                                        runRegistryAction({ message = "No se pudo registrar el paquete: $it" }) {
+                                        runRegistryAction({ message = "No se pudo registrar el paquete: $it"; messageIsError = true }) {
                                             val response = RetrofitClient.api.registerPackage(
                                                 Session.bearer(),
                                                 RegisterPackageRequest(
@@ -536,6 +567,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                             )
                                             if (response.isSuccessful) {
                                                 message = "Paquete registrado."
+                                                messageIsError = false
                                                 packageDescription = ""
                                                 packageDate = ""
                                                 packageTime = ""
@@ -548,6 +580,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                                 load()
                                             } else {
                                                 message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                                messageIsError = true
                                             }
                                         }
                                     }
@@ -565,39 +598,52 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         isGuard = Session.isGuard,
                         onDecision = { visit, decision ->
                             scope.launch {
-                                runRegistryAction({ message = "No se pudo responder la solicitud: $it" }) {
+                                runRegistryAction({ message = "No se pudo responder la solicitud: $it"; messageIsError = true }) {
                                     val response = RetrofitClient.api.decideVisit(
                                         Session.bearer(), visit.id, VisitDecisionRequest(decision)
                                     )
-                                    message = if (response.isSuccessful) {
-                                        if (decision == "aprobada") "Acceso autorizado." else "Acceso rechazado."
-                                    } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                    if (response.isSuccessful) load()
+                                    if (response.isSuccessful) {
+                                        message = if (decision == "aprobada") "Acceso autorizado." else "Acceso rechazado."
+                                        messageIsError = false
+                                        load()
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
+                                    }
                                 }
                             }
                         },
                         onAuthorizeByCall = { visit ->
                             scope.launch {
-                                runRegistryAction({ message = "No se pudo registrar la autorización: $it" }) {
+                                runRegistryAction({ message = "No se pudo registrar la autorización: $it"; messageIsError = true }) {
                                     val response = RetrofitClient.api.authorizeVisitByCall(
                                         Session.bearer(), visit.id
                                     )
-                                    message = if (response.isSuccessful) {
-                                        "Autorización por llamada registrada."
-                                    } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                    if (response.isSuccessful) load()
+                                    if (response.isSuccessful) {
+                                        message = "Autorización por llamada registrada."
+                                        messageIsError = false
+                                        load()
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
+                                    }
                                 }
                             }
                         },
                         onEntry = { visit ->
                             scope.launch {
-                                runRegistryAction({ message = "No se pudo registrar la entrada: $it" }) {
+                                runRegistryAction({ message = "No se pudo registrar la entrada: $it"; messageIsError = true }) {
                                     val response = RetrofitClient.api.registerVisitEntry(
                                         Session.bearer(), visit.id
                                     )
-                                    message = if (response.isSuccessful) "Entrada registrada."
-                                    else mensajeDeError(response.code(), response.errorBody()?.string())
-                                    if (response.isSuccessful) load()
+                                    if (response.isSuccessful) {
+                                        message = "Entrada registrada."
+                                        messageIsError = false
+                                        load()
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
+                                    }
                                 }
                             }
                         },
@@ -647,11 +693,13 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                             attemptedVisit = true
                             if (selectedVisitResident == null || visitorName.isBlank()) {
                                 message = "Selecciona residente y escribe el nombre del visitante."
+                                messageIsError = true
                             } else if (!documentRefused && visitorDocument.isBlank()) {
                                 message = "El documento de identidad del visitante es obligatorio, o debes marcar que se negó a suministrarlo."
+                                messageIsError = true
                             } else {
                                 scope.launch {
-                                    runRegistryAction({ message = "No se pudo registrar la visita: $it" }) {
+                                    runRegistryAction({ message = "No se pudo registrar la visita: $it"; messageIsError = true }) {
                                         val response = RetrofitClient.api.registerVisit(
                                             Session.bearer(),
                                             RegisterVisitRequest(
@@ -669,6 +717,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                         )
                                         if (response.isSuccessful) {
                                             message = "Registro enviado. El residente recibirá una solicitud para autorizar el ingreso."
+                                            messageIsError = false
                                             visitorName = ""
                                             visitorDocument = ""
                                             documentRefused = false
@@ -681,6 +730,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                             load()
                                         } else {
                                             message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            messageIsError = true
                                         }
                                     }
                                 }
@@ -728,14 +778,18 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                         isGuard = false,
                         onDecision = { visit, decision ->
                             scope.launch {
-                                runRegistryAction({ message = "No se pudo responder la solicitud: $it" }) {
+                                runRegistryAction({ message = "No se pudo responder la solicitud: $it"; messageIsError = true }) {
                                     val response = RetrofitClient.api.decideVisit(
                                         Session.bearer(), visit.id, VisitDecisionRequest(decision)
                                     )
-                                    message = if (response.isSuccessful) {
-                                        if (decision == "aprobada") "Acceso autorizado." else "Acceso rechazado."
-                                    } else mensajeDeError(response.code(), response.errorBody()?.string())
-                                    if (response.isSuccessful) load()
+                                    if (response.isSuccessful) {
+                                        message = if (decision == "aprobada") "Acceso autorizado." else "Acceso rechazado."
+                                        messageIsError = false
+                                        load()
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
+                                    }
                                 }
                             }
                         },
@@ -931,11 +985,14 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
                                     val response = RetrofitClient.api.revokeVisitQrPass(
                                         Session.bearer(), pass.id
                                     )
-                                    message = if (response.isSuccessful) "QR revocado."
-                                    else mensajeDeError(response.code(), response.errorBody()?.string())
                                     if (response.isSuccessful) {
+                                        message = "QR revocado."
+                                        messageIsError = false
                                         if (activeQrPass?.id == pass.id) activeQrPass = null
                                         load()
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
                                     }
                                 }
                             }
@@ -1033,16 +1090,18 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        runRegistryAction({ message = "No se pudo registrar la salida: $it" }) {
+                        runRegistryAction({ message = "No se pudo registrar la salida: $it"; messageIsError = true }) {
                             val response = RetrofitClient.api.registerVisitExit(
                                 Session.bearer(), visit.id, VisitExitRequest(true)
                             )
-                            message = if (response.isSuccessful) {
-                                "Salida registrada; puede regresar hoy."
-                            } else mensajeDeError(response.code(), response.errorBody()?.string())
                             if (response.isSuccessful) {
+                                message = "Salida registrada; puede regresar hoy."
+                                messageIsError = false
                                 pendingExit = null
                                 load()
+                            } else {
+                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                messageIsError = true
                             }
                         }
                     }
@@ -1051,15 +1110,18 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
             dismissButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        runRegistryAction({ message = "No se pudo registrar la salida: $it" }) {
+                        runRegistryAction({ message = "No se pudo registrar la salida: $it"; messageIsError = true }) {
                             val response = RetrofitClient.api.registerVisitExit(
                                 Session.bearer(), visit.id, VisitExitRequest(false)
                             )
-                            message = if (response.isSuccessful) "Salida definitiva registrada."
-                            else mensajeDeError(response.code(), response.errorBody()?.string())
                             if (response.isSuccessful) {
+                                message = "Salida definitiva registrada."
+                                messageIsError = false
                                 pendingExit = null
                                 load()
+                            } else {
+                                message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                messageIsError = true
                             }
                         }
                     }
