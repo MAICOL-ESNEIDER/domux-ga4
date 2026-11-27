@@ -19,10 +19,16 @@ from models import (
     Apartment,
     CommonArea,
     ParkingSpot,
+    PackageItem,
     Pqrs,
+    Reservation,
     StorageRoom,
     Tower,
     User,
+    Vehicle,
+    Visit,
+    VisitQrPass,
+    VisitorVehicleEntry,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,6 +58,51 @@ def table_counts():
             continue
         counts[name] = db.session.execute(db.text(f'select count(*) from "{name}"')).scalar()
     return counts
+
+
+def _file(url, kind):
+    """«sin archivo» o el tipo y el tamaño aproximado de lo que se guardó."""
+    if not url:
+        return "sin archivo"
+    return f"{kind or '?'} {len(url) // 1365} KB"
+
+
+def detail_lines():
+    """Una línea por cada PQRS, reserva, paquete, visita, vehículo y pase QR (para decidir qué limpiar)."""
+    lines = ["== PQRS (una por línea) =="]
+    for item in Pqrs.query.order_by(Pqrs.id).all():
+        lines.append(
+            f"id {item.id} · {item.category} · {item.status} · «{item.subject[:50]}» · residente {item.resident_id} · "
+            f"creada {_day(item.created_at)} · {_file(item.media_url, item.media_type)} · archivada {item.is_archived}"
+        )
+    lines.append("== Reservas (una por línea) ==")
+    for item in Reservation.query.order_by(Reservation.id).all():
+        lines.append(
+            f"id {item.id} · {item.common_area.name} · {item.date} {item.time_slot} · {item.status} · "
+            f"residente {item.resident_id} · creada {_day(item.created_at)} · archivada {item.is_archived}"
+        )
+    lines.append("== Paquetes (uno por línea) ==")
+    for item in PackageItem.query.order_by(PackageItem.id).all():
+        lines.append(
+            f"id {item.id} · «{(item.description or '')[:40]}» · {item.status} · llegó {_day(item.arrived_at or item.created_at)} · "
+            f"entregado {_day(item.delivered_at)} · residente {item.resident_id} · {_file(item.media_url, item.media_type)} · "
+            f"borrado {item.is_deleted}"
+        )
+    lines.append("== Visitas (una por línea) ==")
+    for item in Visit.query.order_by(Visit.id).all():
+        lines.append(
+            f"id {item.id} · {item.visitor_name} · {item.type} · {item.approval_status} · entró {_day(item.entered_at)} · "
+            f"salió {_day(item.exited_at)} · creada {_day(item.created_at)}"
+        )
+    lines.append("== Pases QR ==")
+    for item in VisitQrPass.query.order_by(VisitQrPass.id).all():
+        lines.append(f"id {item.id} · {item.valid_from} a {item.valid_until} · {item.max_people} personas · revocado {item.revoked}")
+    lines.append("== Vehículos y entradas de visitantes ==")
+    for item in Vehicle.query.order_by(Vehicle.id).all():
+        lines.append(f"vehículo id {item.id} · {item.plate}")
+    for item in VisitorVehicleEntry.query.order_by(VisitorVehicleEntry.id).all():
+        lines.append(f"entrada de visitante id {item.id} · creada {_day(getattr(item, 'created_at', None))}")
+    return lines
 
 
 def report():
@@ -87,6 +138,7 @@ def report():
         db.session.query(Pqrs.category, Pqrs.status, func.count(Pqrs.id)).group_by(Pqrs.category, Pqrs.status).all()
     ):
         lines.append(f"{category} · {status}: {total}")
+    lines += detail_lines()
     return lines
 
 
