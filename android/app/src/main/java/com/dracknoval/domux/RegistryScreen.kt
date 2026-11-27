@@ -7,16 +7,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,9 +63,15 @@ fun RegistryScreen(
                 }
                 "registrar-paquete" -> if (Session.isResident) 0 else 1
                 "registrar-visita" -> if (Session.isGuard) 3 else 0
+                "escanear" -> if (Session.isGuard) 4 else 0
                 else -> 0
             }
         )
+    }
+    // El guardia ve Paquetes y Visitas como pantallas separadas: cada botón del menú abre solo
+    // las pestañas de lo suyo. Al escanear un código se pasa sola a la que corresponde.
+    var guardOnPackages by remember(initialTab) {
+        mutableStateOf(initialTab == "paquetes" || initialTab == "registrar-paquete")
     }
     // Cambio de guardia con PIN (HU-010): guardName es quien tiene el turno ahora.
     var showGuardShift by remember { mutableStateOf(false) }
@@ -76,11 +86,40 @@ fun RegistryScreen(
     val packageScanner = rememberLauncherForActivityResult(ScanContract()) { result ->
         result.contents?.let { packagesVm.lookupPickupCode(it) }
     }
-    val visitScanner = rememberLauncherForActivityResult(ScanContract()) { result ->
-        result.contents?.let { visitsVm.onQrScanned(it) }
+    // Un solo escáner para la portería: el código dice si es de un paquete o de una visita.
+    val anyScanner = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val raw = result.contents ?: return@rememberLauncherForActivityResult
+        when (scannedCodeKind(raw)) {
+            ScannedCode.PACKAGE -> {
+                guardOnPackages = true
+                selectedTab = 0
+                packagesVm.lookupPickupCode(raw)
+            }
+            ScannedCode.VISIT -> {
+                guardOnPackages = false
+                selectedTab = 4
+                visitsVm.onQrScanned(raw)
+            }
+            ScannedCode.UNKNOWN -> visitsVm.showNotice("El código leído no es de DOMUX: ni de una visita ni de un paquete.")
+        }
+    }
+    val launchAnyScanner = {
+        anyScanner.launch(
+            ScanOptions()
+                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                .setPrompt("Escanea el QR de la visita o el código de entrega del paquete")
+        )
+    }
+    // «Escanear código» del inicio abre la cámara de una vez.
+    var autoScanDone by rememberSaveable(initialTab) { mutableStateOf(false) }
+    LaunchedEffect(initialTab) {
+        if (Session.isGuard && initialTab == "escanear" && !autoScanDone) {
+            autoScanDone = true
+            launchAnyScanner()
+        }
     }
 
-    val tabs = when {
+    val allTabs = when {
         Session.isResident -> listOf("Mis paquetes", "Mis visitas", "Código QR")
         Session.isGuard -> listOf(
             "Paquetes", "Registrar paquete", "Visitas", "Registrar visita", "Ingreso por QR"
@@ -88,12 +127,19 @@ fun RegistryScreen(
         // La administración consulta las visitas, pero no las registra (ADR-015).
         else -> listOf("Paquetes", "Registrar paquete", "Visitas")
     }
+    // Las pestañas que se ven (su número en allTabs): el guardia solo ve las de la sección abierta.
+    val visibleTabs = when {
+        Session.isGuard && guardOnPackages -> listOf(0, 1)
+        Session.isGuard -> listOf(2, 3, 4)
+        else -> allTabs.indices.toList()
+    }
     val title = when {
         Session.isResident -> "Mis paquetes y visitas"
-        Session.isGuard -> "Control de portería"
+        Session.isGuard && guardOnPackages -> "Paquetes"
+        Session.isGuard -> "Visitas"
         else -> "Paquetería y visitas"
     }
-    val tab = selectedTab.coerceIn(tabs.indices)
+    val tab = if (selectedTab in visibleTabs) selectedTab else visibleTabs.first()
     // El texto buscado va a la lista que se abre: la de visitas si piden «visitas», si no la de paquetes.
     val packageSearch = if (initialTab == "visitas") "" else initialSearch
     val visitSearch = if (initialTab == "visitas") initialSearch else ""
@@ -106,7 +152,13 @@ fun RegistryScreen(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            DomuxSectionTabs(tabs, tab) { selectedTab = it }
+            DomuxSectionTabs(visibleTabs.map { allTabs[it] }, visibleTabs.indexOf(tab)) { selectedTab = visibleTabs[it] }
+            if (Session.isGuard) {
+                OutlinedButton(
+                    onClick = { launchAnyScanner() },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) { Text("Escanear código (visita o paquete)") }
+            }
             if (packages.message.isNotBlank()) {
                 DomuxMessageBanner(packages.message, packages.messageIsError) { packagesVm.dismissMessage() }
             }
@@ -137,11 +189,15 @@ fun RegistryScreen(
                     onSearch = { packagesVm.setSearch(it) },
                     onRefresh = { packagesVm.refresh() },
                     onScan = {
-                        packageScanner.launch(
-                            ScanOptions()
-                                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                                .setPrompt("Escanea el código de entrega del paquete")
-                        )
+                        if (Session.isGuard) {
+                            launchAnyScanner()
+                        } else {
+                            packageScanner.launch(
+                                ScanOptions()
+                                    .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                    .setPrompt("Escanea el código de entrega del paquete")
+                            )
+                        }
                     },
                     onDeliver = { packagesVm.startDelivery(it) },
                     onStatusChange = { item, status -> packagesVm.changeStatus(item, status) },
@@ -190,13 +246,7 @@ fun RegistryScreen(
                 Session.isGuard && tab == 4 -> QrEntrySection(
                     modifier = Modifier.weight(1f),
                     state = visits,
-                    onScan = {
-                        visitScanner.launch(
-                            ScanOptions()
-                                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                                .setPrompt("Escanea el QR de visitas")
-                        )
-                    },
+                    onScan = launchAnyScanner,
                     onMessage = { visitsVm.showNotice(it) },
                     onEnterNew = { name, stay, onSuccess -> visitsVm.enterQrVisitor(name, stay, onSuccess) },
                     onLinkVisit = { visit ->
@@ -320,6 +370,7 @@ fun RegistryScreen(
             onSeeList = {
                 visitsVm.dismissInsideAlert()
                 visitsVm.setInsideOnly(true)
+                guardOnPackages = false
                 selectedTab = 2
             },
             onDismiss = { visitsVm.dismissInsideAlert() }
@@ -340,4 +391,13 @@ fun RegistryScreen(
             }
         )
     }
+}
+
+/** Qué es un código escaneado en la portería: el de entrega de un paquete, el QR de una visita u otro. */
+enum class ScannedCode { PACKAGE, VISIT, UNKNOWN }
+
+fun scannedCodeKind(raw: String): ScannedCode = when {
+    raw.startsWith(PackagesViewModel.PICKUP_QR_PREFIX) && raw.length > PackagesViewModel.PICKUP_QR_PREFIX.length -> ScannedCode.PACKAGE
+    raw.startsWith(VisitsViewModel.QR_PREFIX) && raw.length > VisitsViewModel.QR_PREFIX.length -> ScannedCode.VISIT
+    else -> ScannedCode.UNKNOWN
 }

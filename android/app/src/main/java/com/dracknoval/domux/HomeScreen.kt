@@ -590,7 +590,7 @@ private class GuardAction(val icon: Int, val title: String, val detail: String, 
 
 private val guardActions = listOf(
     GuardAction(R.drawable.ic_person, "Registrar visita", "Visitante, domiciliario o contratista", "registry?tab=registrar-visita"),
-    GuardAction(R.drawable.ic_qr_scan, "Escanear QR", "Visita invitada por el residente", "registry?tab=qr"),
+    GuardAction(R.drawable.ic_qr_scan, "Escanear código", "QR de una visita o código de entrega de un paquete", "registry?tab=escanear"),
     GuardAction(R.drawable.ic_package, "Recibir paquete", "Con foto y transportadora", "registry?tab=registrar-paquete"),
     GuardAction(R.drawable.ic_check_circle, "Entregar paquete", "Con el código de entrega", "registry?tab=paquetes"),
     GuardAction(R.drawable.ic_car, "Entrada de vehículo", "Placa y parqueadero", "vehicles"),
