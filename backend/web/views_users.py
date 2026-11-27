@@ -183,6 +183,8 @@ def _user_body(creating, current=None):
         body["parentalConsent"] = checked("parentalConsent")
         if creating or (current is not None and current["role"] != "RESIDENT"):
             body["dataProcessingConsent"] = checked("dataProcessingConsent")
+        if current is not None and current.get("contactPendingVerification") and checked("contactVerified"):
+            body["contactVerified"] = True
     return compact(body)
 
 

@@ -115,6 +115,34 @@ interface ApiService {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<UnitRulesView>
 
+    // La administración cambia los datos de la unidad (lo que no se manda queda como estaba).
+    @PUT("api/admin/unit-info")
+    suspend fun updateComplexInfo(
+        @Header("Authorization") auth: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<ComplexInfoResponse>
+
+    // Zonas comunes (solo administración): cambiar reglas, cerrar y reabrir.
+    @PUT("api/common-areas/{id}/rules")
+    suspend fun updateCommonAreaRules(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<ResponseBody>
+
+    @POST("api/common-areas/{id}/close")
+    suspend fun closeCommonArea(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int,
+        @Body body: Map<String, String>
+    ): Response<ResponseBody>
+
+    @POST("api/common-areas/{id}/open")
+    suspend fun openCommonArea(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<ResponseBody>
+
     @GET("api/unit-info/logo")
     suspend fun getComplexLogo(@Header("Authorization") auth: String): Response<ResponseBody>
 

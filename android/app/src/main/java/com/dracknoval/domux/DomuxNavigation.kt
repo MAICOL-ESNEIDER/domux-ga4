@@ -70,6 +70,7 @@ fun moreDestinations(): List<DomuxDestination> = when {
         DomuxDestination("Estructura de la unidad", "structure", R.drawable.ic_building),
         Documents,
         DomuxDestination("Reglas de la unidad", "unitRules", R.drawable.ic_settings),
+        DomuxDestination("Datos de la unidad y zonas", "unitAndZones", R.drawable.ic_building),
         Notifications,
         Preferences,
         Legal

@@ -27,6 +27,11 @@
     {{ field("phone", "Teléfono", values.phone, type="tel", maxlength=20, help="10 números: un celular empieza por 3 y un fijo por 60. Puedes escribir +57 al inicio.", autocomplete="tel", extra={"inputmode": "tel"}) }}
     {{ field("documentId", "Documento", values.documentId, maxlength=30) }}
   </div>
+  {% if user and user.contactPendingVerification %}
+  <p class="notice">El residente cambió su correo o su teléfono desde la app y está pendiente de verificar.</p>
+  {{ checkbox("contactVerified", "Ya verifiqué el nuevo correo o teléfono", False,
+              help="Márcalo después de confirmar el dato con el residente.") }}
+  {% endif %}
   <div class="form-row">
     {{ field("birthDate", "Fecha de nacimiento", values.birthDate, type="date") }}
     {% if not user %}
