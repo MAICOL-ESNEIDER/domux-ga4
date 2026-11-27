@@ -433,9 +433,10 @@ fun saveBase64FileToDownloads(
     base64Data: String,
     mimeType: String = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 ): String {
-    val safeFileName = fileName.substringAfterLast('/').substringAfterLast('\\').trim()
+    val safeFileName = fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true).substringAfterLast('/').substringAfterLast('\\').trim()
     require(safeFileName.isNotEmpty()) { "El nombre del archivo no es válido." }
     val fileBytes = Base64.decode(base64Data, Base64.DEFAULT)
+    var finalUri: Uri? = null
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, safeFileName)
@@ -448,6 +449,7 @@ fun saveBase64FileToDownloads(
             val output = context.contentResolver.openOutputStream(uri)
                 ?: error("No se pudo abrir el archivo en Descargas.")
             output.use { it.write(fileBytes) }
+            finalUri = uri
         } catch (exception: Exception) {
             context.contentResolver.delete(uri, null, null)
             throw exception
@@ -458,8 +460,11 @@ fun saveBase64FileToDownloads(
         check(downloads.exists() || downloads.mkdirs()) {
             "No se pudo acceder a la carpeta Descargas."
         }
-        FileOutputStream(File(downloads, safeFileName)).use { it.write(fileBytes) }
+        val file = File(downloads, safeFileName)
+        FileOutputStream(file).use { it.write(fileBytes) }
+        finalUri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
+    showDownloadCompletedNotification(context, safeFileName, finalUri, mimeType)
     return "Descargas/$safeFileName"
 }
 

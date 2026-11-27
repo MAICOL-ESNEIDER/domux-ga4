@@ -2,6 +2,8 @@ package com.dracknoval.domux
 
 import android.content.Intent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -53,7 +55,7 @@ fun ExportsArchiveScreen(navController: NavController) {
                         includeArchived = "true"
                     )
                     if (response.isSuccessful) {
-                        archivedPqrs = response.body()?.pqrs?.filter { it.status == "papelera" } ?: emptyList()
+                        archivedPqrs = response.body()?.pqrs?.filter { it.isArchived || !it.archivedAt.isNullOrBlank() } ?: emptyList()
                     } else {
                         message = mensajeDeError(response.code(), response.errorBody()?.string())
                         isError = true
@@ -65,7 +67,7 @@ fun ExportsArchiveScreen(navController: NavController) {
                         includeArchived = "true"
                     )
                     if (response.isSuccessful) {
-                        archivedReservations = response.body()?.reservations?.filter { it.status == "papelera" } ?: emptyList()
+                        archivedReservations = response.body()?.reservations?.filter { it.isArchived || !it.archivedAt.isNullOrBlank() } ?: emptyList()
                     } else {
                         message = mensajeDeError(response.code(), response.errorBody()?.string())
                         isError = true
@@ -159,11 +161,12 @@ fun ExportsArchiveScreen(navController: NavController) {
                                                 val response = RetrofitClient.api.exportLegalReport(Session.bearer()) // Backend route shared in API for now, assume it handles PQRS context if global
                                                 if (response.isSuccessful) {
                                                     val file = response.body() ?: error("Reporte vacío.")
+                                                    val cleanFileName = file.fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true)
                                                     val mime = file.mimeType ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                                     val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
-                                                    val uri = saveBytesToDownloads(context, file.fileName, mime, base64Bytes)
+                                                    val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
                                                     if (uri != null) {
-                                                        message = "Reporte guardado exitosamente en Descargas/${file.fileName}."
+                                                        message = "Reporte guardado exitosamente en Descargas/$cleanFileName."
                                                         isError = false
                                                         lastSavedUri = uri
                                                         lastSavedMime = mime
@@ -198,11 +201,12 @@ fun ExportsArchiveScreen(navController: NavController) {
                                                     val response = RetrofitClient.api.archiveHistory(Session.bearer())
                                                     if (response.isSuccessful) {
                                                         val file = response.body() ?: error("Archivo vacío.")
+                                                        val cleanFileName = file.fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true)
                                                         val mime = file.mimeType ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                                         val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
-                                                        val uri = saveBytesToDownloads(context, file.fileName, mime, base64Bytes)
+                                                        val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
                                                         if (uri != null) {
-                                                            message = "PQRS resueltas archivadas. Respaldo guardado en Descargas/${file.fileName}."
+                                                            message = "PQRS resueltas archivadas. Respaldo guardado en Descargas/$cleanFileName."
                                                             isError = false
                                                             lastSavedUri = uri
                                                             lastSavedMime = mime
@@ -250,11 +254,12 @@ fun ExportsArchiveScreen(navController: NavController) {
                                                 val response = RetrofitClient.api.exportLegalReport(Session.bearer())
                                                 if (response.isSuccessful) {
                                                     val file = response.body() ?: error("Reporte vacío.")
+                                                    val cleanFileName = file.fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true)
                                                     val mime = file.mimeType ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                                     val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
-                                                    val uri = saveBytesToDownloads(context, file.fileName, mime, base64Bytes)
+                                                    val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
                                                     if (uri != null) {
-                                                        message = "Reporte guardado exitosamente en Descargas/${file.fileName}."
+                                                        message = "Reporte guardado exitosamente en Descargas/$cleanFileName."
                                                         isError = false
                                                         lastSavedUri = uri
                                                         lastSavedMime = mime
@@ -289,11 +294,12 @@ fun ExportsArchiveScreen(navController: NavController) {
                                                     val response = RetrofitClient.api.archiveHistory(Session.bearer())
                                                     if (response.isSuccessful) {
                                                         val file = response.body() ?: error("Archivo vacío.")
+                                                        val cleanFileName = file.fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true)
                                                         val mime = file.mimeType ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                                         val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
-                                                        val uri = saveBytesToDownloads(context, file.fileName, mime, base64Bytes)
+                                                        val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
                                                         if (uri != null) {
-                                                            message = "Reservas finalizadas archivadas. Respaldo guardado en Descargas/${file.fileName}."
+                                                            message = "Reservas finalizadas archivadas. Respaldo guardado en Descargas/$cleanFileName."
                                                             isError = false
                                                             lastSavedUri = uri
                                                             lastSavedMime = mime
@@ -325,23 +331,27 @@ fun ExportsArchiveScreen(navController: NavController) {
             } else {
                 // Pestaña 2: Archivo histórico
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val pqrsCount = if (archiveCategory == "pqrs" && !loading) " (${archivedPqrs.size})" else ""
+                    val resCount = if (archiveCategory == "reservas" && !loading) " (${archivedReservations.size})" else ""
+                    val pkgCount = if (archiveCategory == "paquetes" && !loading) " (${archivedPackages.size})" else ""
+                    
                     FilterChip(
                         selected = archiveCategory == "pqrs",
                         onClick = { archiveCategory = "pqrs" },
-                        label = { Text("PQRS archivadas") }
+                        label = { Text("PQRS$pqrsCount", maxLines = 1, softWrap = false) }
                     )
                     FilterChip(
                         selected = archiveCategory == "reservas",
                         onClick = { archiveCategory = "reservas" },
-                        label = { Text("Reservas archivadas") }
+                        label = { Text("Reservas$resCount", maxLines = 1, softWrap = false) }
                     )
                     FilterChip(
                         selected = archiveCategory == "paquetes",
                         onClick = { archiveCategory = "paquetes" },
-                        label = { Text("Paquetes archivados") }
+                        label = { Text("Paquetes$pkgCount", maxLines = 1, softWrap = false) }
                     )
                 }
 
@@ -352,16 +362,26 @@ fun ExportsArchiveScreen(navController: NavController) {
                         when (archiveCategory) {
                             "pqrs" -> {
                                 if (archivedPqrs.isEmpty()) {
-                                    item { Text("No hay registros archivados en esta categoría.", modifier = Modifier.padding(16.dp)) }
+                                    item {
+                                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                            Text("No hay PQRS archivadas", color = androidx.compose.ui.graphics.Color(0xFF94A3B8))
+                                        }
+                                    }
                                 } else {
                                     items(archivedPqrs, key = { it.id }) { pqrs ->
                                         DomuxCard(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(pqrs.subject, style = MaterialTheme.typography.titleMedium)
+                                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                                    Text(pqrs.subject, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                                    Surface(color = androidx.compose.ui.graphics.Color(0xFF1E3A8A), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) {
+                                                        Text("Archivada", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = androidx.compose.ui.graphics.Color(0xFF93C5FD))
+                                                    }
+                                                }
+                                                Text("Estado real: ${pqrs.status.toDomuxDisplayLabel()}", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
                                                 Text("Radicado: ${pqrs.id}")
                                                 Text("Residente: ${pqrs.residentName ?: "—"}")
                                                 Text("Fecha: ${pqrs.createdAt}")
-                                                // No "Restaurar" as requested if endpoint is not verified.
+                                                pqrs.archivedAt?.let { Text("Archivada el: $it", style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF94A3B8)) }
                                             }
                                         }
                                     }
@@ -369,15 +389,25 @@ fun ExportsArchiveScreen(navController: NavController) {
                             }
                             "reservas" -> {
                                 if (archivedReservations.isEmpty()) {
-                                    item { Text("No hay registros archivados en esta categoría.", modifier = Modifier.padding(16.dp)) }
+                                    item {
+                                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                            Text("No hay reservas archivadas", color = androidx.compose.ui.graphics.Color(0xFF94A3B8))
+                                        }
+                                    }
                                 } else {
                                     items(archivedReservations, key = { it.id }) { res ->
                                         DomuxCard(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("Zona: ${res.commonAreaName}", style = MaterialTheme.typography.titleMedium)
+                                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                                    Text("Zona: ${res.commonAreaName}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                                    Surface(color = androidx.compose.ui.graphics.Color(0xFF1E3A8A), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) {
+                                                        Text("Archivada", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = androidx.compose.ui.graphics.Color(0xFF93C5FD))
+                                                    }
+                                                }
+                                                Text("Estado real: ${res.status.toDomuxDisplayLabel()}", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
                                                 Text("Residente: ${res.residentName ?: "—"}")
                                                 Text("Fecha del evento: ${res.date}")
-                                                Text("Pago: ${res.status.toDomuxDisplayLabel()}")
+                                                res.archivedAt?.let { Text("Archivada el: $it", style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF94A3B8)) }
                                             }
                                         }
                                     }
@@ -385,7 +415,11 @@ fun ExportsArchiveScreen(navController: NavController) {
                             }
                             "paquetes" -> {
                                 if (archivedPackages.isEmpty()) {
-                                    item { Text("No hay registros archivados en esta categoría.", modifier = Modifier.padding(16.dp)) }
+                                    item {
+                                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                            Text("No hay paquetes archivados", color = androidx.compose.ui.graphics.Color(0xFF94A3B8))
+                                        }
+                                    }
                                 } else {
                                     items(archivedPackages, key = { it.id }) { pkg ->
                                         DomuxCard(Modifier.fillMaxWidth()) {

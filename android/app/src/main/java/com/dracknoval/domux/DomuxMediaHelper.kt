@@ -1,12 +1,21 @@
 package com.dracknoval.domux
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -39,7 +48,7 @@ fun saveBytesToDownloads(
     bytes: ByteArray
 ): Uri? {
     if (bytes.isEmpty()) return null
-    val safeFileName = fileName.substringAfterLast('/').substringAfterLast('\\').trim().ifEmpty { "archivo_descargado" }
+    val safeFileName = fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true).substringAfterLast('/').substringAfterLast('\\').trim().ifEmpty { "archivo_descargado" }
     
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val values = ContentValues().apply {
@@ -54,6 +63,7 @@ fun saveBytesToDownloads(
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
             context.contentResolver.update(uri, values, null, null)
+            showDownloadCompletedNotification(context, safeFileName, uri, mimeType)
             uri
         } catch (e: Exception) {
             context.contentResolver.delete(uri, null, null)
@@ -66,10 +76,66 @@ fun saveBytesToDownloads(
         val file = File(downloads, safeFileName)
         return try {
             FileOutputStream(file).use { it.write(bytes) }
-            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            showDownloadCompletedNotification(context, safeFileName, uri, mimeType)
+            uri
         } catch (e: Exception) {
             null
         }
+    }
+}
+
+fun showDownloadCompletedNotification(context: Context, fileName: String, uri: Uri?, mimeType: String) {
+    try {
+        val channelId = "domux_downloads"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Descargas DOMUX",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val intent = if (uri != null) {
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS)
+            } else {
+                Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            uri?.hashCode() ?: 0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done) // Ensure this icon exists or fallback to a standard one
+            .setContentTitle("Archivo descargado")
+            .setContentText("$fileName · Toca para abrir")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
+        NotificationManagerCompat.from(context).notify(uri?.hashCode() ?: fileName.hashCode(), builder.build())
+    } catch (e: Exception) {
+        // Fallback silently if notification fails so download logic is not broken
     }
 }
 
