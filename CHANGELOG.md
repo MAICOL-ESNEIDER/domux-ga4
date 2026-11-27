@@ -20,6 +20,7 @@ administración.
 
 **La app y la web de administración se parecen más**
 - App de administración: nueva pantalla «Datos de la unidad y zonas» (nombre, NIT, dirección y teléfono de portería; horario, aforo y anticipación de cada zona; cerrar y reabrir una zona), igual que «Datos de la unidad» y «Zonas comunes y reglas» de la web.
+- La administración solo consulta los paquetes de los residentes: entregar, cambiar de estado, archivar y sacar de archivados quedan para la portería; ella solo lo hace con los paquetes de la unidad.
 - Web: al editar un residente que cambió su correo o teléfono desde la app, aparece el aviso «pendiente de verificar» y la casilla para darlo por verificado.
 
 **Portería: registro más simple, guía por llamada y «Entradas y entregas»**

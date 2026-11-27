@@ -247,9 +247,12 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual([item["id"] for item in trash.get_json()["packages"]], [package_id])
 
+        # La administración solo consulta los paquetes de los residentes: no los saca del archivo.
+        refused = self.client.put(f"/api/packages/{package_id}/restore", headers=self.auth(self.admin))
+        self.assertEqual(refused.status_code, 403)
         restored = self.client.put(
             f"/api/packages/{package_id}/restore",
-            headers=self.auth(self.admin),
+            headers=self.auth(self.guard),
         )
         self.assertEqual(restored.status_code, 200)
         self.assertFalse(restored.get_json()["packageItem"]["isDeleted"])
@@ -257,13 +260,13 @@ class SecurityWorkflowTests(unittest.TestCase):
         # Nada se borra (DEC-090): ni con force=true ni desde la papelera.
         forced_delete = self.client.delete(
             f"/api/packages/{package_id}?force=true",
-            headers=self.auth(self.admin),
+            headers=self.auth(self.guard),
         )
         self.assertEqual(forced_delete.status_code, 200)
         self.assertTrue(forced_delete.get_json()["packageItem"]["isDeleted"])
         delete_again = self.client.delete(
             f"/api/packages/{package_id}",
-            headers=self.auth(self.admin),
+            headers=self.auth(self.guard),
         )
         self.assertEqual(delete_again.status_code, 409)
         self.assertIsNotNone(db.session.get(PackageItem, package_id))

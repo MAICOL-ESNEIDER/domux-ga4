@@ -269,6 +269,15 @@ def register_package():
     return jsonify({"message": "Paquete registrado", "packageItem": package.to_dict()}), 201
 
 
+def _admin_only_unit_package(package):
+    """La administración solo maneja los paquetes de la unidad; los de los residentes son de la portería."""
+    if g.current_user.role == "ADMIN" and not package.for_unit:
+        return error_response(
+            403, "Los paquetes de los residentes los maneja la portería. La administración solo los consulta."
+        )
+    return None
+
+
 @bp.put("/packages/<int:pkg_id>/status")
 @token_required
 @role_required("GUARD", "ADMIN")
@@ -282,6 +291,8 @@ def update_package_status(pkg_id):
     package = db.session.get(PackageItem, pkg_id)
     if package is None:
         return error_response(404, "Paquete no encontrado")
+    if (refused := _admin_only_unit_package(package)) is not None:
+        return refused
     if package.status == "entregado":
         return error_response(409, "Este paquete ya fue entregado: su estado no se puede cambiar.")
     if package.status != status:
@@ -312,6 +323,8 @@ def delete_package(pkg_id):
     package = db.session.get(PackageItem, pkg_id)
     if package is None:
         return error_response(404, "Paquete no encontrado")
+    if (refused := _admin_only_unit_package(package)) is not None:
+        return refused
     if package.is_deleted:
         return error_response(
             409,
@@ -335,6 +348,8 @@ def restore_package(pkg_id):
     package = db.session.get(PackageItem, pkg_id)
     if package is None:
         return error_response(404, "Paquete no encontrado")
+    if (refused := _admin_only_unit_package(package)) is not None:
+        return refused
     package.is_deleted = False
     package.deleted_at = None
     package.deleted_by_id = None
@@ -352,6 +367,8 @@ def deliver_package(pkg_id):
     package = db.session.get(PackageItem, pkg_id)
     if package is None:
         return error_response(404, "Paquete no encontrado")
+    if (refused := _admin_only_unit_package(package)) is not None:
+        return refused
     receiver = data.get("receivedBy")
     if receiver is not None and not isinstance(receiver, str):
         return error_response(400, "El nombre de quien recibe debe ser texto.")
