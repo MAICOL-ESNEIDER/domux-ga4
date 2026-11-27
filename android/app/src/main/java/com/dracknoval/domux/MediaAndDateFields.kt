@@ -58,6 +58,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private object PendingCameraCapture { var filePath: String? = null }
+
 private fun pickerDateMillis(value: String): Long? =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
         isLenient = false
@@ -169,8 +171,7 @@ private fun MediaAttachmentPickerFiltered(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showDialog by rememberSaveable { mutableStateOf(false) }
-    var currentCameraUriString by rememberSaveable { mutableStateOf<String?>(null) }
-    var currentCameraUri = currentCameraUriString?.let { Uri.parse(it) }
+    val currentCameraFilePath by rememberUpdatedState(PendingCameraCapture.filePath)
     
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) {
@@ -233,20 +234,23 @@ private fun MediaAttachmentPickerFiltered(
     }
     
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && currentCameraUri != null) {
+        if (success) {
             scope.launch {
                 try {
-                    val uri = currentCameraUri!!
+                    val filePath = currentCameraFilePath
+                    if (filePath == null) {
+                        onError("Ruta de captura no encontrada.")
+                        return@launch
+                    }
+                    val file = File(filePath)
                     val fileExistsAndValid = withContext(Dispatchers.IO) {
-                        context.contentResolver.openFileDescriptor(uri, "r")?.use {
-                            it.statSize > 0
-                        } ?: false
+                        file.exists() && file.length() > 0
                     }
                     if (!fileExistsAndValid) {
                         onError("La foto capturada está vacía o no existe.")
                         return@launch
                     }
-                    val encoded = withContext(Dispatchers.IO) { processImageUriToCompressedBase64(context, uri) }
+                    val encoded = withContext(Dispatchers.IO) { processImageFileToCompressedBase64(file) }
                     if (encoded != null) {
                         onAttachment("data:image/jpeg;base64,$encoded", "image", "foto_camara.jpg")
                     } else {
@@ -262,8 +266,8 @@ private fun MediaAttachmentPickerFiltered(
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             val file = File(context.cacheDir, "camera_capture_${System.currentTimeMillis()}.jpg")
+            PendingCameraCapture.filePath = file.absolutePath
             val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            currentCameraUriString = uri.toString()
             cameraLauncher.launch(uri)
         } else {
             onError("Se requiere permiso de cámara para tomar fotos.")
@@ -310,8 +314,8 @@ private fun MediaAttachmentPickerFiltered(
                         showDialog = false
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                             val file = File(context.cacheDir, "camera_capture_${System.currentTimeMillis()}.jpg")
+                            PendingCameraCapture.filePath = file.absolutePath
                             val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                            currentCameraUriString = uri.toString()
                             cameraLauncher.launch(uri)
                         } else {
                             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -361,7 +365,7 @@ fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri
                     decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                     decoder.isMutableRequired = true
                     var scale = 1
-                    while (info.size.width / scale > 1280 || info.size.height / scale > 1280) {
+                    while (info.size.width / scale > 1024 || info.size.height / scale > 1024) {
                         scale *= 2
                     }
                     decoder.setTargetSize(info.size.width / scale, info.size.height / scale)
@@ -371,7 +375,7 @@ fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri
             }
         } else {
             var scale = 1
-            while (width / scale > 1280 || height / scale > 1280) {
+            while (width / scale > 1024 || height / scale > 1024) {
                 scale *= 2
             }
             
@@ -411,10 +415,10 @@ fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri
         
         val outputStream = ByteArrayOutputStream()
         try {
-            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
-            if (outputStream.size() > 1_500_000) {
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+            if (outputStream.size() > 350_000) {
                 outputStream.reset()
-                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 60, outputStream)
+                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 55, outputStream)
             }
             return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
         } finally {
@@ -424,6 +428,92 @@ fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri
         throw Exception("La imagen es demasiado grande para procesarla.")
     } catch (e: Throwable) {
         throw Exception("No se pudo leer la imagen: ${e.message}")
+    }
+}
+
+fun processImageFileToCompressedBase64(file: File): String? {
+    try {
+        var width = 0
+        var height = 0
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        width = options.outWidth
+        height = options.outHeight
+        
+        var bitmap: Bitmap? = null
+        if (width <= 0 || height <= 0) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(file)
+                bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    decoder.isMutableRequired = true
+                    var scale = 1
+                    while (info.size.width / scale > 1024 || info.size.height / scale > 1024) {
+                        scale *= 2
+                    }
+                    decoder.setTargetSize(info.size.width / scale, info.size.height / scale)
+                }
+            } else {
+                throw Exception("Formato de imagen no soportado o archivo corrupto.")
+            }
+        } else {
+            var scale = 1
+            while (width / scale > 1024 || height / scale > 1024) {
+                scale *= 2
+            }
+            
+            val decodeOptions = BitmapFactory.Options().apply { 
+                inSampleSize = scale 
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            
+            bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions) 
+                ?: throw Exception("No se pudo decodificar la imagen.")
+        }
+        
+        var finalBitmap = bitmap ?: return null
+        
+        try {
+            val exif = ExifInterface(file.absolutePath)
+            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            val matrix = Matrix()
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            }
+            if (!matrix.isIdentity) {
+                val rotated = Bitmap.createBitmap(finalBitmap, 0, 0, finalBitmap.width, finalBitmap.height, matrix, true)
+                if (rotated !== finalBitmap) {
+                    finalBitmap.recycle()
+                    finalBitmap = rotated
+                }
+            }
+        } catch (e: Exception) {
+            // Ignorar errores EXIF y continuar
+        }
+        
+        val outputStream = ByteArrayOutputStream()
+        try {
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+            if (outputStream.size() > 350_000) {
+                outputStream.reset()
+                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 55, outputStream)
+            }
+            return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+        } finally {
+            finalBitmap.recycle()
+        }
+    } catch (e: OutOfMemoryError) {
+        throw Exception("La imagen es demasiado grande para procesarla.")
+    } catch (e: Throwable) {
+        throw Exception("No se pudo leer la imagen: ${e.message}")
+    } finally {
+        try {
+            file.delete()
+        } catch (e: Exception) {
+            // Ignore delete error
+        }
     }
 }
 

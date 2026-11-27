@@ -38,7 +38,7 @@ fun AnnouncementsScreen(navController: NavController) {
     var detail by rememberSaveable { mutableStateOf("") }
     var eventDate by rememberSaveable { mutableStateOf("") }
     var eventTime by rememberSaveable { mutableStateOf("") }
-    var mediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaUrl by remember { mutableStateOf<String?>(null) }
     var mediaType by rememberSaveable { mutableStateOf<String?>(null) }
     var mediaName by rememberSaveable { mutableStateOf<String?>(null) }
     var message by rememberSaveable { mutableStateOf("") }

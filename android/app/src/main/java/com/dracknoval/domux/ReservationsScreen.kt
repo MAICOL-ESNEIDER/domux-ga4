@@ -161,7 +161,7 @@ fun ReservationsScreen(navController: NavController, targetResidentId: Int? = nu
     var date by remember { mutableStateOf("") }
     var slot by remember { mutableStateOf("") }
     var requestMessage by rememberSaveable { mutableStateOf("") }
-    var requestMediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var requestMediaUrl by remember { mutableStateOf<String?>(null) }
     var requestMediaType by rememberSaveable { mutableStateOf<String?>(null) }
     var requestMediaName by rememberSaveable { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }

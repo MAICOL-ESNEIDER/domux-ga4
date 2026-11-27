@@ -160,7 +160,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
     var packageDescription by remember { mutableStateOf("") }
     var packageDate by remember { mutableStateOf("") }
     var packageTime by remember { mutableStateOf("") }
-    var mediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaUrl by remember { mutableStateOf<String?>(null) }
     var mediaType by rememberSaveable { mutableStateOf<String?>(null) }
     var mediaName by remember { mutableStateOf<String?>(null) }
     var attemptedPackage by remember { mutableStateOf(false) }
@@ -178,7 +178,7 @@ fun RegistryScreen(navController: NavController, initialTab: Int = 0) {
 
     var deliveryPackage by remember { mutableStateOf<PackageItem?>(null) }
     var receiverName by remember { mutableStateOf("") }
-    var deliveryMediaUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var deliveryMediaUrl by remember { mutableStateOf<String?>(null) }
     var deliveryMediaType by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryMediaName by remember { mutableStateOf<String?>(null) }
     var pendingExit by remember { mutableStateOf<Visit?>(null) }
