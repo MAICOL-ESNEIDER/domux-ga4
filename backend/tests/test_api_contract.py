@@ -728,6 +728,10 @@ class ContractContentTests(unittest.TestCase):
         })["visit"]
         self.call(resident, "PUT", f"/api/visits/{visit['id']}/decision", json={"decision": "aprobada"})
         self.call(guard, "PUT", f"/api/visits/{courier['id']}/authorize-call")
+        stranger = self.data(guard, "POST", "/api/visits", expect=201, json={
+            "visitorName": "Persona Desconocida", "residentId": resident.id, "type": "visitante", "documentRefused": True,
+        })["visit"]
+        self.call(guard, "PUT", f"/api/visits/{stranger['id']}/reject-call")
         self.call(guard, "POST", f"/api/visits/{visit['id']}/entry", json={"expectedStayMinutes": 90})
         self.call(guard, "POST", f"/api/visits/{courier['id']}/entry")
         self.call(guard, "GET", "/api/visits", query={

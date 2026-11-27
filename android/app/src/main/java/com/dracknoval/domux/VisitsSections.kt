@@ -86,6 +86,7 @@ fun VisitListSection(
     onLoadMore: () -> Unit,
     onDecision: (Visit, String) -> Unit,
     onAuthorizeByCall: (Visit) -> Unit,
+    onRejectByCall: (Visit) -> Unit = {},
     onEntry: (Visit) -> Unit,
     onExit: (Visit) -> Unit,
     // El texto con el que abre la caja de búsqueda (lo deja puesto el buscador general).
@@ -209,6 +210,7 @@ fun VisitListSection(
                     busy = state.busy,
                     onDecision = { onDecision(visit, it) },
                     onAuthorizeByCall = { onAuthorizeByCall(visit) },
+                    onRejectByCall = { onRejectByCall(visit) },
                     onEntry = { onEntry(visit) },
                     onExit = { onExit(visit) }
                 )
@@ -234,6 +236,7 @@ private fun VisitCard(
     busy: Boolean,
     onDecision: (String) -> Unit,
     onAuthorizeByCall: () -> Unit,
+    onRejectByCall: () -> Unit,
     onEntry: () -> Unit,
     onExit: () -> Unit
 ) {
@@ -304,7 +307,8 @@ private fun VisitCard(
                 }
             }
             if (isGuard && visit.approvalStatus == "pendiente") {
-                TextButton(onClick = onAuthorizeByCall, enabled = !busy) { Text("Autorizar por llamada") }
+                // Guía para autorizar por teléfono cuando el residente no responde en la app.
+                CallGuide(visit, busy, onAuthorizeByCall, onRejectByCall)
             }
             if (isGuard && visit.approvalStatus == "aprobada") {
                 if (visit.enteredAt == null || (visit.exitedAt != null && visit.exitReturning)) {
@@ -436,6 +440,8 @@ fun VisitRegistrationSection(
     var description by rememberSaveable { mutableStateOf("") }
     var stay by remember { mutableStateOf<Int?>(null) }
     var attempted by rememberSaveable { mutableStateOf(false) }
+    // Registro simple: lo obligatorio a la vista; la estadía, los detalles y la foto en «Más datos».
+    var showMore by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -468,15 +474,6 @@ fun VisitRegistrationSection(
                         )
                     }
                 }
-                if (visitorType == "domiciliario") {
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("Detalles del pedido (opcional)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                StayChips(stay, { stay = it })
                 VisitorDocumentSection(
                     choice = documentChoice,
                     onChoice = { chosen ->
@@ -493,7 +490,19 @@ fun VisitRegistrationSection(
                     onDocument = { visitorDocument = it },
                     attempted = attempted
                 )
-                if (documentChoice == DOCUMENT_GIVEN) {
+                TextButton(onClick = { showMore = !showMore }) {
+                    Text(if (showMore) "Ocultar los datos opcionales" else "Más datos (opcional): estadía, detalles y foto")
+                }
+                if (showMore) {
+                    StayChips(stay, { stay = it })
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(if (visitorType == "domiciliario") "Detalles del pedido (opcional)" else "Detalles (opcional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (showMore && documentChoice == DOCUMENT_GIVEN) {
                     Text("Foto del visitante (opcional)", style = MaterialTheme.typography.titleSmall)
                     MediaAttachmentPicker(
                         photoName,
@@ -956,3 +965,25 @@ fun qrNameProblem(name: String): String? {
 /** Qué le falta al documento, o null si está bien. */
 fun qrDocumentProblem(document: String): String? =
     if (qrDocument.matches(cleanDocument(document))) null else "el documento debe tener de 5 a 15 letras o números"
+
+
+/**
+ * Registro guiado por llamada: cuando el residente no responde en la app, el guardia llama al
+ * apartamento (citófono o teléfono de la portería), pregunta y marca lo que le dijeron.
+ */
+@Composable
+private fun CallGuide(visit: Visit, busy: Boolean, onAuthorize: () -> Unit, onReject: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("¿El residente no responde en la app?", style = MaterialTheme.typography.labelLarge)
+        Text(
+            "1. Llama a ${visit.apartment ?: "el apartamento"} por el citófono o el teléfono de la portería.\n" +
+                "2. Pregunta si deja entrar a ${visit.visitorName}.\n" +
+                "3. Marca lo que te respondió:",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onAuthorize, enabled = !busy) { Text("Sí autorizó") }
+            TextButton(onClick = onReject, enabled = !busy) { Text("No autorizó") }
+        }
+    }
+}

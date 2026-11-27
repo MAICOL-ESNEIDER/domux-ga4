@@ -134,3 +134,20 @@ class OtherCategoryTests(UnitExpectedTests):
             "title": "Sin nombre", "message": "x", "category": "otra",
         })
         self.assertEqual(missing.status_code, 400)
+
+
+class CallFlowTests(UnitExpectedTests):
+    def test_el_guardia_registra_que_el_residente_no_autorizo(self):
+        created = self.client.post("/api/visits", headers=self.auth(self.guard), json={
+            "visitorName": "Persona Desconocida", "residentId": self.resident.id, "type": "visitante", "documentRefused": True,
+        })
+        visit_id = created.get_json()["visit"]["id"]
+        response = self.client.put(f"/api/visits/{visit_id}/reject-call", headers=self.auth(self.guard))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["visit"]["approvalStatus"], "rechazada")
+        again = self.client.put(f"/api/visits/{visit_id}/reject-call", headers=self.auth(self.guard))
+        self.assertEqual(again.status_code, 400)
+
+    def test_el_resumen_de_la_administracion_cuenta_los_vehiculos(self):
+        counts = self.client.get("/api/admin/summary", headers=self.auth(self.admin)).get_json()["counts"]
+        self.assertEqual((counts["visitorVehiclesInside"], counts["visitorVehiclesOverdue"]), (0, 0))

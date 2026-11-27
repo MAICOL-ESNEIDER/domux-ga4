@@ -400,6 +400,12 @@ interface ApiService {
         @Path("id") id: Int
     ): Response<RegisterVisitResponse>
 
+    @PUT("api/visits/{id}/reject-call")
+    suspend fun rejectVisitByCall(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
+    ): Response<RegisterVisitResponse>
+
     @PUT("api/visits/{id}/authorize-call")
     suspend fun authorizeVisitByCall(
         @Header("Authorization") auth: String,

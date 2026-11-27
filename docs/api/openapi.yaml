@@ -8037,6 +8037,53 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/visits/{visit_id}/reject-call:
+    put:
+      tags:
+      - Visitas
+      summary: Registrar que el residente no autorizó por teléfono
+      description: |-
+        **Quién puede usarla:** Solo portería.
+
+        Solo si la visita sigue pendiente.
+      operationId: securityRejectVisitByCall
+      x-endpoint: security.reject_visit_by_call
+      x-roles:
+      - GUARD
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: visit_id
+        in: path
+        required: true
+        description: Id de la visita
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Rechazo registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - visit
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  visit:
+                    $ref: '#/components/schemas/Visit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/visits/{visit_id}/decision:
     put:
       tags:
@@ -11327,6 +11374,12 @@ components:
               description: Paquetes que pasaron las horas del aviso rojo sin reclamar (72 por defecto; el nombre viene de ese valor)
             unreadNotifications:
               type: integer
+            visitorVehiclesInside:
+              type: integer
+              description: Vehículos de visitantes que siguen adentro
+            visitorVehiclesOverdue:
+              type: integer
+              description: Vehículos de visitantes que pasaron el tiempo máximo de parqueo
         urgentPqrs:
           type: array
           items:

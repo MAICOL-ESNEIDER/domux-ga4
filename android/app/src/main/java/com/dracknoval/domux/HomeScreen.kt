@@ -501,6 +501,15 @@ private fun AdminHome(summary: AdminSummaryResponse?, loading: Boolean, navContr
             "${counts?.packagesOver72} con más de ${ComplexInfoStore.rules.redHours} h" to DomuxBadgeTone.ALERT
         } else null
     ) { navController.openMainDestination("registry") }
+    // Avisos de vehículos: los que pasaron el tiempo máximo en el parqueadero de visitantes.
+    CountCard(
+        icon = R.drawable.ic_car,
+        count = counts?.visitorVehiclesInside ?: 0,
+        label = "Vehículos de visitantes adentro",
+        note = if ((counts?.visitorVehiclesOverdue ?: 0) > 0) {
+            "${counts?.visitorVehiclesOverdue} pasaron el tiempo máximo" to DomuxBadgeTone.ALERT
+        } else null
+    ) { navController.openMainDestination("vehicles") }
 
     val reservations = summary?.pendingReservations.orEmpty()
     if (reservations.isNotEmpty()) {
@@ -618,7 +627,8 @@ private val guardActions = listOf(
     GuardAction(R.drawable.ic_package, "Recibir paquete", "Con foto y transportadora", "registry?tab=registrar-paquete"),
     GuardAction(R.drawable.ic_check_circle, "Entregar paquete", "Con el código de entrega", "registry?tab=paquetes"),
     GuardAction(R.drawable.ic_car, "Entrada de vehículo", "Placa y parqueadero", "vehicles"),
-    GuardAction(R.drawable.ic_car, "Salida de vehículo", "Libera el parqueadero", "vehicles")
+    GuardAction(R.drawable.ic_car, "Salida de vehículo", "Libera el parqueadero", "vehicles"),
+    GuardAction(R.drawable.ic_schedule, "Entradas y entregas", "Todo lo de hoy en la portería", "activity")
 )
 
 @Composable
