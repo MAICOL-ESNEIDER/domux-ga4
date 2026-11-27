@@ -144,7 +144,7 @@ class WebUnitTests(WebTestCase):
         heavy = PNG + b"\x00" * unit_service.MAX_LOGO_BYTES
         response = self.send({"name": "Altos de DOMUX"}, logo=heavy)
         self.assertEqual(response.status_code, 400)
-        self.assertIn("El logo es muy pesado: el máximo es 512 KB", self.text(response))
+        self.assertIn("El logo es muy pesado: el máximo es 6 MB", self.text(response))
         self.assertIsNone(self.saved())
 
     def test_the_logo_is_public_but_revalidated_and_not_stored_as_a_page(self):
@@ -176,11 +176,21 @@ class WebUnitTests(WebTestCase):
             body = self.page(path)
             self.assertIn('<strong class="unit-name">Altos de DOMUX</strong><small>DOMUX · Administración</small>', body, path)
             self.assertIn(f"/web/unidad/logo?v={version}", body, path)
-        # La pantalla de inicio de sesión (sin sesión) muestra solo el nombre y el logo.
+        # La pantalla de inicio de sesión (sin sesión) muestra solo el nombre y el logo de la unidad en
+        # grande, y DOMUX en la esquina.
         login = self.app.test_client().get("/web/login").get_data(as_text=True)
-        self.assertIn('<strong class="unit-name">Altos de DOMUX</strong>', login)
-        self.assertIn(f"/web/unidad/logo?v={version}", login)
+        self.assertIn('<p class="unit-hero-name">Altos de DOMUX</p>', login)
+        self.assertIn(f'class="unit-hero-logo" src="/web/unidad/logo?v={version}"', login)
+        self.assertIn('alt="Logo de Altos de DOMUX"', login)
+        self.assertIn('<a class="public-brand" href="/">', login)
         self.assertNotIn("Calle 10", login)
+
+    def test_without_a_logo_the_login_shows_the_domux_logo_in_the_center(self):
+        self.send({"name": "Altos de DOMUX"})
+        login = self.app.test_client().get("/web/login").get_data(as_text=True)
+        self.assertIn('class="unit-hero-logo is-domux" src="/web/static/img/domux-logo.png"', login)
+        self.assertIn('<p class="unit-hero-name">Altos de DOMUX</p>', login)
+        self.assertNotIn("/web/unidad/logo", login)
 
     def test_the_name_written_by_a_person_is_escaped_in_the_header(self):
         self.send({"name": "<script>alert(1)</script>"})

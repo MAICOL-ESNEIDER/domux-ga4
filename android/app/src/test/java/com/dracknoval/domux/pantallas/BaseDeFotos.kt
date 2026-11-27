@@ -211,13 +211,20 @@ private fun GrafoDeLaApp(navegacion: NavHostController, rutaPedida: String) {
             )
         }
         composable(
-            "reservations?residentId={residentId}",
-            arguments = listOf(navArgument("residentId") {
-                type = NavType.IntType
-                defaultValue = -1
-            })
+            "reservations?residentId={residentId}&tab={tab}",
+            arguments = listOf(
+                navArgument("residentId") {
+                    type = NavType.IntType
+                    defaultValue = -1
+                },
+                tabArg
+            )
         ) { entry ->
-            ReservationsScreen(navegacion, entry.arguments?.getInt("residentId")?.takeIf { it > 0 })
+            ReservationsScreen(
+                navegacion,
+                entry.arguments?.getInt("residentId")?.takeIf { it > 0 },
+                initialTab = entry.arguments?.getString("tab").orEmpty()
+            )
         }
         composable("registry?tab={tab}&search={search}", arguments = listOf(tabArg, searchArg)) { entry ->
             RegistryScreen(

@@ -206,7 +206,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             json={
                 "residentId": self.resident.id,
                 "description": "Caja especial",
-                "status": "por_llegar",
+                "status": "pendiente",
             },
         )
         self.assertEqual(registration.status_code, 201)
@@ -230,9 +230,10 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(status_response.status_code, 200)
         self.assertEqual(status_response.get_json()["packageItem"]["status"], "pendiente")
+        # Un solo aviso: el de que llegó (confirmar que sigue en portería no avisa otra vez).
         self.assertEqual(
             Notification.query.filter_by(user_id=self.resident.id).count(),
-            2,
+            1,
         )
 
         deleted = self.client.delete(

@@ -279,12 +279,13 @@ class UnitInfoTests(unittest.TestCase):
         self.save({"name": "Altos de DOMUX"})
         # Pasa el encabezado de PNG, pero pesa más de lo permitido.
         heavy = PNG + b"\x00" * unit_service.MAX_LOGO_BYTES
-        huge = b"\x00" * (3 * unit_service.MAX_LOGO_BYTES)
+        # Más grande todavía, pero sin pasar el máximo de una solicitud (12 MB).
+        huge = b"\x00" * (unit_service.MAX_LOGO_BYTES + unit_service.MAX_LOGO_BYTES // 3)
         for raw in (heavy, huge):
             response = self.save({"logo": data_url(raw)})
             self.assertEqual(response.status_code, 400)
             self.assertIn("muy pesado", response.get_json()["error"])
-            self.assertIn("512 KB", response.get_json()["error"])
+            self.assertIn("6 MB", response.get_json()["error"])
         # Justo en el límite sí entra.
         edge = PNG + b"\x00" * (unit_service.MAX_LOGO_BYTES - len(PNG))
         self.assertEqual(self.save({"logo": data_url(edge)}).status_code, 200)

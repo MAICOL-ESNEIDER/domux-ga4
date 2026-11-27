@@ -1,12 +1,12 @@
 {% extends "web/base.html" %}
-{% from "web/_macros.html" import brand_parts, legal_links %}
+{% from "web/_macros.html" import unit_hero, legal_links %}
 {% set page_title = "Bienvenida" %}
 {% set wide_card = true %}
 {# La presentación de DOMUX se ve siempre oscura, como la app. #}
 {% set dark_only = true %}
 
 {% block content %}
-<div class="brand">{{ brand_parts() }}</div>
+{{ unit_hero() }}
 
 <h1>La administración de tu conjunto residencial, en el celular y en el computador</h1>
 <p class="lead">DOMUX junta en un solo lugar lo que hoy se hace con cuadernos, grupos de mensajes y papeles: paquetes, visitas, reservas de zonas comunes, solicitudes (PQRS), comunicados y documentos de la unidad.</p>
@@ -28,17 +28,18 @@
 
 <h2>Entrar a DOMUX</h2>
 <p class="muted">La app es solo para Android. La página de administración es para el computador.</p>
-<p>
+<div class="button-row">
   <a class="btn" href="/descargar">Descargar la app (Android)</a>
-  <a class="btn btn-quiet" href="{{ url_for('web.login') }}">Entrar a la administración</a>
-</p>
+  <a class="btn btn-outline" href="{{ url_for('web.login') }}">Entrar a la administración</a>
+</div>
 <p class="small muted">Si Android avisa que la app es de un origen desconocido, es porque aún no está en la tienda de aplicaciones; hay que permitir la instalación para este archivo.</p>
 
 <h2>Para quien revisa el proyecto</h2>
-<ul>
-  <li><a href="{{ url_for('docs.swagger_page') }}">Documentación de la API (Swagger)</a>: todas las rutas del servidor, con la posibilidad de probarlas.</li>
-  <li><a href="https://github.com/MAICOL-ESNEIDER/domux-ga4">Código y documentación en GitHub</a></li>
-</ul>
+<p class="muted">Todas las rutas del servidor, con la posibilidad de probarlas, y el código con su documentación.</p>
+<div class="button-row">
+  <a class="btn btn-outline" href="{{ url_for('docs.swagger_page') }}">Documentación de la API (Swagger)</a>
+  <a class="btn btn-outline" href="https://github.com/MAICOL-ESNEIDER/domux-ga4" rel="noopener">Código en GitHub</a>
+</div>
 
 {{ legal_links() }}
 {% endblock %}

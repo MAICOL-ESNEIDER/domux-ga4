@@ -31,7 +31,9 @@ data class PackagesUiState(
     val delivery: DeliveryTarget? = null,
     // El código de entrega que el residente acaba de generar; se muestra una sola vez (HU-048).
     val pickupCode: PickupCodeData? = null,
-    val pickupCodePackage: PackageItem? = null
+    val pickupCodePackage: PackageItem? = null,
+    // La ventana para escribir el PIN de entrega cuando el QR no se puede leer.
+    val typingPin: Boolean = false
 )
 
 /**
@@ -146,6 +148,39 @@ class PackagesViewModel : DomuxViewModel() {
 
     fun cancelDelivery() {
         _state.update { it.copy(delivery = null, message = "") }
+    }
+
+    fun openPinEntry() {
+        _state.update { it.copy(typingPin = true, message = "") }
+    }
+
+    fun closePinEntry() {
+        _state.update { it.copy(typingPin = false, message = "") }
+    }
+
+    /**
+     * El guardia escribió el PIN de 6 dígitos (el QR no se pudo leer): el servidor dice de qué paquete
+     * es y se abre la entrega con ese PIN, como si se hubiera escaneado el QR.
+     */
+    fun lookupPickupPin(pin: String) {
+        val clean = pin.filter(Char::isDigit)
+        if (clean.length != 6) {
+            showError("El PIN tiene 6 dígitos.")
+            return
+        }
+        viewModelScope.launch {
+            val response = withBusy {
+                attempt("No se pudo buscar el PIN") {
+                    api.lookupPickupCode(auth(), PickupLookupRequest(clean))
+                }
+            } ?: return@launch
+            val item = response.body()?.packageItem
+            if (item == null) {
+                showError("El servidor no encontró el paquete de este PIN.")
+                return@launch
+            }
+            _state.update { it.copy(typingPin = false, delivery = DeliveryTarget(item, clean), message = "") }
+        }
     }
 
     /**

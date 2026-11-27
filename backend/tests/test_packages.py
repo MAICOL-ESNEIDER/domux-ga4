@@ -209,7 +209,10 @@ class PackageTests(unittest.TestCase):
                 self.assertIsNone(package.to_dict()["hoursWaiting"])
 
     def test_the_arrival_time_starts_when_the_package_reaches_the_porteria(self):
-        coming = self.register(status="por_llegar").get_json()["packageItem"]
+        # Solo los paquetes de la unidad se anuncian «por llegar»; los de los residentes llegan directo.
+        coming = self.client.post(
+            "/api/packages", headers=self.auth(self.admin), json={"description": "Repuesto", "status": "por_llegar"}
+        ).get_json()["packageItem"]
         self.assertIsNone(coming["arrivedAt"])
         self.assertIsNone(coming["hoursWaiting"])
 
@@ -223,6 +226,57 @@ class PackageTests(unittest.TestCase):
 
         direct = self.register().get_json()["packageItem"]
         self.assertIsNotNone(direct["arrivedAt"])
+
+    def test_resident_packages_always_stay_in_the_porteria(self):
+        refused = self.register(status="por_llegar")
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("quedan guardados en portería", refused.get_json()["error"])
+
+        package = self.register(description="Caja de zapatos", carrier="Servientrega").get_json()["packageItem"]
+        self.assertEqual(package["status"], "pendiente")
+        self.assertIsNotNone(package["arrivedAt"])
+        notice = Notification.query.filter_by(user_id=self.resident.id).one()
+        self.assertEqual(notice.title, "Llegó un paquete para ti")
+        self.assertIn("«Caja de zapatos» de Servientrega", notice.message)
+        self.assertIn("pasa a recogerlo", notice.message)
+
+        back = self.set_status(package["id"], "por_llegar")
+        self.assertEqual(back.status_code, 409)
+
+    def test_the_guard_finds_the_package_by_its_pin_when_the_qr_fails(self):
+        package = self.make_package()
+        other = self.make_package(self.neighbor)
+        pins = []
+        for item, owner in ((package, self.resident), (other, self.neighbor)):
+            pins.append(self.client.post(
+                f"/api/packages/{item.id}/pickup-code", headers=self.auth(owner)
+            ).get_json()["pickupCode"]["pin"])
+
+        def lookup(value):
+            return self.client.post("/api/packages/pickup-lookup", headers=self.auth(self.guard), json={"code": value})
+
+        found = lookup(pins[0])
+        self.assertEqual(found.status_code, 200)
+        self.assertEqual(found.get_json()["packageItem"]["id"], package.id)
+
+        wrong_pin = next(f"{n:06d}" for n in range(10) if f"{n:06d}" not in pins)
+        self.assertEqual(lookup(wrong_pin).status_code, 404)
+        self.assertEqual(lookup("123").status_code, 400)
+
+        delivered = self.client.put(
+            f"/api/packages/{package.id}/deliver", headers=self.auth(self.guard),
+            json={"receivedBy": "Hermana del residente", "pickupCode": pins[0]},
+        )
+        self.assertEqual(delivered.status_code, 200)
+        # Ya usado, el PIN no vuelve a servir.
+        self.assertEqual(lookup(pins[0]).status_code, 404)
+
+        # Tras 5 PIN errados la búsqueda por PIN se pausa para esa cuenta.
+        for _ in range(3):
+            self.assertEqual(lookup(wrong_pin).status_code, 404)
+        paused = lookup(pins[1])
+        self.assertEqual(paused.status_code, 429)
+        self.assertIn("Demasiados PIN errados", paused.get_json()["error"])
 
     def test_confirming_the_same_status_does_not_restart_the_clock(self):
         package = self.make_package(arrived_minutes_ago=50 * 60)
@@ -335,7 +389,7 @@ class PackageTests(unittest.TestCase):
         code = self.generate(package)
 
         self.assertEqual(self.lookup(QR_PREFIX + "inventado").status_code, 404)
-        self.assertEqual(self.lookup(code["pin"]).status_code, 404)  # el PIN no abre la búsqueda
+        self.assertEqual(self.lookup("000000" if code["pin"] != "000000" else "111111").status_code, 404)
         no_code = self.client.post("/api/packages/pickup-lookup", headers=self.auth(self.guard), json={})
         self.assertEqual(no_code.status_code, 400)
         not_text = self.client.post(

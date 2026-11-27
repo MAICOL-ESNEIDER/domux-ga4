@@ -599,7 +599,7 @@ fun DomuxScreenScaffold(
                 },
                 actions = {
                     actions()
-                    if (showMenu && showQuickActions && hasQuickActions()) DomuxQuickActions(navController)
+                    if (showMenu && showQuickActions && (hasQuickActions() || hasNewMenu())) DomuxQuickActions(navController)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DomuxColor.Deep,

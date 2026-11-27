@@ -25,8 +25,8 @@ from time_utils import utc_now
 NAME_MAX = 120
 ADDRESS_MAX = 200
 
-#: Lo máximo que puede pesar el logo (un logo normal pesa menos de 100 KB).
-MAX_LOGO_BYTES = 512 * 1024
+#: Lo máximo que puede pesar el logo: 6 MB, para que sirva una foto o imagen sin tener que reducirla.
+MAX_LOGO_BYTES = 6 * 1024 * 1024
 
 #: Lo que devuelve la API mientras la administración no ha guardado los datos.
 BLANK_UNIT = {
@@ -133,7 +133,7 @@ def read_logo(value):
     if not header.startswith("data:image/") or not header.endswith(";base64"):
         raise ApiError(LOGO_FORMAT_MESSAGE)
     too_heavy = ApiError(
-        f"El logo es muy pesado: el máximo es {MAX_LOGO_BYTES // 1024} KB. Reduce la imagen e inténtalo de nuevo."
+        f"El logo es muy pesado: el máximo es {MAX_LOGO_BYTES // (1024 * 1024)} MB. Reduce la imagen e inténtalo de nuevo."
     )
     # Se mira el largo antes de decodificar para no gastar memoria con un archivo enorme.
     if len(payload) > (MAX_LOGO_BYTES * 4) // 3 + 8:
@@ -242,6 +242,20 @@ def logo_response():
     Lleva su huella como ETag y «no-cache»: el navegador y la app la guardan, pero antes de usarla
     preguntan si cambió y, si no cambió, el servidor responde 304 sin enviarla otra vez.
     """
+    # Primero solo la huella: si el navegador ya tiene esta versión, se responde 304 sin leer la
+    # imagen de la base (un logo puede pesar varios MB).
+    sha = (
+        db.session.query(ComplexProfile.logo_sha256)
+        .filter(ComplexProfile.id == ComplexProfile.SINGLE_ID, ComplexProfile.logo.isnot(None))
+        .scalar()
+    )
+    if sha is None:
+        return None
+    if sha in request.if_none_match:
+        response = Response(status=304)
+        response.set_etag(sha)
+        response.headers["Cache-Control"] = "private, no-cache"
+        return response
     row = (
         db.session.query(ComplexProfile.logo, ComplexProfile.logo_type, ComplexProfile.logo_sha256)
         .filter(ComplexProfile.id == ComplexProfile.SINGLE_ID)

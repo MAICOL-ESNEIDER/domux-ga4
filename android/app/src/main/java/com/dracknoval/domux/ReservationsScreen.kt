@@ -72,13 +72,15 @@ private class ReservationConfirmation(
 fun ReservationsScreen(
     navController: NavController,
     targetResidentId: Int? = null,
+    // «nueva» abre directo la pestaña de reservar (el botón «+ Nuevo»).
+    initialTab: String = "",
     viewModel: ReservationsViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val canBook = Session.isAdmin || Session.isResident
     val tabs = if (canBook) listOf(TAB_LIST, TAB_NEW) else listOf(TAB_LIST)
     // Si la administración llega desde el perfil de un residente, abre directo la reserva nueva.
-    var selectedTab by rememberSaveable { mutableStateOf(if (targetResidentId != null && canBook) 1 else 0) }
+    var selectedTab by rememberSaveable { mutableStateOf(if ((targetResidentId != null || initialTab == "nueva") && canBook) 1 else 0) }
     val tab = selectedTab.coerceIn(tabs.indices)
     var confirmation by remember { mutableStateOf<ReservationConfirmation?>(null) }
 

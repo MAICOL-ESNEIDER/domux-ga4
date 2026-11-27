@@ -1,11 +1,9 @@
 {% extends "web/base.html" %}
-{% from "web/_macros.html" import brand_parts, legal_links %}
+{% from "web/_macros.html" import unit_hero, legal_links %}
 {% set page_title = "Iniciar sesión" %}
 
 {% block content %}
-<div class="brand">{{ brand_parts() }}</div>
-
-<p class="small"><a href="{{ url_for('root') }}">← Volver a la página de DOMUX</a></p>
+{{ unit_hero() }}
 
 <h1>Iniciar sesión</h1>
 <p class="lead">Esta página es solo para la administración del conjunto.</p>

@@ -693,7 +693,7 @@ class ContractContentTests(unittest.TestCase):
             "eventDate": today, "eventTime": "10:30",
         })["packageItem"]
         coming = self.data(guard, "POST", "/api/packages", expect=201, json={
-            "residentId": resident.id, "description": "Sobre de la DIAN", "status": "por_llegar",
+            "residentId": resident.id, "description": "Sobre de la DIAN", "status": "pendiente",
         })["packageItem"]
         self.call(guard, "GET", "/api/packages", query={"status": "pendiente", "residentId": resident.id, "search": "caja"})
         self.call(resident, "GET", "/api/packages")
