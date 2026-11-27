@@ -192,6 +192,10 @@ administración.
 ### Cambiado
 
 - Se quitaron de la app y la web los avisos que decían que algo llegaría «en la versión completa» o que era «de demostración». En los textos legales, el aviso del principio ahora dice que lo preparó el equipo de DOMUX, que no es asesoría legal y que la unidad debe revisarlo con su asesor jurídico.- El Excel se maneja solo en la web de administración; la app no guarda archivos en el celular.
+- PQRS: en una queja, un reclamo o un daño hay que decir cuándo pasó (fecha obligatoria, hora opcional; solo de hoy hacia atrás), en la app y en el servidor. La fecha y hora en que se radica la PQRS se guardan solas en todas. La tarjeta muestra «Radicado: …».
+
+- App del residente: en Inicio y en Comunicados los enlaces azules pasaron a botones; los comunicados largos tienen «Leer más»; las notificaciones se marcan solas como leídas al abrirlas y salen con la etiqueta «Nueva».
+- El Excel se maneja solo en la web de administración; la app no guarda archivos en el celular.
 - Las horas se muestran y se comparan en hora de Colombia (TT-031, DEF-002).
 - Errores del servidor en español y un solo registro de auditoría para todo el servidor (TT-013).
 - Las listas del administrador (PQRS, reservas, resumen y reporte legal) cargan sus datos

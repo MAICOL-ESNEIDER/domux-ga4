@@ -596,10 +596,11 @@ class ContractContentTests(unittest.TestCase):
         })["pqrs"]
         again = self.data(resident, "POST", "/api/pqrs", expect=201, json={
             "subject": "Ruido en la mañana", "message": "Otra vez el ruido.", "category": "Queja",
+            "incidentDate": yesterday,
         })["pqrs"]
         for_resident = self.data(admin, "POST", "/api/pqrs", expect=201, json={
             "subject": "Daño en el ascensor", "message": "La administración lo registra a nombre del residente.",
-            "category": "Queja", "residentId": resident.id,
+            "category": "Queja", "residentId": resident.id, "incidentDate": yesterday,
         })["pqrs"]
         self.call(resident, "GET", "/api/pqrs")
         self.call(admin, "GET", "/api/pqrs", query={

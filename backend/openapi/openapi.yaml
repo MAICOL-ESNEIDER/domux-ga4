@@ -4873,7 +4873,7 @@ paths:
                   minimum: 1
                 incidentDate:
                   type: string
-                  description: Día en que pasó, AAAA-MM-DD
+                  description: Día en que pasó, AAAA-MM-DD. Obligatorio en Queja, Reclamo y Daño; no puede ser futuro.
                   nullable: true
                   example: '2026-12-01'
                   format: date
