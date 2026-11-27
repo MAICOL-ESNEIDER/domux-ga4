@@ -26,9 +26,10 @@ from models import User
 from web import security
 
 #: Rutas públicas a propósito (inicio de sesión, estado del servicio, archivos de diseño, logo de la web, los
-#: documentos legales, que se leen antes de entrar, y la documentación Swagger, que no trae datos de nadie).
+#: documentos legales, que se leen antes de entrar, la documentación Swagger, que no trae datos de nadie, y la
+#: descarga de la app, que es la misma APK publicada en GitHub).
 PUBLIC_ENDPOINTS = {
-    "root", "static", "auth.login", "auth.health",
+    "root", "download_app", "static", "auth.login", "auth.health",
     "web.static", "web.login", "web.login_submit", "web.unit_logo",
     "legal.list_documents", "legal.get_document", "web.legal_index", "web.legal_document",
     "docs.swagger_page", "docs.openapi_spec",
