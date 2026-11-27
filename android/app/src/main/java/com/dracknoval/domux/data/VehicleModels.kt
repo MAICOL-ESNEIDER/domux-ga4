@@ -35,7 +35,11 @@ data class VisitorSpotItem(
     val apartmentId: Int? = null,
     val apartment: String? = null,
     val isOccupied: Boolean = false,
-    val entry: VisitorVehicleEntryData? = null
+    val entry: VisitorVehicleEntryData? = null,
+    // Parqueadero «para motos»: cuántas hay adentro y cuántas caben (regla «motos por cupo de carro»).
+    val forMotos: Boolean = false,
+    val motosInside: Int? = null,
+    val motosCapacity: Int? = null
 )
 
 /** El tablero de parqueaderos de visitantes: libres, ocupados, el sugerido y los que entraron sin parqueadero. */
@@ -58,7 +62,9 @@ data class RegisterVehicleEntryRequest(
     val plate: String,
     val visitId: Int,
     val spotId: Int? = null,
-    val withoutSpot: Boolean? = null
+    val withoutSpot: Boolean? = null,
+    // «carro» o «moto»: una moto va primero a un parqueadero «para motos» con cupo.
+    val vehicleType: String = "carro"
 )
 
 data class VehicleEntryResponse(val message: String? = null, val vehicleEntry: VisitorVehicleEntryData? = null)

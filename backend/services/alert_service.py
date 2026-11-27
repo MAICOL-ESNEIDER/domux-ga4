@@ -103,7 +103,7 @@ def alert_overdue_vehicles(now=None):
         if not _claim(VisitorVehicleEntry, entry.id, VisitorVehicleEntry.overdue_alerted_at, now):
             continue
         days = entry.parked_minutes(now) // (24 * 60)
-        spot = f" en el parqueadero {entry.spot.code}" if entry.spot else ""
+        spot = f" en el parqueadero {entry.place.code}" if entry.place else ""
         apartment = entry.apartment.label if entry.apartment else "un apartamento sin identificar"
         for guard in guards:
             notify_user(

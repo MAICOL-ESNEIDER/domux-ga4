@@ -286,6 +286,12 @@ private fun SpotCard(
             spot.location?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall)
             }
+            if (spot.forMotos) {
+                Text(
+                    "Para motos: ${spot.motosInside ?: 0} de ${spot.motosCapacity ?: "?"} adentro.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             if (!spot.isOccupied && suggested) {
                 Text("Es el que se sugiere al próximo vehículo.", style = MaterialTheme.typography.bodySmall)
             }
@@ -365,6 +371,7 @@ private fun VehicleEntrySection(
     var selectedVisit by remember { mutableStateOf<Visit?>(null) }
     // AUTO_SPOT = el primero libre; NO_SPOT = sin parqueadero; otro valor = id del parqueadero elegido.
     var spotChoice by rememberSaveable { mutableStateOf(AUTO_SPOT) }
+    var vehicleType by rememberSaveable { mutableStateOf("carro") }
     var attempted by rememberSaveable { mutableStateOf(false) }
     var handled by rememberSaveable { mutableStateOf(state.entryRegistrations) }
 
@@ -381,10 +388,12 @@ private fun VehicleEntrySection(
             visitSearch = ""
             selectedVisit = null
             spotChoice = AUTO_SPOT
+            vehicleType = "carro"
             attempted = false
         }
     }
-    val freeSpots = state.board?.spots.orEmpty().filter { !it.isOccupied }
+    // Para un carro, los libres que no son «para motos»; para una moto, también los de motos con cupo.
+    val freeSpots = state.board?.spots.orEmpty().filter { !it.isOccupied && (vehicleType == "moto" || !it.forMotos) }
     val suggestedCode = freeSpots.firstOrNull { it.id == state.board?.suggestedSpotId }?.code
     // Si el parqueadero elegido se ocupó mientras tanto, se vuelve a la opción automática.
     LaunchedEffect(freeSpots) {
@@ -480,6 +489,11 @@ private fun VehicleEntrySection(
                     }
                 }
 
+                Text("Tipo de vehículo", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = vehicleType == "carro", onClick = { vehicleType = "carro" }, label = { Text("Carro") })
+                    FilterChip(selected = vehicleType == "moto", onClick = { vehicleType = "moto" }, label = { Text("Moto") })
+                }
                 // Parqueadero: por defecto el primero libre (HU-036); el guardia puede elegir otro o ninguno.
                 Text("Parqueadero", style = MaterialTheme.typography.labelLarge)
                 Row(
@@ -495,7 +509,12 @@ private fun VehicleEntrySection(
                         FilterChip(
                             selected = spotChoice == spot.id,
                             onClick = { spotChoice = spot.id },
-                            label = { Text(spot.code) }
+                            label = {
+                                Text(
+                                    if (spot.forMotos) "${spot.code} · motos ${spot.motosInside ?: 0}/${spot.motosCapacity ?: "?"}"
+                                    else spot.code
+                                )
+                            }
                         )
                     }
                     FilterChip(
@@ -522,7 +541,8 @@ private fun VehicleEntrySection(
                                     plate = plate,
                                     visitId = chosen.id,
                                     spotId = spotChoice.takeIf { it > 0 },
-                                    withoutSpot = if (spotChoice == NO_SPOT) true else null
+                                    withoutSpot = if (spotChoice == NO_SPOT) true else null,
+                                    vehicleType = vehicleType
                                 )
                             )
                         }

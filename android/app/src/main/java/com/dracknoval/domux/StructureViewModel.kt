@@ -287,15 +287,17 @@ class StructureViewModel : ViewModel() {
         }
     }
 
-    fun createParking(code: String, type: String, location: String, apartmentId: Int?, onSuccess: () -> Unit) =
-        change("No se pudo guardar el parqueadero", "Parqueadero guardado.", onSuccess) {
-            api.createParkingSpot(auth(), SaveParkingSpotRequest(code, type, location, apartmentId))
-        }
+    fun createParking(
+        code: String, type: String, location: String, apartmentId: Int?, forMotos: Boolean, onSuccess: () -> Unit
+    ) = change("No se pudo guardar el parqueadero", "Parqueadero guardado.", onSuccess) {
+        api.createParkingSpot(auth(), SaveParkingSpotRequest(code, type, location, apartmentId, forMotos))
+    }
 
-    fun updateParking(id: Int, code: String, type: String, location: String, apartmentId: Int?, onSuccess: () -> Unit) =
-        change("No se pudo guardar el parqueadero", "Parqueadero guardado.", onSuccess) {
-            api.updateParkingSpot(auth(), id, SaveParkingSpotRequest(code, type, location, apartmentId))
-        }
+    fun updateParking(
+        id: Int, code: String, type: String, location: String, apartmentId: Int?, forMotos: Boolean, onSuccess: () -> Unit
+    ) = change("No se pudo guardar el parqueadero", "Parqueadero guardado.", onSuccess) {
+        api.updateParkingSpot(auth(), id, SaveParkingSpotRequest(code, type, location, apartmentId, forMotos))
+    }
 
     fun retireParking(id: Int) =
         change("No se pudo retirar el parqueadero", "Parqueadero retirado.", {}) {

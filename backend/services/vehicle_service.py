@@ -79,8 +79,11 @@ def visitor_spots_query():
 
 
 def free_visitor_spots(excluding_id=None):
-    """Los parqueaderos de visitantes libres; el primero es el que se sugiere."""
-    query = visitor_spots_query().filter(ParkingSpot.occupied.is_(False))
+    """Los parqueaderos de visitantes libres para un carro; el primero es el que se sugiere.
+
+    No cuenta los marcados «para motos»: esos se llenan con motos (ver ``_assign_moto_spot``).
+    """
+    query = visitor_spots_query().filter(ParkingSpot.occupied.is_(False), ParkingSpot.for_motos.is_(False))
     if excluding_id is not None:
         query = query.filter(ParkingSpot.id != excluding_id)
     return query.all()
@@ -146,12 +149,16 @@ def visitor_board(now=None):
     inside = VisitorVehicleEntry.query.filter(VisitorVehicleEntry.exited_at.is_(None)).all()
     by_spot = {entry.spot_id: entry for entry in inside if entry.spot_id is not None}
     items = []
+    capacity = current_rules().motos_per_car_spot
     for spot in spots:
         item = spot.to_dict()
         entry = by_spot.get(spot.id)
         item["entry"] = entry.to_dict(now) if entry else None
+        if spot.for_motos:
+            item["motosInside"] = motos_in(spot.id)
+            item["motosCapacity"] = capacity
         items.append(item)
-    free = [spot for spot in spots if not spot.occupied]
+    free = [spot for spot in spots if not spot.occupied and not spot.for_motos]
     return {
         "spots": items,
         "total": len(spots),
@@ -197,6 +204,45 @@ def _chosen_spot(spot_id):
     return spot
 
 
+VEHICLE_TYPES = ("carro", "moto")
+
+
+def _vehicle_type(value):
+    if value in (None, ""):
+        return "carro"
+    if value not in VEHICLE_TYPES:
+        raise ApiError("El tipo de vehículo debe ser «carro» o «moto».")
+    return value
+
+
+def motos_in(spot_id):
+    """Cuántas motos hay adentro en un parqueadero compartido."""
+    return VisitorVehicleEntry.query.filter(
+        VisitorVehicleEntry.shared_spot_id == spot_id, VisitorVehicleEntry.exited_at.is_(None)
+    ).count()
+
+
+def _assign_moto_spot(data):
+    """Busca lugar para una moto en un parqueadero «para motos» con cupo (regla «motos por cupo de carro»).
+
+    Devuelve el parqueadero o None si no hay ninguno con cupo (entonces la moto usa un parqueadero normal).
+    Cuando la moto completa el cupo, el parqueadero queda ocupado.
+    """
+    capacity = current_rules().motos_per_car_spot
+    spot_id = data.get("spotId")
+    candidates = visitor_spots_query().filter(ParkingSpot.for_motos.is_(True), ParkingSpot.occupied.is_(False))
+    if spot_id is not None:
+        candidates = candidates.filter(ParkingSpot.id == _whole_id(spot_id, "spotId"))
+    for spot in candidates.all():
+        inside = motos_in(spot.id)
+        if inside < capacity:
+            if inside + 1 >= capacity:
+                _set_occupied(spot.id, True)
+                db.session.expire(spot)
+            return spot
+    return None
+
+
 def _assign_spot(data):
     """Ocupa el parqueadero que corresponde y lo devuelve; None si se registra sin parqueadero.
 
@@ -236,12 +282,24 @@ def register_visitor_entry(data, guard):
     if open_entry is not None:
         where = f" en el parqueadero {open_entry.spot.code}" if open_entry.spot else ""
         raise ApiError(f"El vehículo {plate} ya figura adentro{where}.", 409)
-    spot = _assign_spot(data)
+    vehicle_type = _vehicle_type(data.get("vehicleType"))
+    shared = None
+    chosen = data.get("spotId")
+    chosen_spot = db.session.get(ParkingSpot, chosen) if isinstance(chosen, int) and not isinstance(chosen, bool) else None
+    if chosen_spot is not None and chosen_spot.for_motos and vehicle_type != "moto":
+        raise ApiError(f"El parqueadero {chosen_spot.code} es para motos: elige otro para el carro.")
+    if vehicle_type == "moto" and not _flag(data.get("withoutSpot"), "withoutSpot"):
+        shared = _assign_moto_spot(data)
+        if shared is None and chosen_spot is not None and chosen_spot.for_motos:
+            raise ApiError(f"El parqueadero {chosen_spot.code} ya tiene todas las motos que caben.", 409)
+    spot = None if shared is not None else _assign_spot(data)
     entry = VisitorVehicleEntry(
         plate=plate,
         visit_id=visit.id,
         apartment_id=visit.resident.apartment_id if visit.resident else None,
         spot_id=spot.id if spot else None,
+        shared_spot_id=shared.id if shared else None,
+        vehicle_type=vehicle_type,
         entered_at=utc_now(),
         registered_by=guard.id,
     )
@@ -281,6 +339,9 @@ def register_visitor_exit(entry, guard):
         raise ApiError("Este vehículo ya registró su salida.", 409)
     if entry.spot_id is not None:
         _set_occupied(entry.spot_id, False)
+    if entry.shared_spot_id is not None:
+        # Salió una moto: en el parqueadero compartido vuelve a haber cupo.
+        _set_occupied(entry.shared_spot_id, False)
     db.session.expire(entry)
     return entry
 
