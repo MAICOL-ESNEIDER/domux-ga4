@@ -1591,7 +1591,7 @@ paths:
                   nullable: true
                 logo:
                   type: string
-                  description: Imagen PNG, JPG o WebP de máximo 512 KB como «data:image/png;base64,...»
+                  description: Imagen PNG, JPG o WebP de máximo 6 MB como «data:image/png;base64,...»
                   nullable: true
       responses:
         '200':
@@ -4244,7 +4244,7 @@ paths:
       description: |-
         **Quién puede usarla:** Solo administración, portería.
 
-        Le llega una notificación al residente. `pendiente` es un paquete que ya está en portería (empieza a contar el tiempo sin reclamar) y `por_llegar` uno que todavía no ha llegado. Adjunto: image, video o audio.
+        Un paquete para un residente se registra cuando ya llegó: queda guardado en portería (`pendiente`, empieza a contar el tiempo sin reclamar) sin que el residente tenga que aceptarlo, y a él le llega la notificación para que pase a recogerlo; con `por_llegar` responde 400. Solo los paquetes de la unidad (los registra la administración) pueden anunciarse `por_llegar`. Adjunto: image, video o audio.
       operationId: securityRegisterPackage
       x-endpoint: security.register_package
       x-roles:
@@ -4334,7 +4334,7 @@ paths:
       description: |-
         **Quién puede usarla:** Solo administración, portería.
 
-        El guardia escanea el QR (o escribe el PIN) y ve el paquete. El código viaja en el cuerpo y no en la dirección para que no quede en los registros del servidor.
+        El guardia escanea el QR o, si el QR no se puede leer, escribe el PIN de 6 dígitos y ve el paquete. Tras 5 PIN errados en 10 minutos, la búsqueda por PIN de esa cuenta se pausa (429). El código viaja en el cuerpo y no en la dirección para que no quede en los registros del servidor.
       operationId: securityLookupPackagePickupCode
       x-endpoint: security.lookup_package_pickup_code
       x-roles:
@@ -4376,6 +4376,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /api/packages/{pkg_id}:
     get:
       tags:
@@ -4642,7 +4644,7 @@ paths:
       description: |-
         **Quién puede usarla:** Solo administración, portería.
 
-        Un paquete ya entregado no cambia de estado (409). Al llegar a portería se avisa al residente.
+        Un paquete ya entregado no cambia de estado (409). Un paquete de un residente no puede pasar a `por_llegar` (409): siempre queda en portería. Al llegar a portería se avisa a su dueño.
       operationId: securityUpdatePackageStatus
       x-endpoint: security.update_package_status
       x-roles:

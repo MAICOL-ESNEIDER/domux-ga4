@@ -144,7 +144,7 @@ class WebUnitTests(WebTestCase):
         heavy = PNG + b"\x00" * unit_service.MAX_LOGO_BYTES
         response = self.send({"name": "Altos de DOMUX"}, logo=heavy)
         self.assertEqual(response.status_code, 400)
-        self.assertIn("El logo es muy pesado: el máximo es 512 KB", self.text(response))
+        self.assertIn("El logo es muy pesado: el máximo es 6 MB", self.text(response))
         self.assertIsNone(self.saved())
 
     def test_the_logo_is_public_but_revalidated_and_not_stored_as_a_page(self):

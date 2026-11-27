@@ -18,6 +18,20 @@ administración.
 
 ### Añadido
 
+**Paquetes: siempre en portería y entrega con PIN**
+- Un paquete para un residente se registra cuando ya llegó y queda guardado en portería, sin que el residente tenga que aceptarlo. La app le avisa «Llegó un paquete para ti… pasa a recogerlo». La portería ya no ve la opción «En portería / Por llegar» para los paquetes de los residentes; «por llegar» queda solo para lo que espera la unidad.
+- El servidor no deja registrar ni pasar a «por llegar» un paquete de un residente. Los que habían quedado así pasan a «en portería» con la migración 0030.
+- Nuevo botón «Escribir PIN de entrega» en la portería: si el QR no se puede leer, el guardia escribe el PIN de 6 dígitos y DOMUX busca de qué paquete es. Tras 5 PIN errados en 10 minutos, la búsqueda por PIN de esa cuenta se pausa (contra quien quiera adivinar PINs).
+
+**Botón «+ Nuevo» para el residente**
+- El residente tiene arriba, junto a la campana, el botón «+ Nuevo» con: QR para una visita, reserva de zona común, PQRS, ver mis paquetes y ver mis visitas. Se quitaron los «Atajos» del inicio.
+- En la administración y la portería el botón ahora dice «Nuevo» (antes era solo el ícono +), igual que en la web.
+
+**Web: DOMUX y la unidad juntos en la presentación y el inicio de sesión**
+- Arriba a la izquierda va siempre el logo y el nombre de DOMUX (lleva a la presentación). En la tarjeta va el logo de la unidad en grande con su nombre y «Administración con DOMUX»; si la unidad no tiene logo, va el de DOMUX.
+- En la presentación, Swagger y GitHub ahora son botones, y los enlaces legales (política, términos, cookies) se ven como botones pequeños en toda la web.
+- El logo de la unidad puede pesar hasta 6 MB (antes 512 KB). El servidor solo lo vuelve a enviar si cambió.
+
 **Descarga directa de la app: /descargar**
 - Nueva dirección `https://domux-ga4.onrender.com/descargar`: el propio servidor entrega la última APK como app Android y con su tamaño. Así el celular la instala sin el error «el paquete no es válido» que salía al descargar desde GitHub con el navegador del lector de QR.
 - El QR del póster y el botón de la página de presentación usan esta dirección.

@@ -4,6 +4,7 @@ import android.net.Uri
 import com.dracknoval.domux.data.SearchResult
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.TextSize
+import com.dracknoval.domux.hasNewMenu
 import com.dracknoval.domux.hasQuickActions
 import com.dracknoval.domux.mainDestinations
 import com.dracknoval.domux.moreDestinations
@@ -68,10 +69,25 @@ class NovedadesDeLaVersionTest {
     }
 
     @Test
-    fun el_residente_no_tiene_nuevo() {
+    fun nuevo_del_residente_tiene_qr_reserva_pqrs_y_paquetes() {
         como(Roles.RESIDENTE)
+        // El residente no tiene la lupa del buscador general, pero sí «+ Nuevo».
         assertFalse(hasQuickActions())
-        assertTrue(quickCreateItems().isEmpty())
+        assertTrue(hasNewMenu())
+        assertEquals(
+            listOf(
+                "QR para una visita", "Reserva de zona común", "PQRS (petición, queja o reclamo)",
+                "Ver mis paquetes", "Ver mis visitas"
+            ),
+            quickCreateItems().map { it.label }
+        )
+        assertEquals(
+            listOf(
+                "registry?tab=qr", "reservations?tab=nueva", "pqrs?tab=nueva",
+                "registry?tab=paquetes", "registry?tab=visitas"
+            ),
+            quickCreateItems().map { it.route }
+        )
     }
 
     // --- Menús de cada rol ---

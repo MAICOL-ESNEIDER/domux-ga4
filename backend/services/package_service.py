@@ -12,6 +12,7 @@ el PIN no puede adivinarlo a ciegas: tras 5 intentos fallidos el código se anul
 """
 
 import hmac
+from datetime import timedelta
 import secrets
 
 from sqlalchemy import update
@@ -19,7 +20,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from errors import ApiError
 from extensions import db
-from models import PackagePickupCode
+from models import AuditLog, PackageItem, PackagePickupCode
 from services.audit_service import add_audit_log
 from time_utils import utc_now
 
@@ -31,6 +32,9 @@ PIN_DIGITS = 6
 
 #: Intentos fallidos antes de anular el código.
 MAX_FAILED_ATTEMPTS = 5
+
+#: Minutos que se pausa la búsqueda por PIN de una cuenta tras varios PIN errados.
+PIN_LOOKUP_PAUSE_MINUTES = 10
 
 #: Lo que lleva el QR antes del token, para distinguirlo de los QR de las visitas.
 QR_PREFIX = "DOMUX-PKG:"
@@ -106,11 +110,56 @@ def _bare_token(value):
     return value[len(QR_PREFIX):] if value.startswith(QR_PREFIX) else value
 
 
-def package_for_pickup_token(value):
-    """El paquete de un código escaneado por el guardia, si el código sirve todavía."""
+def _package_for_pin(pin, guard):
+    """El paquete cuyo código vigente tiene este PIN (cuando el QR no se puede leer).
+
+    El PIN se guarda con hash, así que se compara con cada código vigente de un paquete
+    que espera en portería (son pocos). Si dos códigos tuvieran el mismo PIN, se pide
+    buscar el paquete por el residente, para no entregar el equivocado.
+    """
+    if len(pin) != PIN_DIGITS:
+        raise ApiError(f"El PIN tiene {PIN_DIGITS} dígitos.")
+    # Contra quien quiera adivinar PINs: tras varios PIN errados seguidos, la búsqueda por PIN
+    # se pausa unos minutos para esa cuenta (el QR y la búsqueda por residente siguen sirviendo).
+    since = utc_now() - timedelta(minutes=PIN_LOOKUP_PAUSE_MINUTES)
+    misses = AuditLog.query.filter(
+        AuditLog.action == "pickup_pin_lookup_failed",
+        AuditLog.actor_id == guard.id,
+        AuditLog.created_at >= since,
+    ).count()
+    if misses >= MAX_FAILED_ATTEMPTS:
+        raise ApiError(
+            f"Demasiados PIN errados. Espera {PIN_LOOKUP_PAUSE_MINUTES} minutos o busca el paquete por el residente.",
+            429,
+        )
+    active = (
+        PackagePickupCode.query.join(PackageItem, PackagePickupCode.package_id == PackageItem.id)
+        .filter(
+            PackagePickupCode.used_at.is_(None),
+            PackagePickupCode.revoked_at.is_(None),
+            PackageItem.status == "pendiente",
+            PackageItem.is_deleted.is_(False),
+        )
+        .all()
+    )
+    found = [code for code in active if check_password_hash(code.pin_hash, pin)]
+    if not found:
+        add_audit_log("package", None, "pickup_pin_lookup_failed", actor=guard)
+        db.session.commit()
+        raise ApiError("Ningún paquete en portería tiene ese PIN. Revísalo con quien lo trae.", 404)
+    if len(found) > 1:
+        raise ApiError("Ese PIN coincide con más de un paquete: busca el paquete por el nombre del residente.", 409)
+    return found[0].package
+
+
+def package_for_pickup_token(value, guard=None):
+    """El paquete de un código escaneado (QR) o escrito (PIN) por el guardia, si el código sirve todavía."""
     if not isinstance(value, str) or not value.strip():
-        raise ApiError("Escanea el QR del código de entrega.")
-    code = PackagePickupCode.query.filter_by(token=_bare_token(value)).first()
+        raise ApiError("Escanea el QR o escribe el PIN del código de entrega.")
+    text = _bare_token(value)
+    if text.isdigit():
+        return _package_for_pin(text, guard)
+    code = PackagePickupCode.query.filter_by(token=text).first()
     if code is None:
         raise ApiError("Código de entrega no encontrado.", 404)
     if code.used_at is not None:

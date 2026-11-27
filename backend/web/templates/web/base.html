@@ -81,6 +81,13 @@
     {# Solo tras entrar con «Recordar mi correo»: domux.js guarda el correo y el nombre en este navegador. #}
     {% if recordar_cuenta %}<div hidden data-recordar-cuenta data-correo="{{ recordar_cuenta.correo }}" data-nombre="{{ recordar_cuenta.nombre }}"></div>{% endif %}
 {% else %}
+{# Sin sesión: el logo y el nombre de DOMUX quedan siempre en la esquina y llevan a la presentación. #}
+<header class="public-bar">
+  <a class="public-brand" href="{{ url_for('root') }}">
+    <img src="{{ url_for('web.static', filename='img/domux-logo.png') }}" alt="" width="36" height="36">
+    <span><strong>DOMUX</strong><small>Administración de conjuntos residenciales</small></span>
+  </a>
+</header>
 <main id="contenido" class="auth-wrap" tabindex="-1">
   <div class="auth-card card{% if wide_card %} auth-card-wide{% endif %}">
 {% endif %}

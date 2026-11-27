@@ -209,6 +209,7 @@ fun RegistryScreen(
                             )
                         }
                     },
+                    onTypePin = { packagesVm.openPinEntry() },
                     onDeliver = { packagesVm.startDelivery(it) },
                     onStatusChange = { item, status -> packagesVm.changeStatus(item, status) },
                     onMoveToTrash = { item: PackageItem ->
@@ -295,6 +296,7 @@ fun RegistryScreen(
                     onSearch = { packagesVm.setSearch(it) },
                     onRefresh = { packagesVm.refresh() },
                     onScan = {},
+                    onTypePin = {},
                     onDeliver = {},
                     onStatusChange = { _, _ -> },
                     onMoveToTrash = {},
@@ -355,6 +357,16 @@ fun RegistryScreen(
             error = packages.message.takeIf { packages.messageIsError && it.isNotBlank() },
             onConfirm = { receiver, pin -> packagesVm.deliver(target, receiver, pin) },
             onDismiss = { packagesVm.cancelDelivery() }
+        )
+    }
+
+    // Entregar escribiendo el PIN, cuando el QR no se puede leer (HU-048).
+    if (packages.typingPin) {
+        PickupPinDialog(
+            busy = packages.busy,
+            error = packages.message.takeIf { packages.messageIsError && it.isNotBlank() },
+            onSearch = { packagesVm.lookupPickupPin(it) },
+            onDismiss = { packagesVm.closePinEntry() }
         )
     }
 

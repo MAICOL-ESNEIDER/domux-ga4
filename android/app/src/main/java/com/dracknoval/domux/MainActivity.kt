@@ -102,15 +102,19 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(
-                            "reservations?residentId={residentId}",
-                            arguments = listOf(navArgument("residentId") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            })
+                            "reservations?residentId={residentId}&tab={tab}",
+                            arguments = listOf(
+                                navArgument("residentId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                tabArg
+                            )
                         ) { entry ->
                             ReservationsScreen(
                                 navController,
-                                entry.arguments?.getInt("residentId")?.takeIf { it > 0 }
+                                entry.arguments?.getInt("residentId")?.takeIf { it > 0 },
+                                initialTab = entry.arguments?.getString("tab").orEmpty()
                             )
                         }
                         // «tab» abre portería en una pestaña: «paquetes» o «visitas» (los botones del guardia).

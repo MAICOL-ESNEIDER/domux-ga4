@@ -121,6 +121,24 @@
 <span class="brand-text"><strong{% if unit.name %} class="unit-name"{% endif %}>{{ unit.name or "DOMUX" }}</strong><small>{% if unit.name %}DOMUX · {% endif %}Administración</small></span>
 {%- endmacro %}
 
+{#
+  La cabecera de las páginas sin sesión (presentación e inicio de sesión): el logo de la unidad en
+  grande con su nombre y, debajo, «con DOMUX». Si la unidad no tiene logo, va el de DOMUX en el
+  centro. El logo de DOMUX además queda siempre en la esquina de arriba (base.html).
+#}
+{% macro unit_hero(subtitle="Administración con DOMUX") -%}
+{% set unit = unit_brand() -%}
+<div class="unit-hero">
+  {% if unit.logo_url -%}
+  <img class="unit-hero-logo" src="{{ unit.logo_url }}" alt="Logo de {{ unit.name or 'la unidad' }}" height="96">
+  {%- else -%}
+  <img class="unit-hero-logo is-domux" src="{{ url_for('web.static', filename='img/domux-logo.png') }}" alt="" width="96" height="96">
+  {%- endif %}
+  <p class="unit-hero-name">{{ unit.name or "DOMUX" }}</p>
+  <p class="unit-hero-sub">{{ subtitle }}</p>
+</div>
+{%- endmacro %}
+
 {# Si un documento legal ya está publicado (con su versión y fecha) o todavía está en preparación. #}
 {% macro legal_status(document) -%}
 {% if document.status == "vigente" -%}

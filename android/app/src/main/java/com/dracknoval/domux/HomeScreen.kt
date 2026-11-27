@@ -420,31 +420,7 @@ private fun ResidentHome(
         onClick = { navController.openMainDestination("reservations") },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
     ) { Text("Reservar una zona común") }
-
-    // Atajos a lo que está en «Mi hogar», y «Más» para ver todas las opciones.
-    SectionTitle("Atajos")
-    residentShortcuts.chunked(2).forEach { row ->
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            row.forEach { (label, icon, route) ->
-                OutlinedButton(
-                    onClick = { navController.navigate(route) },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-                ) {
-                    Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(6.dp))
-                    Text(label)
-                }
-            }
-        }
-    }
 }
-
-private val residentShortcuts = listOf(
-    Triple("Mis paquetes", R.drawable.ic_package, "registry?tab=paquetes"),
-    Triple("Mis visitas y QR", R.drawable.ic_qr_scan, "registry?tab=visitas"),
-    Triple("Mi perfil", R.drawable.ic_person, "profile"),
-    Triple("Más", R.drawable.ic_more, "more")
-)
 
 @Composable
 private fun ReservationCard(reservation: Reservation, onClick: () -> Unit) {

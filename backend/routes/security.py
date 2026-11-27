@@ -234,6 +234,14 @@ def register_package():
         resident = User.query.filter_by(id=resident_id, role="RESIDENT").first()
         if resident is None:
             return error_response(400, "Selecciona un residente válido")
+        # Un paquete para un residente se guarda en portería apenas llega: no hace falta que el
+        # residente lo acepte. Se registra cuando ya está ahí y la app le avisa que pase por él.
+        if status != "pendiente":
+            return error_response(
+                400,
+                "Los paquetes de los residentes se registran cuando llegan: quedan guardados en portería "
+                "y la app le avisa al residente.",
+            )
 
     package = PackageItem(
         resident_id=resident.id,
@@ -261,8 +269,8 @@ def register_package():
     else:
         notify_user(
             resident.id,
-            "Paquete registrado",
-            f"Se registró un paquete{from_carrier} para {resident.apartment or 'tu cuenta'}.",
+            "Llegó un paquete para ti",
+            f"Llegó «{package.description}»{from_carrier}. Está guardado en portería: pasa a recogerlo.",
             "package",
         )
     db.session.commit()
@@ -295,6 +303,10 @@ def update_package_status(pkg_id):
         return refused
     if package.status == "entregado":
         return error_response(409, "Este paquete ya fue entregado: su estado no se puede cambiar.")
+    if status == "por_llegar" and not package.for_unit:
+        return error_response(
+            409, "Los paquetes de los residentes quedan guardados en portería: no se pueden pasar a «por llegar»."
+        )
     if package.status != status:
         package.status = status
         # Al llegar a la portería empieza a contar el tiempo sin reclamar (RN-018).
@@ -423,15 +435,16 @@ def create_package_pickup_code(pkg_id):
 @token_required
 @role_required("GUARD", "ADMIN")
 def lookup_package_pickup_code():
-    """El guardia escanea el QR de un código de entrega y ve de qué paquete es (HU-048).
+    """El guardia escanea el QR de un código de entrega, o escribe su PIN, y ve de qué paquete es (HU-048).
 
-    El código viaja en el cuerpo y no en la dirección, para que no quede en los
-    registros del servidor.
+    El PIN sirve cuando el QR no se puede leer (pantalla rota, poca luz). El código
+    viaja en el cuerpo y no en la dirección, para que no quede en los registros del
+    servidor.
     """
     data, failure = json_body()
     if failure:
         return failure
-    package = package_service.package_for_pickup_token(data.get("code"))
+    package = package_service.package_for_pickup_token(data.get("code"), g.current_user)
     return jsonify({"packageItem": package.to_dict()})
 
 

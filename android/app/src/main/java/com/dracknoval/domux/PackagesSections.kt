@@ -1,6 +1,8 @@
 package com.dracknoval.domux
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +52,7 @@ private val COMMON_CARRIERS = listOf(
     "4-72", "DHL", "Rappi", "Mercado Libre"
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PackageListSection(
     modifier: Modifier,
@@ -59,6 +62,7 @@ fun PackageListSection(
     onSearch: (String) -> Unit,
     onRefresh: () -> Unit,
     onScan: () -> Unit,
+    onTypePin: () -> Unit,
     onDeliver: (PackageItem) -> Unit,
     onStatusChange: (PackageItem, String) -> Unit,
     onMoveToTrash: (PackageItem) -> Unit,
@@ -77,7 +81,8 @@ fun PackageListSection(
     val filters = buildList<Pair<String, String?>> {
         add("Todos" to null)
         add("En portería" to "pendiente")
-        add("Por llegar" to "por_llegar")
+        // «Por llegar» solo existe para los paquetes de la unidad: los de los residentes llegan directo a portería.
+        if (!Session.isResident) add("Por llegar" to "por_llegar")
         add("Entregados" to "entregado")
         if (canRegister) add("Archivados" to "archivados")
     }
@@ -124,10 +129,12 @@ fun PackageListSection(
                 isError = true
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = onRefresh) { Text("Actualizar registros") }
             if (canRegister) {
                 TextButton(onClick = onScan, enabled = !state.busy) { Text("Escanear código de entrega") }
+                // Si el QR no se puede leer (pantalla rota, poca luz), el guardia escribe el PIN.
+                TextButton(onClick = onTypePin, enabled = !state.busy) { Text("Escribir PIN de entrega") }
             }
         }
         LazyColumn(
@@ -254,9 +261,11 @@ private fun PackageCard(
                     // Los paquetes nunca se borran para siempre (DEC-090): solo se sacan de «Archivados».
                     TextButton(onClick = onRestore, enabled = !busy) { Text("Sacar de archivados") }
                 } else {
-                    if (item.status == "por_llegar") {
+                    // Solo lo que espera la unidad se anuncia «por llegar» y se recibe después; un paquete
+                    // de un residente ya queda guardado en portería al registrarlo, sin que él lo acepte.
+                    if (item.status == "por_llegar" && item.forUnit) {
                         TextButton(onClick = { onStatusChange("pendiente") }, enabled = !busy) {
-                            Text("Recibir en portería")
+                            Text("Ya llegó: recibir en portería")
                         }
                     }
                     if (item.status != "entregado") {
@@ -312,11 +321,11 @@ fun DeliveryDialog(
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (target.scannedCode != null) {
-                    Text("✓ Código de entrega leído. Escribe el nombre de quien recibe.")
+                    Text("✓ Código de entrega correcto. Escribe el nombre de quien recibe.")
                 } else if (item.hasPickupCode) {
                     Text(
                         "El residente generó un código de entrega. Si recoge otra persona, pídele el PIN " +
-                            "de 6 dígitos (o usa «Escanear código de entrega»). Sin PIN se entiende que " +
+                            "de 6 dígitos (o escanea su QR). Sin PIN se entiende que " +
                             "lo recoge el residente y el código se anula.",
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -352,6 +361,47 @@ fun DeliveryDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
+    )
+}
+
+/**
+ * Entregar con el PIN cuando el QR no se puede leer (HU-048): el guardia escribe los 6 dígitos que
+ * le dicta quien recoge y DOMUX busca de qué paquete es. Después se confirma la entrega como siempre.
+ */
+@Composable
+fun PickupPinDialog(
+    busy: Boolean,
+    error: String?,
+    onSearch: (pin: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var pin by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Entregar con PIN") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Pídele a quien recoge el PIN de 6 dígitos del código de entrega. Sirve cuando el QR no se puede leer.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it.filter(Char::isDigit).take(6) },
+                    label = { Text("PIN de 6 dígitos") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (!error.isNullOrBlank()) {
+                    Text("⚠ $error", color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = pin.length == 6 && !busy, onClick = { onSearch(pin) }) { Text("Buscar paquete") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }
 
@@ -491,16 +541,25 @@ fun PackageRegistrationSection(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = status == "pendiente",
-                        onClick = { status = "pendiente" },
-                        label = { Text("En portería") }
-                    )
-                    FilterChip(
-                        selected = status == "por_llegar",
-                        onClick = { status = "por_llegar" },
-                        label = { Text("Por llegar") }
+                if (forUnit) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = status == "pendiente",
+                            onClick = { status = "pendiente" },
+                            label = { Text("Ya está en portería") }
+                        )
+                        FilterChip(
+                            selected = status == "por_llegar",
+                            onClick = { status = "por_llegar" },
+                            label = { Text("Por llegar") }
+                        )
+                    }
+                } else {
+                    // El paquete de un residente queda guardado en portería al registrarlo: no necesita su
+                    // aceptación. La app le avisa para que pase a recogerlo.
+                    Text(
+                        "Queda guardado en portería y la app le avisa al residente para que pase a recogerlo.",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
                 DatePickerField("Fecha del paquete", date, { date = it })
@@ -545,12 +604,13 @@ fun PackageRegistrationSection(
                 if (forUnit || target != null) {
                     val request = RegisterPackageRequest(
                         residentId = if (forUnit) null else target?.id,
+                        // Los de los residentes siempre quedan en portería.
                         description = description.trim(),
                         mediaUrl = mediaUrl,
                         mediaType = mediaType,
                         eventDate = date.ifBlank { null },
                         eventTime = time.ifBlank { null },
-                        status = status,
+                        status = if (forUnit) status else "pendiente",
                         carrier = carrier.trim().ifEmpty { null },
                         trackingNumber = tracking.trim().ifEmpty { null }
                     )
