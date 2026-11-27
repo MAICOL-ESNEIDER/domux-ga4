@@ -18,6 +18,10 @@ administración.
 
 ### Añadido
 
+**Reglas de la unidad conectadas: QR automático y motos por cupo**
+- QR automático: cuando el guardia registra la entrada de una visita que se queda los días de la regla o más (2 por defecto), DOMUX le crea al residente un QR para ese visitante, válido los días de la estadía, y le avisa para que lo comparta.
+- Motos por cupo de carro: un parqueadero de visitantes se puede marcar «para motos» (app y web). Ahí caben las motos de la regla (6 por defecto); con el cupo lleno queda ocupado y se libera cuando sale una. El guardia elige «Carro» o «Moto» al registrar la entrada.
+
 **La administración anuncia técnicos y paquetes de la unidad**
 - La administración ya no registra visitas ni paquetes de los residentes (eso es de la portería). Ahora anuncia con anticipación a los técnicos y contratistas que vienen a trabajar en las zonas comunes (ascensores, piscina, jardín…) y los paquetes de la unidad (repuestos, materiales, plantas, herramientas).
 - El guardia los ve como «Esperados por la administración» en el inicio y en Visitas; el técnico ya llega autorizado y solo se registra su entrada. Los paquetes de la unidad aparecen «Por llegar».

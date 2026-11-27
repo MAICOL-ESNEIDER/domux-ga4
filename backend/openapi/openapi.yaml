@@ -825,6 +825,9 @@ paths:
                   enum:
                   - residente
                   - visitante
+                forMotos:
+                  type: boolean
+                  description: Parqueadero de visitantes «para motos» (caben varias motos)
                 location:
                   type: string
                   description: Dónde queda (hasta 120 caracteres)
@@ -932,6 +935,9 @@ paths:
                   enum:
                   - residente
                   - visitante
+                forMotos:
+                  type: boolean
+                  description: Parqueadero de visitantes «para motos» (caben varias motos)
                 location:
                   type: string
                   maxLength: 120
@@ -6985,6 +6991,12 @@ paths:
                 withoutSpot:
                   type: boolean
                   description: Verdadero si entra sin parqueadero. No se manda junto con spotId
+                vehicleType:
+                  type: string
+                  description: «carro» (si no se manda) o «moto». Una moto va primero a un parqueadero «para motos» con cupo
+                  enum:
+                  - carro
+                  - moto
       responses:
         '201':
           description: Entrada registrada
@@ -10893,6 +10905,9 @@ components:
         exitedByName:
           type: string
           nullable: true
+        vehicleType:
+          type: string
+          description: «carro» o «moto»
     SearchResponse:
       type: object
       required:
@@ -11044,6 +11059,12 @@ components:
               forMotos:
                 type: boolean
                 description: Parqueadero de carro que se usa para varias motos
+              motosInside:
+                type: integer
+                description: Motos adentro (solo en los parqueaderos «para motos»)
+              motosCapacity:
+                type: integer
+                description: Motos que caben (regla «motos por cupo de carro»)
               entry:
                 nullable: true
                 description: La entrada que ocupa el parqueadero; nula si está libre

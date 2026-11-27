@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% from "web/_forms.html" import field, select %}
+{% from "web/_forms.html" import field, select, checkbox %}
 {% set page_title = title %}
 
 {% block content %}
@@ -18,6 +18,8 @@
   {% for item in fields %}
     {% if item.kind == "select" %}
     {{ select(item.id, item.label, item.options, item.value, required=item.required, help=item.help, blank=item.blank) }}
+    {% elif item.kind == "checkbox" %}
+    {{ checkbox(item.id, item.label, checked=item.value, help=item.help) }}
     {% else %}
     {{ field(item.id, item.label, item.value, type=item.kind, required=item.required, help=item.help,
              maxlength=item.maxlength, extra=item.extra) }}

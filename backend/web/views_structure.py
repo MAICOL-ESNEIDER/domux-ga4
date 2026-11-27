@@ -328,6 +328,8 @@ def _parking_form(api, spot, values, status=200):
         _field("apartmentId", "Apartamento asignado", values.get("apartmentId", ""), kind="select",
                options=_apartment_options(api), blank="Sin asignar",
                help="Solo los parqueaderos de residente se asignan a un apartamento."),
+        _field("forMotos", "Para motos", bool(values.get("forMotos")), kind="checkbox",
+               help="Solo parqueaderos de visitantes: caben varias motos. Cuántas se cambia en «Reglas de la unidad»."),
     ]
     retire = _retire_card(
         url_for("web.parking_retire", spot_id=spot["id"]), "Retirar parqueadero",
@@ -345,6 +347,7 @@ def _parking_form(api, spot, values, status=200):
 
 def _parking_body(editing):
     body = compact({"code": text("code"), "type": text("type"), "location": text("location")})
+    body["forMotos"] = bool(request.form.get("forMotos")) and text("type") == "visitante"
     apartment = number("apartmentId")
     if apartment is not None or editing:
         # Al editar, «Sin asignar» se manda como nulo para liberar el parqueadero.
@@ -377,6 +380,7 @@ def parking_edit(spot_id):
         return done or _parking_form(api, spot, request.form, result.status)
     return _parking_form(api, spot, {
         "code": spot["code"], "type": spot["type"], "location": spot["location"], "apartmentId": spot["apartmentId"],
+        "forMotos": spot.get("forMotos"),
     })
 
 

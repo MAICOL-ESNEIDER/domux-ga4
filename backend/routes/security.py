@@ -699,6 +699,44 @@ def _start_stay(visit, stay):
         visit.expected_stay_minutes = stay
 
 
+def _auto_qr_for_long_stay(visit):
+    """Regla «QR automático para estadías largas»: si la visita se queda varios días, DOMUX le crea un QR.
+
+    Con el QR el visitante entra y sale esos días sin que la portería tenga que llamar al residente cada
+    vez. Se crea a nombre del residente, para una persona (el visitante) y con la vigencia de la estadía
+    (sin pasar del máximo de días de un QR). Si el residente ya le había hecho un QR vigente, no se repite.
+    """
+    rules = current_rules()
+    stay = visit.expected_stay_minutes
+    resident = visit.resident
+    if visit.for_unit or visit.qr_pass_id is not None or not stay or resident is None or resident.role != "RESIDENT":
+        return None
+    if stay < rules.auto_qr_min_stay_days * 24 * 60:
+        return None
+    today = colombia_today()
+    for existing in VisitQrPass.query.filter_by(resident_id=resident.id, revoked=False).all():
+        if existing.valid_until >= today.isoformat() and visit.visitor_name in (existing.names or []):
+            return None
+    days = min(-(-stay // (24 * 60)), rules.qr_max_valid_days) - 1
+    qr_pass = VisitQrPass(
+        resident_id=resident.id,
+        token=secrets.token_urlsafe(32),
+        valid_from=today.isoformat(),
+        valid_until=(today + timedelta(days=max(days, 0))).isoformat(),
+        max_people=1,
+    )
+    qr_pass.names = [visit.visitor_name]
+    db.session.add(qr_pass)
+    notify_user(
+        resident.id,
+        "QR creado para tu visita",
+        f"Como {visit.visitor_name} se queda varios días, DOMUX le creó un QR válido hasta el {qr_pass.valid_until}. "
+        "Ábrelo en «Mis visitas y mi QR» y compártelo: así entra y sale sin que la portería te llame.",
+        "visit",
+    )
+    return qr_pass
+
+
 @bp.post("/visits/<int:visit_id>/entry")
 @token_required
 @role_required("GUARD")
@@ -728,6 +766,7 @@ def register_visit_entry(visit_id):
     visit.exited_at = None
     visit.exit_returning = False
     _start_stay(visit, stay)
+    _auto_qr_for_long_stay(visit)
     method = visit.authorization_method or "app"
     visit.events.append(VisitEvent(
         event_type="entrada",

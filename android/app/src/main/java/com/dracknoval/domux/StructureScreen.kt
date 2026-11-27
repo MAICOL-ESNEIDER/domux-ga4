@@ -246,12 +246,12 @@ fun StructureScreen(
             editing = editing,
             busy = state.busy,
             errorMessage = dialogError,
-            onSave = { code, type, location, apartment ->
+            onSave = { code, type, location, apartment, forMotos ->
                 val apartmentId = apartment?.id
                 if (editing == null) {
-                    viewModel.createParking(code, type, location, apartmentId) { parkingForm = null }
+                    viewModel.createParking(code, type, location, apartmentId, forMotos) { parkingForm = null }
                 } else {
-                    viewModel.updateParking(editing.id, code, type, location, apartmentId) {
+                    viewModel.updateParking(editing.id, code, type, location, apartmentId, forMotos) {
                         parkingForm = null
                     }
                 }
@@ -790,10 +790,11 @@ private fun ParkingFormDialog(
     editing: ParkingSpotData?,
     busy: Boolean,
     errorMessage: String,
-    onSave: (code: String, type: String, location: String, apartment: ApartmentOption?) -> Unit,
+    onSave: (code: String, type: String, location: String, apartment: ApartmentOption?, forMotos: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val initialApartmentId = editing?.apartmentId
+    var forMotos by remember(editing?.id) { mutableStateOf(editing?.forMotos ?: false) }
     var code by remember(editing?.id) { mutableStateOf(editing?.code.orEmpty()) }
     var type by remember(editing?.id) { mutableStateOf(editing?.type ?: "residente") }
     var location by remember(editing?.id) { mutableStateOf(editing?.location.orEmpty()) }
@@ -855,6 +856,15 @@ private fun ParkingFormDialog(
                     )
                 } else {
                     Text("Un parqueadero de visitantes no se asigna a un apartamento.")
+                    FilterChip(
+                        selected = forMotos,
+                        onClick = { forMotos = !forMotos },
+                        label = { Text(if (forMotos) "Para motos (sí)" else "Para motos (no)") }
+                    )
+                    Text(
+                        "Si es «para motos», caben varias motos de visitantes; cuántas se cambia en «Reglas de la unidad».",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 DialogError(errorMessage)
             }
@@ -869,7 +879,8 @@ private fun ParkingFormDialog(
                         code.trim(),
                         type,
                         location.trim(),
-                        if (type == "residente") apartment else null
+                        if (type == "residente") apartment else null,
+                        type == "visitante" && forMotos
                     )
                 }
             ) { Text(if (busy) "Guardando..." else "Guardar") }

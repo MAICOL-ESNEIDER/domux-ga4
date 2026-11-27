@@ -446,6 +446,17 @@ def _check_parking_assignment(kind, apartment):
         raise ApiError("Un parqueadero de visitantes no se asigna a un apartamento.")
 
 
+def _for_motos(value, kind):
+    """«Para motos» (regla «motos por cupo de carro»): solo en parqueaderos de visitantes."""
+    if value in (None, False):
+        return False
+    if value is not True:
+        raise ApiError("«Para motos» debe ser verdadero o falso.")
+    if kind != "visitante":
+        raise ApiError("Solo un parqueadero de visitantes se puede marcar «para motos».")
+    return True
+
+
 def create_parking(data, actor):
     """Registra un parqueadero; el de visitantes empieza libre (CA-HU-015-01)."""
     code = _code(data.get("code"))
@@ -454,7 +465,8 @@ def create_parking(data, actor):
     apartment = _optional_apartment(data.get("apartmentId"))
     _check_parking_assignment(kind, apartment)
     _require_free_parking_code(code)
-    spot = ParkingSpot(code=code, kind=kind, location=location, apartment=apartment, occupied=False)
+    for_motos = _for_motos(data.get("forMotos"), kind)
+    spot = ParkingSpot(code=code, kind=kind, location=location, apartment=apartment, occupied=False, for_motos=for_motos)
     db.session.add(spot)
     db.session.flush()
     add_audit_log(
@@ -482,7 +494,11 @@ def update_parking(spot, data, actor):
     _check_parking_assignment(kind, apartment)
     if kind != spot.kind and spot.occupied:
         raise ApiError(f"El parqueadero {spot.code} está ocupado en este momento: no cambia de tipo.", 409)
+    for_motos = _for_motos(data["forMotos"], kind) if "forMotos" in data else (spot.for_motos and kind == "visitante")
+    if for_motos != spot.for_motos and (spot.occupied or (spot.for_motos and _has_motos(spot))):
+        raise ApiError(f"El parqueadero {spot.code} tiene vehículos adentro: cambia «para motos» cuando quede libre.", 409)
     spot.code, spot.kind, spot.location, spot.apartment = code, kind, location, apartment
+    spot.for_motos = for_motos
     add_audit_log(
         "parking_spot", spot.id, "updated",
         {"before": {key: before[key] for key in ("code", "type", "location", "apartment")},
@@ -493,8 +509,16 @@ def update_parking(spot, data, actor):
     return spot
 
 
+def _has_motos(spot):
+    from models import VisitorVehicleEntry
+
+    return VisitorVehicleEntry.query.filter(
+        VisitorVehicleEntry.shared_spot_id == spot.id, VisitorVehicleEntry.exited_at.is_(None)
+    ).first() is not None
+
+
 def retire_parking(spot, actor):
-    if spot.occupied:
+    if spot.occupied or (spot.for_motos and _has_motos(spot)):
         raise ApiError(f"El parqueadero {spot.code} está ocupado en este momento.", 409)
     spot.retire(actor)
     add_audit_log("parking_spot", spot.id, "retired", {"code": spot.code}, actor=actor)

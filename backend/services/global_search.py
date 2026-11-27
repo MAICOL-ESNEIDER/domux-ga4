@@ -162,7 +162,7 @@ def _vehicles(text, user, limit):
         apartment = entry.apartment
         subtitle = _join(
             "Visitante adentro", apartment.label if apartment is not None else None,
-            f"Parqueadero {entry.spot.code}" if entry.spot is not None else None,
+            f"Parqueadero {entry.place.code}" if entry.place is not None else None,
         )
         items.append(_item("vehiculos", entry.id, entry.plate, subtitle, entry.apartment_id, "visitante",
                            apartment.label if apartment is not None else None))

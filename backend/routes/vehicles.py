@@ -39,8 +39,8 @@ def register_vehicle_entry():
     entry = vehicles.register_visitor_entry(json_object(), g.current_user)
     save_changes("No se pudo registrar la entrada del vehículo: inténtalo de nuevo.")
     message = (
-        f"Entrada registrada. Parqueadero {entry.spot.code}."
-        if entry.spot else "Entrada registrada sin parqueadero."
+        f"Entrada registrada. Parqueadero {entry.place.code}."
+        if entry.place else "Entrada registrada sin parqueadero."
     )
     return jsonify({"message": message, "vehicleEntry": entry.to_dict()}), 201
 
@@ -55,8 +55,8 @@ def register_vehicle_exit(entry_id):
     vehicles.register_visitor_exit(entry, g.current_user)
     save_changes()
     message = "Salida registrada."
-    if entry.spot:
-        message += f" El parqueadero {entry.spot.code} quedó libre."
+    if entry.place:
+        message += f" El parqueadero {entry.place.code} quedó libre."
     return jsonify({"message": message, "vehicleEntry": entry.to_dict()})
 
 

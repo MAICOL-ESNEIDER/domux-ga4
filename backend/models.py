@@ -1760,16 +1760,31 @@ class VisitorVehicleEntry(db.Model):
     )
     #: Cuándo se avisó a los guardias que pasó el tiempo máximo (RN-015); evita avisar dos veces.
     overdue_alerted_at = db.Column(db.DateTime, nullable=True)
+    #: «carro» o «moto».
+    vehicle_type = db.Column(db.String(10), nullable=False, default="carro", server_default="carro")
+    #: Parqueadero «para motos» donde quedó una moto; ahí caben varias (regla «motos por cupo de carro»).
+    shared_spot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("parking_spots.id", name="fk_visitor_vehicle_entries_shared_spot_id_parking_spots"),
+        nullable=True,
+        index=True,
+    )
 
     visit = db.relationship("Visit")
     apartment = db.relationship("Apartment", lazy="joined")
-    spot = db.relationship("ParkingSpot", lazy="joined")
+    spot = db.relationship("ParkingSpot", lazy="joined", foreign_keys=[spot_id])
+    shared_spot = db.relationship("ParkingSpot", lazy="joined", foreign_keys=[shared_spot_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
     exited_by = db.relationship("User", foreign_keys=[exited_by_id])
 
     @property
     def is_inside(self):
         return self.exited_at is None
+
+    @property
+    def place(self):
+        """El parqueadero donde quedó: el propio o el compartido de motos; None si entró sin parqueadero."""
+        return self.spot or self.shared_spot
 
     def parked_minutes(self, now=None):
         """Minutos que lleva (o llevó) el vehículo en la unidad."""
@@ -1795,9 +1810,10 @@ class VisitorVehicleEntry(db.Model):
             "residentName": visit.resident.full_name if visit and visit.resident else None,
             "apartmentId": self.apartment_id,
             "apartment": self.apartment.label if self.apartment else None,
-            "spotId": self.spot_id,
-            "spotCode": self.spot.code if self.spot else None,
-            "spotLocation": self.spot.location if self.spot else None,
+            "spotId": self.spot_id if self.spot_id is not None else self.shared_spot_id,
+            "spotCode": self.place.code if self.place else None,
+            "spotLocation": self.place.location if self.place else None,
+            "vehicleType": self.vehicle_type or "carro",
             "enteredAt": _fmt(self.entered_at),
             "exitedAt": _fmt(self.exited_at),
             "isInside": self.is_inside,

@@ -32,7 +32,9 @@ data class ParkingSpotData(
     val location: String? = null,
     val apartmentId: Int? = null,
     val apartment: String? = null,
-    val isOccupied: Boolean = false
+    val isOccupied: Boolean = false,
+    // Parqueadero de visitantes que se usa para varias motos.
+    val forMotos: Boolean = false
 )
 
 data class StorageRoomData(
@@ -94,7 +96,9 @@ data class SaveParkingSpotRequest(
     val code: String,
     val type: String,
     val location: String,
-    val apartmentId: Int?
+    val apartmentId: Int?,
+    // Solo parqueaderos de visitantes: caben varias motos (regla «motos por cupo de carro»).
+    val forMotos: Boolean = false
 )
 
 data class SaveStorageRoomRequest(val code: String, val apartmentId: Int?)
