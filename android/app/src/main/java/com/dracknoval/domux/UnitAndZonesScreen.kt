@@ -44,16 +44,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 /** Un cuerpo JSON que sí lleva los valores vacíos (null), por ejemplo «capacity: null» = sin aforo. */
 fun jsonBody(values: Map<String, Any?>): RequestBody {
     val json = JSONObject()
     values.forEach { (key, value) -> json.put(key, value ?: JSONObject.NULL) }
-    return json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+    // La versión de OkHttp que trae Retrofit usa todavía RequestBody.create(MediaType, String).
+    return RequestBody.create(MediaType.parse("application/json; charset=utf-8"), json.toString())
 }
 
 /**
