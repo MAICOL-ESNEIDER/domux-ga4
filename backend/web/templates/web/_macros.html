@@ -62,13 +62,14 @@
 </nav>
 {%- endmacro %}
 
-{# Secciones de «Paquetería y visitas»; «active» es «paquetes», «visitas» o «vehiculos». #}
+{# Secciones de «Paquetería y visitas»; «active» es «paquetes», «visitas», «vehiculos» o «esperados». #}
 {% macro registry_tabs(active) -%}
 <nav class="tabs" aria-label="Secciones de paquetería y visitas">
   {% for key, label, endpoint in (
        ("paquetes", "Paquetes", "web.registry_packages"),
        ("visitas", "Visitas", "web.registry_visits"),
        ("vehiculos", "Vehículos de visitantes", "web.registry_vehicles"),
+       ("esperados", "Esperados por la administración", "web.registry_expected"),
      ) %}
   <a href="{{ url_for(endpoint) }}"{% if active == key %} aria-current="page"{% endif %}>{{ label }}</a>
   {% endfor %}

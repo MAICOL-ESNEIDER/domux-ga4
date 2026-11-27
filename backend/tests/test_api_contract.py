@@ -754,6 +754,14 @@ class ContractContentTests(unittest.TestCase):
         })
         self.call(resident, "PUT", f"/api/visits/qr-passes/{qr['id']}/revoke")
 
+        # Un técnico que la administración espera para las zonas comunes.
+        technician = self.data(self.admin, "POST", "/api/visits/expected", expect=201, json={
+            "visitorName": "Ascensores Andinos", "description": "Mantenimiento del ascensor",
+            "expectedDate": (today + timedelta(days=1)).isoformat(), "expectedTime": "08:00",
+        })["visit"]
+        self.call(self.guard, "GET", "/api/visits/expected")
+        self.call(self.admin, "PUT", f"/api/visits/expected/{technician['id']}/cancel")
+
     def walk_vehicles(self):
         admin, guard = self.admin, self.guard
         spot = self.visitor_spot

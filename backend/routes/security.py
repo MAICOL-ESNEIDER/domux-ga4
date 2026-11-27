@@ -216,12 +216,24 @@ def register_package():
     if error := _package_metadata_error(data):
         return error_response(400, error)
     carrier, tracking_number = package_service.clean_shipping(data)
-    resident_id = data.get("residentId")
-    if not isinstance(resident_id, int) or isinstance(resident_id, bool):
-        return error_response(400, "Selecciona un residente válido")
-    resident = User.query.filter_by(id=resident_id, role="RESIDENT").first()
-    if resident is None:
-        return error_response(400, "Selecciona un residente válido")
+    # La administración no registra paquetes de los residentes (eso lo hace la portería): solo los de la
+    # unidad, como repuestos, materiales, plantas o herramientas. Van a nombre de su propia cuenta.
+    for_unit = g.current_user.role == "ADMIN"
+    if for_unit:
+        if data.get("residentId") is not None:
+            return error_response(
+                403, "La administración solo registra paquetes de la unidad; los de los residentes los registra la portería."
+            )
+        resident = g.current_user
+        if "status" not in data:
+            status = "por_llegar"
+    else:
+        resident_id = data.get("residentId")
+        if not isinstance(resident_id, int) or isinstance(resident_id, bool):
+            return error_response(400, "Selecciona un residente válido")
+        resident = User.query.filter_by(id=resident_id, role="RESIDENT").first()
+        if resident is None:
+            return error_response(400, "Selecciona un residente válido")
 
     package = PackageItem(
         resident_id=resident.id,
@@ -236,15 +248,23 @@ def register_package():
         media_type=data.get("mediaType"),
         event_date=data.get("eventDate"),
         event_time=data.get("eventTime"),
+        for_unit=for_unit,
     )
     db.session.add(package)
     from_carrier = f" de {carrier}" if carrier else ""
-    notify_user(
-        resident.id,
-        "Paquete registrado",
-        f"Se registró un paquete{from_carrier} para {resident.apartment or 'tu cuenta'}.",
-        "package",
-    )
+    if for_unit:
+        _notify_guards(
+            "Paquete esperado para la unidad",
+            f"La administración espera «{package.description}»{from_carrier}. Recíbelo en portería.",
+            "package",
+        )
+    else:
+        notify_user(
+            resident.id,
+            "Paquete registrado",
+            f"Se registró un paquete{from_carrier} para {resident.apartment or 'tu cuenta'}.",
+            "package",
+        )
     db.session.commit()
     return jsonify({"message": "Paquete registrado", "packageItem": package.to_dict()}), 201
 
@@ -530,6 +550,93 @@ def register_visit():
     )
     db.session.commit()
     return jsonify({"message": "Ingreso registrado", "visit": visit.to_dict()}), 201
+
+
+def _notify_guards(title, message, kind):
+    for guard in User.query.filter_by(role="GUARD", is_active=True).all():
+        notify_user(guard.id, title, message, kind)
+
+
+@bp.get("/visits/expected")
+@token_required
+@role_required("ADMIN", "GUARD")
+def get_expected_unit_visits():
+    """Técnicos y contratistas que la administración espera y todavía no han entrado (los más próximos primero)."""
+    items = (
+        Visit.query.filter(
+            Visit.for_unit.is_(True),
+            Visit.approval_status == "aprobada",
+            Visit.entered_at.is_(None),
+        )
+        .order_by(Visit.expected_date, Visit.expected_time, Visit.id)
+        .all()
+    )
+    return jsonify({"visits": [item.to_dict() for item in items]})
+
+
+@bp.post("/visits/expected")
+@token_required
+@role_required("ADMIN")
+def register_expected_unit_visit():
+    """La administración avisa con anticipación que viene un técnico o contratista a las zonas comunes.
+
+    Ya va autorizada: cuando llega, el guardia solo registra la entrada.
+    """
+    data, failure = json_body()
+    if failure:
+        return failure
+    validation_error = require_non_empty_fields(
+        data,
+        (("visitorName", "nombre de quien viene"), ("description", "trabajo que va a hacer"), ("expectedDate", "día en que llega")),
+    )
+    if validation_error:
+        return error_response(400, validation_error)
+    day = visit_service.expected_day(data.get("expectedDate"))
+    hour = visit_service.expected_hour(data.get("expectedTime"))
+    document = data.get("visitorDocument")
+    if document is not None and not isinstance(document, str):
+        return error_response(400, "El documento debe ser texto.")
+    document = (document or "").strip()[:40] or None
+    visit = Visit(
+        resident_id=g.current_user.id,
+        registered_by=g.current_user.id,
+        visitor_name=data["visitorName"].strip()[:120],
+        visitor_document=document,
+        media_consent=bool(document),
+        type="contratista",
+        description=data["description"].strip()[:250],
+        approval_status="aprobada",
+        authorization_method="administracion",
+        for_unit=True,
+        expected_date=day,
+        expected_time=hour,
+    )
+    db.session.add(visit)
+    visit.events.append(VisitEvent(event_type="aprobada", method="administracion", actor_id=g.current_user.id))
+    when = f"el {day}" + (f" a las {hour}" if hour else "")
+    _notify_guards(
+        "Técnico esperado",
+        f"La administración espera a {visit.visitor_name} {when}: {visit.description}.",
+        "visit",
+    )
+    db.session.commit()
+    return jsonify({"message": "Visita esperada registrada", "visit": visit.to_dict()}), 201
+
+
+@bp.put("/visits/expected/<int:visit_id>/cancel")
+@token_required
+@role_required("ADMIN")
+def cancel_expected_unit_visit(visit_id):
+    """La administración cancela un técnico esperado que todavía no ha entrado."""
+    visit = db.session.get(Visit, visit_id)
+    if visit is None or not visit.for_unit:
+        return error_response(404, "Visita esperada no encontrada.")
+    if visit.entered_at is not None:
+        return error_response(400, "Esta persona ya entró; registra la salida en portería.")
+    visit.approval_status = "rechazada"
+    visit.events.append(VisitEvent(event_type="rechazada", method="administracion", actor_id=g.current_user.id))
+    db.session.commit()
+    return jsonify({"message": "Visita esperada cancelada", "visit": visit.to_dict()})
 
 
 @bp.put("/visits/<int:visit_id>/decision")

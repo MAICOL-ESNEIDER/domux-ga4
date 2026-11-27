@@ -13,7 +13,7 @@ from errors import ApiError
 from extensions import db
 from models import User, Visit, VisitEvent
 from services.unit_rules import current_rules
-from time_utils import colombia_day_to_utc
+from time_utils import colombia_day_to_utc, colombia_today
 
 #: Largo máximo del nombre de un visitante, igual que el de la visita.
 MAX_VISITOR_NAME_LENGTH = 120
@@ -48,6 +48,38 @@ def expected_stay(value):
 # ---------------------------------------------------------------------------
 # Nombres de los visitantes de un QR (HU-033)
 # ---------------------------------------------------------------------------
+
+#: Hasta cuántos días antes la administración puede anunciar un técnico o contratista.
+EXPECTED_MAX_DAYS_AHEAD = 90
+
+
+def expected_day(value):
+    """El día AAAA-MM-DD en que llega un técnico esperado: hoy o hasta 90 días después."""
+    try:
+        parsed = date.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.isoformat() != value:
+        raise ApiError("El día en que llega debe ser una fecha AAAA-MM-DD.")
+    today = colombia_today()
+    if parsed < today:
+        raise ApiError("El día en que llega no puede ser un día que ya pasó.")
+    if parsed > today + timedelta(days=EXPECTED_MAX_DAYS_AHEAD):
+        raise ApiError(f"Solo se pueden anunciar visitas hasta {EXPECTED_MAX_DAYS_AHEAD} días antes.")
+    return parsed.isoformat()
+
+
+def expected_hour(value):
+    """La hora HH:MM en que llega (opcional)."""
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
+        raise ApiError("La hora debe tener el formato HH:MM.")
+    hours, minutes = value[:2], value[3:]
+    if not (hours.isdigit() and minutes.isdigit() and int(hours) < 24 and int(minutes) < 60):
+        raise ApiError("La hora debe tener el formato HH:MM.")
+    return value
+
 
 def clean_visitor_names(value, max_people):
     """Lee los nombres que el residente escribió al crear el QR.

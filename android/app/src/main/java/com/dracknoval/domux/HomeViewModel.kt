@@ -42,6 +42,8 @@ data class HomeUiState(
     val guardPendingTotal: Int = 0,
     val guardInside: List<Visit> = emptyList(),
     val guardInsideTotal: Int = 0,
+    // Técnicos y contratistas que la administración espera (zonas comunes).
+    val guardExpected: List<Visit> = emptyList(),
     // Las que estaban sin leer cuando se abrió la bandeja: se marcan «Nueva» aunque ya queden leídas.
     val newNotificationIds: Set<Int> = emptySet(),
     val busy: Boolean = false,
@@ -138,8 +140,10 @@ class HomeViewModel : DomuxViewModel() {
                 val today = colombiaToday()
                 val pending = quietly { api.getVisitsSummary(auth(), status = "pendiente", dateFrom = today, pageSize = 5) }
                 val inside = quietly { api.getVisitsSummary(auth(), inside = "true", pageSize = 5) }
+                val expected = quietly { api.getExpectedUnitVisits(auth()) }
                 _state.update { current ->
                     current.copy(
+                        guardExpected = expected?.visits ?: current.guardExpected,
                         // Las que esperan son las que todavía no entraron.
                         guardPending = pending?.visits.orEmpty().filter { it.enteredAt == null },
                         guardPendingTotal = pending?.total ?: current.guardPendingTotal,

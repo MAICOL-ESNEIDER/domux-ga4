@@ -18,6 +18,11 @@ administración.
 
 ### Añadido
 
+**La administración anuncia técnicos y paquetes de la unidad**
+- La administración ya no registra visitas ni paquetes de los residentes (eso es de la portería). Ahora anuncia con anticipación a los técnicos y contratistas que vienen a trabajar en las zonas comunes (ascensores, piscina, jardín…) y los paquetes de la unidad (repuestos, materiales, plantas, herramientas).
+- El guardia los ve como «Esperados por la administración» en el inicio y en Visitas; el técnico ya llega autorizado y solo se registra su entrada. Los paquetes de la unidad aparecen «Por llegar».
+- En la app de administración: pestañas «Paquete para la unidad» y «Técnicos esperados». En la web: nueva sección «Esperados por la administración» en Paquetería y visitas.
+
 **Portería: Paquetes y Visitas por separado y un solo escáner**
 - En la app del guardia, «Paquetes» y «Visitas» del menú abren cada una solo sus pestañas (antes se veían las cinco juntas).
 - Un solo botón «Escanear código» (en el inicio y arriba de Paquetes y Visitas) lee tanto el QR de una visita como el código de entrega de un paquete y abre lo que corresponde.

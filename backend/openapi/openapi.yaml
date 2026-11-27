@@ -7416,6 +7416,147 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+  /api/visits/expected:
+    get:
+      tags:
+      - Visitas
+      summary: Técnicos y contratistas que la administración espera
+      description: |-
+        **Quién puede usarla:** Administración y portería.
+
+        Las visitas de la unidad (zonas comunes) autorizadas que todavía no han entrado, las más próximas primero.
+      operationId: securityGetExpectedUnitVisits
+      x-endpoint: security.get_expected_unit_visits
+      x-roles:
+      - ADMIN
+      - GUARD
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de visitas esperadas
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - visits
+                properties:
+                  visits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Visit'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+      - Visitas
+      summary: Anunciar un técnico o contratista para las zonas comunes
+      description: |-
+        **Quién puede usarla:** Solo administración.
+
+        La visita queda autorizada; cuando llega, la portería solo registra la entrada.
+      operationId: securityRegisterExpectedUnitVisit
+      x-endpoint: security.register_expected_unit_visit
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - visitorName
+              - description
+              - expectedDate
+              properties:
+                visitorName:
+                  type: string
+                  description: Persona o empresa que viene
+                visitorDocument:
+                  type: string
+                  description: Documento, si se conoce
+                description:
+                  type: string
+                  description: Trabajo que va a hacer
+                expectedDate:
+                  type: string
+                  description: Día en que llega (AAAA-MM-DD), hoy o hasta 90 días después
+                expectedTime:
+                  type: string
+                  description: Hora en que llega (HH:MM)
+      responses:
+        '201':
+          description: Visita esperada registrada
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - visit
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  visit:
+                    $ref: '#/components/schemas/Visit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/visits/expected/{visit_id}/cancel:
+    put:
+      tags:
+      - Visitas
+      summary: Cancelar un técnico esperado que no ha entrado
+      description: |-
+        **Quién puede usarla:** Solo administración.
+      operationId: securityCancelExpectedUnitVisit
+      x-endpoint: security.cancel_expected_unit_visit
+      x-roles:
+      - ADMIN
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: visit_id
+        in: path
+        required: true
+        description: Id de la visita
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Visita esperada cancelada
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - visit
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje para mostrarle a la persona, en español
+                  visit:
+                    $ref: '#/components/schemas/Visit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/visits/qr-passes:
     get:
       tags:
@@ -8602,6 +8743,9 @@ components:
         isOccupied:
           type: boolean
           description: Si hay un vehículo de visitante adentro
+        forMotos:
+          type: boolean
+          description: Parqueadero de carro que se usa para varias motos
     StorageRoom:
       type: object
       required:
@@ -10215,6 +10359,9 @@ components:
           type: string
           description: Guardia que lo registró
           nullable: true
+        forUnit:
+          type: boolean
+          description: Es de la unidad (lo espera la administración), no de un residente
     PackageSummary:
       type: object
       description: Fila de la lista liviana de paquetes (view=summary), sin la foto.
@@ -10306,6 +10453,9 @@ components:
         registeredByName:
           type: string
           nullable: true
+        forUnit:
+          type: boolean
+          description: Es de la unidad (lo espera la administración), no de un residente
     PickupCode:
       type: object
       required:
@@ -10346,6 +10496,7 @@ components:
           - app
           - llamada
           - qr
+          - administracion
         actorName:
           type: string
           nullable: true
@@ -10432,6 +10583,7 @@ components:
           - app
           - llamada
           - qr
+          - administracion
           - null
         enteredAt:
           type: string
@@ -10487,6 +10639,17 @@ components:
         isInside:
           type: boolean
           description: 'Solo en la vista liviana: si entró y no ha salido'
+        forUnit:
+          type: boolean
+          description: Es de la unidad (la espera la administración), no de un residente
+        expectedDate:
+          type: string
+          description: Día en que llega (AAAA-MM-DD), si la espera la administración
+          nullable: true
+        expectedTime:
+          type: string
+          description: Hora en que llega (HH:MM)
+          nullable: true
     VisitSummary:
       type: object
       description: Fila de la lista liviana de visitas (view=summary).
@@ -10542,6 +10705,7 @@ components:
           - app
           - llamada
           - qr
+          - administracion
           - null
         enteredAt:
           type: string
@@ -10583,6 +10747,17 @@ components:
           pattern: ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$
         registeredByName:
           type: string
+          nullable: true
+        forUnit:
+          type: boolean
+          description: Es de la unidad (la espera la administración), no de un residente
+        expectedDate:
+          type: string
+          description: Día en que llega (AAAA-MM-DD), si la espera la administración
+          nullable: true
+        expectedTime:
+          type: string
+          description: Hora en que llega (HH:MM)
           nullable: true
     VisitQrPass:
       type: object
@@ -10866,6 +11041,9 @@ components:
                 nullable: true
               isOccupied:
                 type: boolean
+              forMotos:
+                type: boolean
+                description: Parqueadero de carro que se usa para varias motos
               entry:
                 nullable: true
                 description: La entrada que ocupa el parqueadero; nula si está libre
