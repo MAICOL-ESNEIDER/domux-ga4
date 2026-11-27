@@ -18,6 +18,10 @@ administración.
 
 ### Añadido
 
+**Portería: Paquetes y Visitas por separado y un solo escáner**
+- En la app del guardia, «Paquetes» y «Visitas» del menú abren cada una solo sus pestañas (antes se veían las cinco juntas).
+- Un solo botón «Escanear código» (en el inicio y arriba de Paquetes y Visitas) lee tanto el QR de una visita como el código de entrega de un paquete y abre lo que corresponde.
+
 - App de administración: nueva pantalla «Reglas de la unidad» (en «Más») para cambiar desde el celular los mismos plazos y límites que ya se cambiaban en la web.
 
 **Limpieza de la base para la exposición**
