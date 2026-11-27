@@ -36,6 +36,7 @@ import com.dracknoval.domux.data.PackageItem
 import com.dracknoval.domux.data.PickupCodeData
 import com.dracknoval.domux.data.RegisterPackageRequest
 import com.dracknoval.domux.data.ResidentSummary
+import com.dracknoval.domux.data.Session
 import kotlinx.coroutines.delay
 import com.dracknoval.domux.ui.theme.DomuxColor
 
@@ -164,7 +165,8 @@ fun PackageListSection(
             items(state.packages, key = { "package-${it.id}" }) { item ->
                 PackageCard(
                     item = item,
-                    canRegister = canRegister,
+                    // La administración solo maneja los paquetes de la unidad; los de los residentes solo los consulta.
+                    canRegister = canRegister && (!Session.isAdmin || item.forUnit),
                     busy = state.busy,
                     onDeliver = { onDeliver(item) },
                     onStatusChange = { onStatusChange(item, it) },

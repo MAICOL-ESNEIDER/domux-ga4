@@ -157,6 +157,7 @@ class MainActivity : ComponentActivity() {
                         composable("notifications") { NotificationsScreen(navController) }
                         composable("documents") { DocumentsScreen(navController) }
                         composable("unitRules") { UnitRulesScreen(navController) }
+                        composable("unitAndZones") { UnitAndZonesScreen(navController) }
                         // Documentos legales (públicos): sin «slug» es la lista; con «slug», el texto de ese documento.
                         composable(
                             "legal?slug={slug}",

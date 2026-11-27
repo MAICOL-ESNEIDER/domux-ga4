@@ -91,7 +91,7 @@ class NovedadesDeLaVersionTest {
         como(Roles.ADMINISTRACION)
         assertEquals(
             listOf(
-                "Comunicados", "Vehículos", "Usuarios", "Estructura de la unidad", "Documentos", "Reglas de la unidad", "Notificaciones",
+                "Comunicados", "Vehículos", "Usuarios", "Estructura de la unidad", "Documentos", "Reglas de la unidad", "Datos de la unidad y zonas", "Notificaciones",
                 "Preferencias", "Legal y privacidad"
             ),
             moreDestinations().map { it.label }
