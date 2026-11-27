@@ -143,8 +143,12 @@ def report():
 
 
 def run_requested_action():
-    """Hace lo que pide la variable: ``inspeccionar`` (solo lee) o ``cargar`` (solo agrega)."""
+    """Hace lo que pide la variable: ``inspeccionar`` (solo lee), ``limpiar`` (limpieza única) o ``cargar`` (solo agrega)."""
     action = requested_action()
+    if action == "limpiar":
+        from expo_cleanup import clean_for_expo
+
+        return clean_for_expo()
     if action == "cargar":
         from expo_activity import add_expo_activity
 
