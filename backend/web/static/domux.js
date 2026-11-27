@@ -487,7 +487,7 @@
       }
     };
 
-    check("apariencia", saved(THEME_KEY, ["auto", "mixto", "oscuro"], "auto"));
+    check("apariencia", saved(THEME_KEY, ["auto", "mixto", "oscuro"], "oscuro"));
     check("texto", saved(SIZE_KEY, ["normal", "grande", "muy-grande"], "normal"));
 
     preferences.addEventListener("change", function (event) {
@@ -496,8 +496,9 @@
         return;
       }
       if (field.name === "apariencia") {
-        store(THEME_KEY, field.value, "auto");
-        setAttr("data-tema", field.value, "auto");
+        // «Oscuro» es el predeterminado: no se guarda nada y la página queda oscura.
+        store(THEME_KEY, field.value, "oscuro");
+        root.setAttribute("data-tema", field.value);
       } else if (field.name === "texto") {
         store(SIZE_KEY, field.value, "normal");
         setAttr("data-texto", field.value, "normal");

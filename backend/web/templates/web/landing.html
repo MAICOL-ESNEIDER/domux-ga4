@@ -2,6 +2,8 @@
 {% from "web/_macros.html" import brand_parts, legal_links %}
 {% set page_title = "Bienvenida" %}
 {% set wide_card = true %}
+{# La presentación de DOMUX se ve siempre oscura, como la app. #}
+{% set dark_only = true %}
 
 {% block content %}
 <div class="brand">{{ brand_parts() }}</div>

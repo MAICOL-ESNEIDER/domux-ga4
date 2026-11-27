@@ -91,9 +91,11 @@ class PreferencesWebTests(WebTestCase):
         self.assertIn("data-preferencias", body)
         self.assertIn("data-cuentas-recordadas", body)
 
-    def test_defaults_are_automatic_and_normal(self):
+    def test_defaults_are_dark_and_normal(self):
+        # Desde el 27/11/2026 la web viene en «Oscuro», como la app y la página de presentación.
         body = self.page("/web/preferencias")
-        self.assertRegex(body, r'name="apariencia" value="auto" checked')
+        self.assertRegex(body, r'name="apariencia" value="oscuro" checked')
+        self.assertIn('<html lang="es" data-tema="oscuro">', body)
         self.assertRegex(body, r'name="texto" value="normal" checked')
 
     def test_it_says_javascript_is_needed(self):

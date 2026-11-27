@@ -22,6 +22,11 @@ administración.
 - Nueva dirección `https://domux-ga4.onrender.com/descargar`: el propio servidor entrega la última APK como app Android y con su tamaño. Así el celular la instala sin el error «el paquete no es válido» que salía al descargar desde GitHub con el navegador del lector de QR.
 - El QR del póster y el botón de la página de presentación usan esta dirección.
 
+**Web en oscuro, como la app**
+- La página de presentación de DOMUX se ve siempre en oscuro.
+- El inicio de sesión y toda la administración web vienen en «Oscuro»; quien prefiera «Mixto» o «Automático» lo cambia en Preferencias.
+- El inicio de sesión tiene el enlace «Volver a la página de DOMUX».
+
 **Avisos al celular activados**
 - Firebase quedó configurado: la APK ya se arma con los avisos al celular y el servidor puede mandarlos.
 - La APK publicada también se actualiza cuando se lanza la revisión a mano desde GitHub («Run workflow»).
