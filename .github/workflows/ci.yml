@@ -138,7 +138,8 @@ jobs:
       #   https://github.com/MAICOL-ESNEIDER/domux-ga4/releases/download/ultima/domux.apk
       # Solo se publica al subir cambios a la rama de la versión reducida, nunca desde una propuesta (PR).
       - name: Publicar el APK firmado en la página de versiones
-        if: steps.firmada.outputs.armada == 'si' && github.event_name == 'push' && github.ref == 'refs/heads/release/v1.0-reducida'
+        # También al lanzarla a mano («Run workflow»), por ejemplo después de cambiar una llave en GitHub.
+        if: steps.firmada.outputs.armada == 'si' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/release/v1.0-reducida'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
