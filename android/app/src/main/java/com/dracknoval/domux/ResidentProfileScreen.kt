@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.TwoWheeler
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.Color
@@ -78,10 +77,6 @@ fun ResidentProfileScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
 
     suspend fun loadProfile() {
-        if (!Session.isResident) {
-            loading = false
-            return
-        }
         loading = true
         try {
             val response = RetrofitClient.api.getProfile(Session.bearer())
@@ -93,9 +88,12 @@ fun ResidentProfileScreen(navController: NavController) {
             email = user?.email.orEmpty()
             phone = user?.phone.orEmpty()
             socialNetworks = user?.socialNetworks.orEmpty()
-            val unitResponse = RetrofitClient.api.getMyUnit(Session.bearer())
-            if (unitResponse.isSuccessful) unit = unitResponse.body()?.unit
-            else message = mensajeDeError(unitResponse.code(), unitResponse.errorBody()?.string())
+            
+            if (Session.isResident) {
+                val unitResponse = RetrofitClient.api.getMyUnit(Session.bearer())
+                if (unitResponse.isSuccessful) unit = unitResponse.body()?.unit
+                else message = mensajeDeError(unitResponse.code(), unitResponse.errorBody()?.string())
+            }
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
             message = "No se pudo cargar el perfil: ${exception.message}"
@@ -113,97 +111,107 @@ fun ResidentProfileScreen(navController: NavController) {
             DomuxFeedbackBanner(message, isError = messageIsError) { message = "" }
             if (loading) {
                 CircularProgressIndicator()
-            } else if (!Session.isResident) {
-                DomuxCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(Session.userName ?: "Usuario", style = MaterialTheme.typography.titleLarge)
-                        Text(Session.email.orEmpty(), color = Color(0xFF94A3B8))
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                if (Session.isAdmin) "Administrador" else "Guardia de seguridad",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                }
-                Text("Nota: La información de tu cuenta administrativa y permisos de sistema deben ser gestionados por otro administrador.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF94A3B8))
             } else {
-                user?.let { profile ->
+                if (!Session.isResident) {
                     DomuxCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(profile.fullName ?: profile.name, style = MaterialTheme.typography.titleMedium)
-                            Text("Documento: ${profile.documentId.orEmpty()}")
-                            Text("Apartamento: ${profile.apartment ?: "Sin asignar"}")
-                            Text("Tipo de residente: ${profile.occupancyType?.toDomuxDisplayLabel() ?: "—"}")
-                            Text("Rol: ${profile.role.toDomuxDisplayLabel()}")
-                            profile.recoveryEmail?.takeIf { it.isNotBlank() }?.let {
-                                Text("Correo de recuperación: $it")
+                            Text(user?.fullName ?: user?.name ?: Session.userName ?: "Usuario", style = MaterialTheme.typography.titleLarge)
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    if (Session.isAdmin) "Administrador" else "Guardia de seguridad",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
                             }
                         }
                     }
-                    Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(email, { email = it }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = { input ->
-                            phone = input.filter { ch -> ch.isDigit() }.take(10)
-                        },
-                        label = { Text("Teléfono") },
-                        isError = phone.isNotEmpty() && phone.length != 10,
-                        supportingText = { Text("10 dígitos (ej. 3001234567)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Text("Nota: La información de tu cuenta administrativa y permisos de sistema deben ser gestionados por otro administrador.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF94A3B8))
+                } else {
+                    user?.let { profile ->
+                        DomuxCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(profile.fullName ?: profile.name, style = MaterialTheme.typography.titleMedium)
+                                Text("Documento: ${profile.documentId.orEmpty()}")
+                                Text("Apartamento: ${profile.apartment ?: "Sin asignar"}")
+                                Text("Tipo de residente: ${profile.occupancyType?.toDomuxDisplayLabel() ?: "—"}")
+                                Text("Rol: ${profile.role.toDomuxDisplayLabel()}")
+                                profile.recoveryEmail?.takeIf { it.isNotBlank() }?.let {
+                                    Text("Correo de recuperación: $it")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(email, { email = it }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { input ->
+                        phone = input.filter { ch -> ch.isDigit() }.take(10)
+                    },
+                    label = { Text("Teléfono") },
+                    isError = phone.isNotEmpty() && phone.length != 10,
+                    supportingText = { Text("10 dígitos (ej. 3001234567)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (Session.isResident) {
                     OutlinedTextField(
                         socialNetworks, { socialNetworks = it }, label = { Text("Redes sociales (opcional)") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Button(
-                        enabled = !busy,
-                        onClick = {
-                            if (phone.length != 10) {
-                                message = "El teléfono debe tener exactamente 10 dígitos."
-                                messageIsError = true
-                                return@Button
-                            }
-                            busy = true
-                            message = ""
-                            scope.launch {
-                                try {
-                                    val response = RetrofitClient.api.updateProfile(
-                                        Session.bearer(),
-                                        ResidentProfileUpdateRequest(
-                                            phone = phone,
-                                            email = email,
-                                            socialNetworks = socialNetworks
-                                        )
+                }
+                Button(
+                    enabled = !busy,
+                    onClick = {
+                        if (phone.length != 10) {
+                            message = "El teléfono debe tener exactamente 10 dígitos."
+                            messageIsError = true
+                            return@Button
+                        }
+                        busy = true
+                        message = ""
+                        scope.launch {
+                            try {
+                                val response = RetrofitClient.api.updateProfile(
+                                    Session.bearer(),
+                                    ResidentProfileUpdateRequest(
+                                        phone = phone,
+                                        email = email,
+                                        socialNetworks = if (Session.isResident) socialNetworks else null
                                     )
-                                    if (response.isSuccessful) {
-                                        user = response.body()?.user
-                                        message = "Tus datos fueron actualizados exitosamente."
-                                        messageIsError = false
-                                    } else {
-                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                        messageIsError = true
+                                )
+                                if (response.isSuccessful) {
+                                    user = response.body()?.user
+                                    if (email != Session.email) {
+                                        Session.email = email
+                                        Session.persist(context)
                                     }
-                                } catch (exception: Exception) {
-                                    if (exception is CancellationException) throw exception
-                                    message = "No se pudo guardar el perfil: ${exception.message}"
+                                    message = "Tus datos fueron actualizados exitosamente."
+                                    messageIsError = false
+                                } else {
+                                    message = mensajeDeError(response.code(), response.errorBody()?.string())
                                     messageIsError = true
-                                } finally {
-                                    busy = false
                                 }
+                            } catch (exception: Exception) {
+                                if (exception is CancellationException) throw exception
+                                message = "No se pudo guardar el perfil: ${exception.message}"
+                                messageIsError = true
+                            } finally {
+                                busy = false
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) "Guardando..." else "Guardar cambios") }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (busy) "Guardando..." else "Guardar cambios") }
 
+                if (Session.isResident) {
                     Text(
                         "Para cambiar apartamento, tipo de residente, parentesco, documento, mascotas o vehículos, " +
                             "solicítalo a administración mediante una PQRS o en la oficina.",
@@ -213,181 +221,191 @@ fun ResidentProfileScreen(navController: NavController) {
                         Text("Crear PQRS para solicitar un cambio")
                     }
                 }
-            }
 
-            DomuxCard(Modifier.fillMaxWidth()) {
-                Column(
-                    Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text("Cambiar mi contraseña", style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(
-                        value = currentPassword,
-                        onValueChange = { currentPassword = it },
-                        label = { Text("Contraseña actual") },
-                        isError = attemptedPasswordChange && currentPassword.isBlank(),
-                        singleLine = true,
-                        visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-                        trailingIcon = {
-                            val image = if (currentPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
-                            IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
-                                Icon(image, "Toggle password visibility")
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = newPassword,
-                        onValueChange = { newPassword = it },
-                        label = { Text("Nueva contraseña") },
-                        isError = attemptedPasswordChange && !validStrongPassword(newPassword),
-                        supportingText = {
-                            Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.")
-                        },
-                        singleLine = true,
-                        visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-                        trailingIcon = {
-                            val image = if (newPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
-                            IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
-                                Icon(image, "Toggle password visibility")
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = confirmPassword,
-                        onValueChange = { confirmPassword = it },
-                        label = { Text("Confirmar nueva contraseña") },
-                        isError = attemptedPasswordChange && confirmPassword != newPassword,
-                        singleLine = true,
-                        visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-                        trailingIcon = {
-                            val image = if (confirmPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
-                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                                Icon(image, "Toggle password visibility")
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Button(
-                        enabled = !passwordBusy,
-                        onClick = {
-                            attemptedPasswordChange = true
-                            if (currentPassword.isBlank() || !validStrongPassword(newPassword)) {
-                                message = "Revisa la contraseña actual y los requisitos de la nueva contraseña."
-                                messageIsError = true
-                                return@Button
-                            }
-                            if (confirmPassword != newPassword) {
-                                message = "Las contraseñas no coinciden."
-                                messageIsError = true
-                                return@Button
-                            }
-                            passwordBusy = true
-                            message = ""
-                            scope.launch {
-                                try {
-                                    val response = RetrofitClient.api.changePassword(
-                                        Session.bearer(),
-                                        ChangePasswordRequest(currentPassword, newPassword)
-                                    )
-                                    if (response.isSuccessful) {
-                                        response.body()?.token?.takeIf { it.isNotBlank() }?.let { newToken ->
-                                            Session.token = newToken
-                                            Session.persist(context)
-                                        }
-                                        message = response.body()?.message
-                                            ?: "Contraseña actualizada exitosamente."
-                                        messageIsError = false
-                                        currentPassword = ""
-                                        newPassword = ""
-                                        confirmPassword = ""
-                                        attemptedPasswordChange = false
-                                    } else {
-                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                        messageIsError = true
-                                    }
-                                } catch (exception: Exception) {
-                                    if (exception is CancellationException) throw exception
-                                    message = "No se pudo actualizar la contraseña: ${exception.message}"
-                                    messageIsError = true
-                                } finally {
-                                    passwordBusy = false
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (passwordBusy) "Actualizando..." else "Actualizar contraseña")
-                    }
-                }
-            }
-
-            if (Session.isResident) {
-                unit?.let { profile ->
-            Text("Información del hogar", style = MaterialTheme.typography.titleLarge)
-            profile.residents.forEach { resident ->
-                Text(
-                    "${resident.name} · ${(resident.occupancyType ?: "residente").toDomuxDisplayLabel()}"
-                )
-            }
-            Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
-            profile.storageIdentifier?.takeIf(String::isNotBlank)?.let { storage ->
-                Text("Cuarto útil: $storage")
-            }
-            profile.members.forEach { member ->
                 DomuxCard(Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("${member.name} ${member.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier = Modifier.padding(vertical = 2.dp)) {
-                                Text((member.otherRelationship ?: member.relationship).toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                            }
-                            Text("Doc: ${member.documentId} · Nac: ${member.birthDate}", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-            if (profile.pets.isNotEmpty()) {
-                Text("Mascotas registradas", style = MaterialTheme.typography.titleMedium)
-                profile.pets.forEach { pet ->
-                    DomuxCard(Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.Pets, contentDescription = "Mascota", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
-                            Column(Modifier.weight(1f)) {
-                                Text(pet.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) {
-                                    Text(pet.species.toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Column(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("Cambiar mi contraseña", style = MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(
+                            value = currentPassword,
+                            onValueChange = { currentPassword = it },
+                            label = { Text("Contraseña actual") },
+                            isError = attemptedPasswordChange && currentPassword.isBlank(),
+                            singleLine = true,
+                            visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                            trailingIcon = {
+                                val image = if (currentPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                                IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                                    Icon(image, "Toggle password visibility")
                                 }
-                                Text("Raza: ${pet.breed} · Edad: ${pet.ageYears} años", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-            }
-            if (profile.vehicles.isNotEmpty()) {
-                Text("Vehículos registrados", style = MaterialTheme.typography.titleMedium)
-                profile.vehicles.forEach { vehicle ->
-                    DomuxCard(Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            val vIcon = if (vehicle.type == "moto" || vehicle.type == "bicicleta" || vehicle.type == "scooter") Icons.Rounded.TwoWheeler else Icons.Rounded.DirectionsCar
-                            Icon(vIcon, contentDescription = "Vehículo", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
-                            Column(Modifier.weight(1f)) {
-                                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)) {
-                                    Text(vehicle.plate, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            label = { Text("Nueva contraseña") },
+                            isError = attemptedPasswordChange && !validStrongPassword(newPassword),
+                            supportingText = {
+                                Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.")
+                            },
+                            singleLine = true,
+                            visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                            trailingIcon = {
+                                val image = if (newPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                                IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                                    Icon(image, "Toggle password visibility")
                                 }
-                                Text(vehicle.makeModel, style = MaterialTheme.typography.titleSmall)
-                                Text("${vehicle.type.toDomuxDisplayLabel()} · ${vehicle.year} · ${vehicle.color ?: ""}", style = MaterialTheme.typography.bodySmall)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it },
+                            label = { Text("Confirmar nueva contraseña") },
+                            isError = attemptedPasswordChange && confirmPassword != newPassword,
+                            singleLine = true,
+                            visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                            trailingIcon = {
+                                val image = if (confirmPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                                IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                    Icon(image, "Toggle password visibility")
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            enabled = !passwordBusy,
+                            onClick = {
+                                attemptedPasswordChange = true
+                                if (currentPassword.isBlank() || !validStrongPassword(newPassword)) {
+                                    message = "Revisa la contraseña actual y los requisitos de la nueva contraseña."
+                                    messageIsError = true
+                                    return@Button
+                                }
+                                if (confirmPassword != newPassword) {
+                                    message = "Las contraseñas no coinciden."
+                                    messageIsError = true
+                                    return@Button
+                                }
+                                passwordBusy = true
+                                message = ""
+                                scope.launch {
+                                    try {
+                                        val response = RetrofitClient.api.changePassword(
+                                            Session.bearer(),
+                                            ChangePasswordRequest(currentPassword, newPassword)
+                                        )
+                                        if (response.isSuccessful) {
+                                            response.body()?.token?.takeIf { it.isNotBlank() }?.let { newToken ->
+                                                Session.token = newToken
+                                                Session.persist(context)
+                                            }
+                                            message = response.body()?.message
+                                                ?: "Contraseña actualizada exitosamente."
+                                            messageIsError = false
+                                            currentPassword = ""
+                                            newPassword = ""
+                                            confirmPassword = ""
+                                            attemptedPasswordChange = false
+                                        } else {
+                                            message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                            messageIsError = true
+                                        }
+                                    } catch (exception: Exception) {
+                                        if (exception is CancellationException) throw exception
+                                        message = "No se pudo actualizar la contraseña: ${exception.message}"
+                                        messageIsError = true
+                                    } finally {
+                                        passwordBusy = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (passwordBusy) "Actualizando..." else "Actualizar contraseña")
+                        }
+                    }
+                }
+
+                if (Session.isResident) {
+                    unit?.let { profile ->
+                        Text("Información del hogar", style = MaterialTheme.typography.titleLarge)
+                        DomuxCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                profile.residents.forEach { resident ->
+                                    Text("${resident.name} · ${(resident.occupancyType ?: "residente").toDomuxDisplayLabel()}")
+                                }
+                                Text("Parqueadero: ${profile.parkingIdentifier ?: "No registrado"}")
+                                profile.storageIdentifier?.takeIf(String::isNotBlank)?.let { storage ->
+                                    Text("Cuarto útil: $storage")
+                                }
+                            }
+                        }
+                        
+                        Text("Integrantes del hogar", style = MaterialTheme.typography.titleMedium)
+                        if (profile.members.isEmpty()) {
+                            Text("Sin integrantes registrados.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF94A3B8))
+                        } else {
+                            profile.members.forEach { member ->
+                                DomuxCard(Modifier.fillMaxWidth()) {
+                                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("${member.name} ${member.lastName.orEmpty()}".trim(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+                                                Text((member.otherRelationship ?: member.relationship).toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                            }
+                                            Text("Doc: ${member.documentId} · Nac: ${member.birthDate}", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (profile.pets.isNotEmpty()) {
+                            Text("Mascotas registradas", style = MaterialTheme.typography.titleMedium)
+                            profile.pets.forEach { pet ->
+                                DomuxCard(Modifier.fillMaxWidth()) {
+                                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Rounded.Pets, contentDescription = "Mascota", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Column(Modifier.weight(1f)) {
+                                            Text(pet.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) {
+                                                Text(pet.species.toDomuxDisplayLabel(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            }
+                                            Text("Raza: ${pet.breed} · Edad: ${pet.ageYears} años", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (profile.vehicles.isNotEmpty()) {
+                            Text("Vehículos registrados", style = MaterialTheme.typography.titleMedium)
+                            profile.vehicles.forEach { vehicle ->
+                                DomuxCard(Modifier.fillMaxWidth()) {
+                                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        val vIcon = if (vehicle.type == "moto" || vehicle.type == "bicicleta" || vehicle.type == "scooter") Icons.Rounded.TwoWheeler else Icons.Rounded.DirectionsCar
+                                        Icon(vIcon, contentDescription = "Vehículo", modifier = Modifier.size(32.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Column(Modifier.weight(1f)) {
+                                            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)) {
+                                                Text(vehicle.plate, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                            }
+                                            Text(vehicle.makeModel, style = MaterialTheme.typography.titleSmall)
+                                            Text("${vehicle.type.toDomuxDisplayLabel()} · ${vehicle.year} · ${vehicle.color ?: ""}", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-            }
-        }
             Spacer(Modifier.height(6.dp))
         }
     }

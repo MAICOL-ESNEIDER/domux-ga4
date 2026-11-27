@@ -146,106 +146,13 @@ fun ExportsArchiveScreen(navController: NavController) {
                     item {
                         DomuxCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("Respaldo y Archivo Histórico de PQRS", style = MaterialTheme.typography.titleMedium)
-                                Text("Descarga el histórico de PQRS o archiva las resueltas para limpiar la bandeja principal (por integridad de la información no se eliminan definitivamente).")
-                                
-                                OutlinedButton(
-                                    enabled = !legalPqrsBusy,
-                                    onClick = {
-                                        legalPqrsBusy = true
-                                        message = ""
-                                        isError = null
-                                        lastSavedUri = null
-                                        scope.launch {
-                                            try {
-                                                val response = RetrofitClient.api.exportLegalReport(Session.bearer()) // Backend route shared in API for now, assume it handles PQRS context if global
-                                                if (response.isSuccessful) {
-                                                    val file = response.body() ?: error("Reporte vacío.")
-                                                    val cleanFileName = file.fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true)
-                                                    val mime = file.mimeType ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                                    val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
-                                                    val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
-                                                    if (uri != null) {
-                                                        message = "Reporte guardado exitosamente en Descargas/$cleanFileName."
-                                                        isError = false
-                                                        lastSavedUri = uri
-                                                        lastSavedMime = mime
-                                                    } else {
-                                                        message = "No se pudo guardar el archivo en Descargas."
-                                                        isError = true
-                                                    }
-                                                } else {
-                                                    message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                                    isError = true
-                                                }
-                                            } catch (e: Exception) {
-                                                if (e !is CancellationException) {
-                                                    message = "Error de descarga: ${e.message}"
-                                                    isError = true
-                                                }
-                                            } finally {
-                                                legalPqrsBusy = false
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text(if (legalPqrsBusy) "Descargando..." else "Descargar Excel de PQRS") }
+                                Text("Respaldo consolidado (Excel)", style = MaterialTheme.typography.titleMedium)
+                                Text("Descarga el libro completo con 4 hojas (PQRS, Historial de chats, Reservas y Logs de auditoría) sin modificar ningún registro activo.")
                                 
                                 Button(
                                     enabled = !legalPqrsBusy,
                                     onClick = {
-                                        confirmationDialog = "¿Deseas archivar todas las PQRS resueltas? Se limpiarán de la bandeja principal." to {
-                                            legalPqrsBusy = true
-                                            scope.launch {
-                                                try {
-                                                    val response = RetrofitClient.api.archiveHistory(Session.bearer())
-                                                    if (response.isSuccessful) {
-                                                        val file = response.body() ?: error("Archivo vacío.")
-                                                        val cleanFileName = file.fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true)
-                                                        val mime = file.mimeType ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                                        val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
-                                                        val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
-                                                        if (uri != null) {
-                                                            message = "PQRS resueltas archivadas. Respaldo guardado en Descargas/$cleanFileName."
-                                                            isError = false
-                                                            lastSavedUri = uri
-                                                            lastSavedMime = mime
-                                                        } else {
-                                                            message = "PQRS archivadas, pero no se pudo guardar el archivo local."
-                                                            isError = false // it still archived
-                                                        }
-                                                    } else {
-                                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                                        isError = true
-                                                    }
-                                                } catch (e: Exception) {
-                                                    if (e !is CancellationException) {
-                                                        message = "Error al archivar: ${e.message}"
-                                                        isError = true
-                                                    }
-                                                } finally {
-                                                    legalPqrsBusy = false
-                                                }
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Archivar resueltas y limpiar bandeja") }
-                            }
-                        }
-                    }
-
-                    item {
-                        DomuxCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("Respaldo y Archivo Histórico de Reservas", style = MaterialTheme.typography.titleMedium)
-                                Text("Descarga el histórico de reservas o archiva las finalizadas para limpiar el calendario principal (por integridad de la información no se eliminan definitivamente).")
-                                
-                                OutlinedButton(
-                                    enabled = !legalReservationsBusy,
-                                    onClick = {
-                                        // Asumimos que usa el mismo exportLegalReport / archiveHistory según las rutas previas que no diferenciaban.
-                                        legalReservationsBusy = true
+                                        legalPqrsBusy = true
                                         message = ""
                                         isError = null
                                         lastSavedUri = null
@@ -277,17 +184,76 @@ fun ExportsArchiveScreen(navController: NavController) {
                                                     isError = true
                                                 }
                                             } finally {
-                                                legalReservationsBusy = false
+                                                legalPqrsBusy = false
                                             }
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text(if (legalReservationsBusy) "Descargando..." else "Descargar Excel de Reservas") }
+                                ) { Text(if (legalPqrsBusy) "Descargando..." else "Descargar respaldo completo (Excel)") }
+                            }
+                        }
+                    }
+
+                    item {
+                        DomuxCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("Limpiar bandeja de PQRS resueltas", style = MaterialTheme.typography.titleMedium)
+                                Text("Mueve las PQRS en estado Resuelta al Archivo histórico (no se eliminan por reglas operativas e integridad de la información) y descarga copia Excel.")
                                 
-                                Button(
+                                OutlinedButton(
+                                    enabled = !legalPqrsBusy,
+                                    onClick = {
+                                        confirmationDialog = "¿Deseas archivar todas las PQRS resueltas? Se moverán al archivo histórico." to {
+                                            legalPqrsBusy = true
+                                            scope.launch {
+                                                try {
+                                                    val response = RetrofitClient.api.archiveHistory(Session.bearer())
+                                                    if (response.isSuccessful) {
+                                                        val file = response.body() ?: error("Archivo vacío.")
+                                                        val cleanFileName = file.fileName.replace("Reporte_Legal", "Respaldo_Historico", ignoreCase = true)
+                                                        val mime = file.mimeType ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                                        val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
+                                                        val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
+                                                        if (uri != null) {
+                                                            message = "PQRS resueltas archivadas. Respaldo guardado en Descargas/$cleanFileName."
+                                                            isError = false
+                                                            lastSavedUri = uri
+                                                            lastSavedMime = mime
+                                                        } else {
+                                                            message = "PQRS archivadas, pero no se pudo guardar el archivo local."
+                                                            isError = false
+                                                        }
+                                                    } else {
+                                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                                        isError = true
+                                                    }
+                                                } catch (e: Exception) {
+                                                    if (e !is CancellationException) {
+                                                        message = "Error al archivar: ${e.message}"
+                                                        isError = true
+                                                    }
+                                                } finally {
+                                                    legalPqrsBusy = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Archivar PQRS resueltas") }
+                            }
+                        }
+                    }
+
+                    item {
+                        DomuxCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("Limpiar calendario de Reservas finalizadas", style = MaterialTheme.typography.titleMedium)
+                                Text("Mueve las reservas finalizadas, canceladas o rechazadas al Archivo histórico (sin borrar datos) y descarga copia Excel.")
+                                
+                                OutlinedButton(
                                     enabled = !legalReservationsBusy,
                                     onClick = {
-                                        confirmationDialog = "¿Deseas archivar todas las reservas finalizadas? Se limpiarán de la bandeja principal." to {
+                                        confirmationDialog = "¿Deseas archivar las reservas finalizadas? Se moverán al archivo histórico." to {
                                             legalReservationsBusy = true
                                             scope.launch {
                                                 try {
@@ -299,7 +265,7 @@ fun ExportsArchiveScreen(navController: NavController) {
                                                         val base64Bytes = android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
                                                         val uri = saveBytesToDownloads(context, cleanFileName, mime, base64Bytes)
                                                         if (uri != null) {
-                                                            message = "Reservas finalizadas archivadas. Respaldo guardado en Descargas/$cleanFileName."
+                                                            message = "Reservas archivadas. Respaldo guardado en Descargas/$cleanFileName."
                                                             isError = false
                                                             lastSavedUri = uri
                                                             lastSavedMime = mime
@@ -323,7 +289,7 @@ fun ExportsArchiveScreen(navController: NavController) {
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("Archivar finalizadas y limpiar bandeja") }
+                                ) { Text("Archivar reservas finalizadas") }
                             }
                         }
                     }

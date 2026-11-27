@@ -530,12 +530,6 @@ private fun PqrsCard(
     var replyMediaUrl by remember(pqrs.id) { mutableStateOf<String?>(null) }
     var replyMediaType by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
     var replyMediaName by rememberSaveable(pqrs.id) { mutableStateOf<String?>(null) }
-    var rating by remember(pqrs.id, pqrs.satisfactionRating) {
-        mutableIntStateOf(pqrs.satisfactionRating ?: 5)
-    }
-    var ratingComment by remember(pqrs.id, pqrs.satisfactionComment) {
-        mutableStateOf(pqrs.satisfactionComment.orEmpty())
-    }
     var busy by remember(pqrs.id) { mutableStateOf(false) }
     val tone = when (pqrs.status) {
         "resuelta" -> DomuxBadgeTone.SUCCESS
@@ -588,10 +582,6 @@ private fun PqrsCard(
                     Text("Incidente: ${pqrs.incidentDate.orEmpty()} $formattedTime".trimEnd())
                 }
                 if (Session.isAdmin) {
-                    Text(
-                        "Satisfacción: ${pqrs.satisfactionRating?.let { "$it/5" } ?: "Sin calificar"}" +
-                            (pqrs.satisfactionComment?.let { " · $it" } ?: "")
-                    )
                     OutlinedTextField(
                         value = responseText,
                         onValueChange = { responseText = it },
@@ -692,55 +682,6 @@ private fun PqrsCard(
                             }
                         }
                     ) { Text(if (busy) "Enviando..." else "Enviar mensaje") }
-
-                    if (pqrs.status == "resuelta") {
-                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                        Text("¿Qué tan satisfecho estás con la solución?")
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            (1..5).forEach { score ->
-                                FilterChip(
-                                    selected = rating == score,
-                                    onClick = { rating = score },
-                                    label = { Text("$score ★") }
-                                )
-                            }
-                        }
-                        OutlinedTextField(
-                            value = ratingComment,
-                            onValueChange = { ratingComment = it },
-                            label = { Text("Comentario opcional") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Button(
-                            enabled = !busy,
-                            onClick = {
-                                busy = true
-                                scope.launch {
-                                    try {
-                                        val result = RetrofitClient.api.ratePqrs(
-                                            Session.bearer(),
-                                            pqrs.id,
-                                            RatePqrsRequest(rating, ratingComment.trim().ifEmpty { null })
-                                        )
-                                        if (result.isSuccessful) {
-                                            onMessage("Calificación guardada.", false)
-                                            onRefresh()
-                                        } else {
-                                            onMessage(mensajeDeError(result.code(), result.errorBody()?.string()), true)
-                                        }
-                                    } catch (exception: Exception) {
-                                        if (exception is CancellationException) throw exception
-                                        onMessage("No se pudo guardar la calificación: ${exception.message}", true)
-                                    } finally {
-                                        busy = false
-                                    }
-                                }
-                            }
-                        ) { Text("Guardar calificación") }
-                    }
                 }
             }
         }
