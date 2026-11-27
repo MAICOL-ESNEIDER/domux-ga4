@@ -74,6 +74,8 @@ fun RegistryScreen(
     var guardOnPackages by remember(initialTab) {
         mutableStateOf(initialTab == "paquetes" || initialTab == "registrar-paquete")
     }
+    // El residente también ve «Mis paquetes» y «Mis visitas y mi QR» como pantallas separadas.
+    val residentOnPackages = initialTab != "visitas" && initialTab != "qr"
     // Cambio de guardia con PIN (HU-010): guardName es quien tiene el turno ahora.
     var showGuardShift by remember { mutableStateOf(false) }
     var guardName by remember { mutableStateOf(Session.userName.orEmpty()) }
@@ -134,10 +136,13 @@ fun RegistryScreen(
         Session.isGuard && guardOnPackages -> listOf(0, 1)
         Session.isGuard -> listOf(2, 3, 4, 5)
         Session.isAdmin -> listOf(0, 1, 2, 5)
+        Session.isResident && residentOnPackages -> listOf(0)
+        Session.isResident -> listOf(1, 2)
         else -> allTabs.indices.toList()
     }
     val title = when {
-        Session.isResident -> "Mis paquetes y visitas"
+        Session.isResident && residentOnPackages -> "Mis paquetes"
+        Session.isResident -> "Mis visitas y mi QR"
         Session.isGuard && guardOnPackages -> "Paquetes"
         Session.isGuard -> "Visitas"
         else -> "Paquetería y visitas"
@@ -155,7 +160,9 @@ fun RegistryScreen(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            DomuxSectionTabs(visibleTabs.map { allTabs[it] }, visibleTabs.indexOf(tab)) { selectedTab = visibleTabs[it] }
+            if (visibleTabs.size > 1) {
+                DomuxSectionTabs(visibleTabs.map { allTabs[it] }, visibleTabs.indexOf(tab)) { selectedTab = visibleTabs[it] }
+            }
             if (Session.isGuard) {
                 OutlinedButton(
                     onClick = { launchAnyScanner() },

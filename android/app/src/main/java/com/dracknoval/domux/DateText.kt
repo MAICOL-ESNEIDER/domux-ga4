@@ -1,5 +1,6 @@
 package com.dracknoval.domux
 
+import com.dracknoval.domux.data.AppPreferences
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -84,4 +85,34 @@ fun slotLengthText(minutes: Int): String = when {
     minutes == 60 -> "1 hora"
     minutes % 60 == 0 -> "${minutes / 60} horas"
     else -> "$minutes minutos"
+}
+
+
+/**
+ * Una hora «HH:MM» como la eligió la persona en «Preferencias»: «14:30» o «2:30 p. m.».
+ * Si el texto no es una hora, lo devuelve igual.
+ */
+fun clockText(hhmm: String?, use24: Boolean = AppPreferences.use24Hours): String {
+    if (hhmm.isNullOrBlank()) return ""
+    val parts = hhmm.trim().split(":")
+    val hour = parts.getOrNull(0)?.toIntOrNull()
+    val minute = parts.getOrNull(1)?.take(2)
+    if (hour == null || minute == null || minute.length != 2 || hour !in 0..23) return hhmm
+    if (use24) return "%02d:%s".format(hour, minute)
+    val twelve = if (hour % 12 == 0) 12 else hour % 12
+    return "$twelve:$minute ${if (hour < 12) "a. m." else "p. m."}"
+}
+
+/**
+ * Un momento del servidor («2026-11-20 14:30», ya en hora de Colombia) como se lee en la app:
+ * «20/11/2026 2:30 p. m.» (o «20/11/2026 14:30» con el formato de 24 horas). Una franja «08:00-10:00»
+ * también se convierte. Si no se entiende, se devuelve igual.
+ */
+fun whenText(raw: String?, use24: Boolean = AppPreferences.use24Hours): String {
+    if (raw.isNullOrBlank()) return ""
+    val text = raw.trim()
+    val slot = Regex("^(\\d{1,2}:\\d{2})\\s*-\\s*(\\d{1,2}:\\d{2})$").find(text)
+    if (slot != null) return "${clockText(slot.groupValues[1], use24)} a ${clockText(slot.groupValues[2], use24)}"
+    val moment = Regex("^(\\d{4}-\\d{2}-\\d{2})[ T](\\d{1,2}:\\d{2})").find(text) ?: return text
+    return "${humanDate(moment.groupValues[1])} ${clockText(moment.groupValues[2], use24)}"
 }

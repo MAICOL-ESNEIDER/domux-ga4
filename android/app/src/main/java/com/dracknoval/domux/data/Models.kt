@@ -17,6 +17,8 @@ data class UserData(
     val isActive: Boolean = true,
     val createdAt: String? = null,
     val socialNetworks: String? = "",
+    // Cambió su correo o su teléfono y la administración todavía no lo verificó.
+    val contactPendingVerification: Boolean = false,
     val dataProcessingConsent: Boolean = false,
     val firstName: String? = null,
     val birthDate: String? = null,
@@ -86,7 +88,8 @@ data class UsersListResponse(
 data class ResidentProfileUpdateRequest(
     val phone: String? = null,
     val email: String? = null,
-    val socialNetworks: String? = null
+    // Obligatoria cuando cambia el correo o el teléfono.
+    val currentPassword: String? = null
 )
 
 data class HouseholdMemberData(
@@ -220,8 +223,10 @@ data class AnnouncementsListResponse(
 data class CreateAnnouncementRequest(
     val title: String,
     val message: String,
-    // Una de las cinco categorías: mantenimiento, urgente, asamblea, seguridad o zonas_comunes.
+    // Una de las categorías: mantenimiento, urgente, asamblea, seguridad, zonas_comunes u otra.
     val category: String,
+    // Con «otra», el nombre del tipo que escribe la administración.
+    val categoryLabel: String? = null,
     // Sin torre, el comunicado es para toda la unidad.
     val towerId: Int? = null,
     // Último día vigente (AAAA-MM-DD); sin fecha, nunca vence.
@@ -631,8 +636,11 @@ data class CreateVisitQrPassRequest(
     val validFrom: String,
     val validUntil: String,
     val maxPeople: Int,
-    val visitorNames: List<String>? = null
+    val visitorNames: List<String>? = null,
+    // Cada persona con nombre y apellido y su documento: la portería lo compara al llegar.
+    val visitors: List<QrVisitor>? = null
 )
+data class QrVisitor(val name: String, val document: String? = null)
 data class VisitQrPassResponse(val qrPass: VisitQrPass?)
 data class VisitQrInspectionResponse(
     val qrPass: VisitQrPass?,
@@ -643,7 +651,9 @@ data class VisitQrInspectionResponse(
     val registeredVisits: List<Visit>? = null,
     val linkableVisits: List<Visit>? = null,
     // Los nombres del QR que todavía no tienen una visita registrada (HU-033).
-    val pendingVisitorNames: List<String>? = null
+    val pendingVisitorNames: List<String>? = null,
+    // Los mismos, con el documento que anotó el residente: el guardia lo compara con el de la persona.
+    val pendingVisitors: List<QrVisitor>? = null
 )
 data class QrVisitorEntryRequest(
     val visitorName: String? = null,
@@ -674,7 +684,9 @@ data class LegalDocumentSummary(
     val status: String,
     val version: String?,
     // El día desde el que rige, como AAAA-MM-DD; viene vacío mientras está pendiente.
-    val effectiveFrom: String?
+    val effectiveFrom: String?,
+    // Roles a los que va dirigido («RESIDENT», «GUARD», «ADMIN»); vacío = para todos.
+    val audience: List<String>? = null
 )
 data class LegalDocumentsResponse(val documents: List<LegalDocumentSummary>?)
 

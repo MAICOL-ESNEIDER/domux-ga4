@@ -34,7 +34,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateListOf
 import com.dracknoval.domux.data.CreateVisitQrPassRequest
+import com.dracknoval.domux.data.QrVisitor
 import com.dracknoval.domux.data.RegisterVisitRequest
 import com.dracknoval.domux.data.ResidentSummary
 import com.dracknoval.domux.data.Visit
@@ -259,7 +261,7 @@ private fun VisitCard(
                     }
                 )
             }
-            Text("${visit.type.replaceFirstChar(Char::uppercase)} · ${visit.createdAt.orEmpty()}")
+            Text("${visit.type.replaceFirstChar(Char::uppercase)} · ${whenText(visit.createdAt)}")
             Text("Para: ${visit.residentName.orEmpty()} · ${visit.apartment.orEmpty()}")
             if (visit.mediaConsent && !visit.visitorDocument.isNullOrBlank()) {
                 Text("Documento: ${visit.visitorDocument}")
@@ -268,8 +270,8 @@ private fun VisitCard(
             }
             MediaAttachmentChip(visit.visitorPhotoUrl, visit.visitorPhotoType, "Foto del visitante")
             visit.description?.takeIf { it.isNotBlank() }?.let { Text("Pedido: $it") }
-            visit.enteredAt?.let { Text("Última entrada: $it") }
-            visit.exitedAt?.let { Text("Última salida: $it") }
+            visit.enteredAt?.let { Text("Última entrada: ${whenText(it)}") }
+            visit.exitedAt?.let { Text("Última salida: ${whenText(it)}") }
             // Estadía prevista y cuánto lleva adentro (HU-031).
             visit.expectedStayMinutes?.let { Text("Estadía prevista: ${durationText(it)}") }
             if (visit.isInside()) {
@@ -290,7 +292,7 @@ private fun VisitCard(
             )
             visit.events.orEmpty().forEach { event ->
                 Text(
-                    "${event.type} · ${event.createdAt.orEmpty()} · " +
+                    "${event.type} · ${whenText(event.createdAt)} · " +
                         "${event.method} · ${event.actorName.orEmpty()}",
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -393,7 +395,7 @@ fun VisitsInsideDialog(visits: List<Visit>, onSeeList: () -> Unit, onDismiss: ()
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(visit.visitorName, style = MaterialTheme.typography.titleSmall)
                         Text(
-                            "${visit.apartment.orEmpty()} · desde ${visit.enteredAt.orEmpty()}",
+                            "${visit.apartment.orEmpty()} · desde ${whenText(visit.enteredAt)}",
                             style = MaterialTheme.typography.bodySmall
                         )
                         visit.insideMinutes?.let {
@@ -694,6 +696,16 @@ fun QrEntrySection(
                             }
                         }
                     }
+                    // El documento que anotó el residente: el guardia lo compara con el que muestra la persona.
+                    scanned.pendingVisitors.orEmpty()
+                        .firstOrNull { it.name.equals(visitorName.trim(), ignoreCase = true) }
+                        ?.document?.let { document ->
+                            Text(
+                                "Pide el documento y verifica que sea el $document.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = DomuxColor.Primary
+                            )
+                        }
                     OutlinedTextField(
                         value = visitorName,
                         onValueChange = { visitorName = it },
@@ -766,8 +778,9 @@ fun ResidentQrSection(
     val context = LocalContext.current
     var startDate by rememberSaveable { mutableStateOf(dayText(0)) }
     var endDate by rememberSaveable { mutableStateOf(dayText(0)) }
-    var maxPeople by rememberSaveable { mutableStateOf("5") }
-    var namesText by rememberSaveable { mutableStateOf("") }
+    // Una fila por persona: nombre y apellido, y su documento (los dos obligatorios). Máximo 5.
+    val people = remember { mutableStateListOf(QrVisitorRow()) }
+    var attempted by rememberSaveable { mutableStateOf(false) }
     var shareError by remember { mutableStateOf<String?>(null) }
     val active = state.activeQrPass
     val activeBitmap = rememberQrBitmap(active?.qrData)
@@ -782,41 +795,56 @@ fun ResidentQrSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Código QR para visitas", style = MaterialTheme.typography.titleMedium)
-                Text("Duración máxima: 30 días. Cada persona distinta consume un cupo.")
+                Text("Hasta $QR_MAX_PEOPLE personas por QR y 30 días de vigencia. La portería verifica el nombre y el documento de cada una.")
                 DatePickerField("Válido desde", startDate, { startDate = it }, allowPastDates = false)
                 DatePickerField("Válido hasta", endDate, { endDate = it }, allowPastDates = false)
-                OutlinedTextField(
-                    value = maxPeople,
-                    onValueChange = { maxPeople = it.filter(Char::isDigit) },
-                    label = { Text("Límite de personas") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                // Los nombres ayudan a la portería a reconocer a los invitados (HU-033).
-                OutlinedTextField(
-                    value = namesText,
-                    onValueChange = { namesText = it },
-                    label = { Text("Nombres de los invitados (opcional)") },
-                    supportingText = { Text("Uno por línea. Así la portería sabe a quién esperar.") },
-                    minLines = 2,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                people.forEachIndexed { index, row ->
+                    Text("Persona ${index + 1}", style = MaterialTheme.typography.labelLarge)
+                    OutlinedTextField(
+                        value = row.name,
+                        onValueChange = { people[index] = row.copy(name = it.take(120)) },
+                        label = { Text("Nombre y apellido *") },
+                        isError = attempted && qrNameProblem(row.name) != null,
+                        supportingText = { if (attempted) qrNameProblem(row.name)?.let { Text(it) } },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = row.document,
+                        onValueChange = { people[index] = row.copy(document = it.take(15)) },
+                        label = { Text("Documento *") },
+                        isError = attempted && qrDocumentProblem(row.document) != null,
+                        supportingText = {
+                            Text(if (attempted) qrDocumentProblem(row.document) ?: "" else "Cédula, tarjeta de identidad o pasaporte")
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (people.size > 1) {
+                        TextButton(onClick = { people.removeAt(index) }) { Text("Quitar a la persona ${index + 1}") }
+                    }
+                }
+                if (people.size < QR_MAX_PEOPLE) {
+                    TextButton(onClick = { people.add(QrVisitorRow()) }) { Text("Agregar otra persona") }
+                }
                 Button(
                     onClick = {
-                        val limit = maxPeople.toIntOrNull()
-                        val names = namesText.split('\n', ',').map { it.trim() }.filter { it.isNotEmpty() }
-                        if (limit == null || limit < 1) {
-                            onMessage("El límite de personas debe ser mayor que cero.")
-                        } else if (names.size > limit) {
-                            onMessage("Escribiste ${names.size} nombres pero el QR es para $limit personas.")
+                        attempted = true
+                        val problem = people.firstNotNullOfOrNull { qrNameProblem(it.name) ?: qrDocumentProblem(it.document) }
+                        if (problem != null) {
+                            onMessage("Revisa los datos de las personas: $problem")
                         } else {
                             val request = CreateVisitQrPassRequest(
                                 validFrom = startDate,
                                 validUntil = endDate,
-                                maxPeople = limit,
-                                visitorNames = names.takeIf { it.isNotEmpty() }
+                                maxPeople = people.size,
+                                visitors = people.map { QrVisitor(it.name.trim(), cleanDocument(it.document)) }
                             )
-                            onCreate(request) { namesText = "" }
+                            onCreate(request) {
+                                people.clear()
+                                people.add(QrVisitorRow())
+                                attempted = false
+                            }
                         }
                     },
                     enabled = !state.busy,
@@ -902,3 +930,29 @@ fun ResidentQrSection(
         }
     }
 }
+
+
+/** Una persona del QR mientras el residente la escribe. */
+data class QrVisitorRow(val name: String = "", val document: String = "")
+
+/** Máximo de personas por QR (la regla de la unidad; el servidor tiene la última palabra). */
+const val QR_MAX_PEOPLE = 5
+
+private val qrNameLetters = Regex("^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .-]+$")
+private val qrDocument = Regex("^[A-Za-z0-9]{5,15}$")
+
+fun cleanDocument(text: String): String = text.filterNot { it.isWhitespace() || it == '.' || it == '-' }.uppercase()
+
+/** Qué le falta al nombre de una persona del QR, o null si está bien. */
+fun qrNameProblem(name: String): String? {
+    val clean = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    return when {
+        clean.size < 2 -> "escribe nombre y apellido"
+        !qrNameLetters.matches(name.trim()) -> "el nombre solo lleva letras"
+        else -> null
+    }
+}
+
+/** Qué le falta al documento, o null si está bien. */
+fun qrDocumentProblem(document: String): String? =
+    if (qrDocument.matches(cleanDocument(document))) null else "el documento debe tener de 5 a 15 letras o números"

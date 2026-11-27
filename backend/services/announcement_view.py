@@ -71,7 +71,7 @@ def _summary_row(row, today):
         "title": row.title or "",
         "message": row.message or "",
         "category": row.category,
-        "categoryLabel": ANNOUNCEMENT_CATEGORIES.get(row.category),
+        "categoryLabel": (row.category_label or "Otra") if row.category == "otra" else ANNOUNCEMENT_CATEGORIES.get(row.category),
         "towerId": row.tower_id,
         "towerName": row.tower_name,
         "expiresAt": row.expires_at.isoformat() if row.expires_at else None,
@@ -101,6 +101,7 @@ def summary_page(query, user, page, size):
         .join(User, Announcement.author_id == User.id)
         .with_entities(
             Announcement.id, Announcement.title, Announcement.message, Announcement.category,
+            Announcement.category_label,
             Announcement.tower_id, Announcement.expires_at, Announcement.event_date,
             Announcement.event_time, Announcement.media_type, Announcement.created_at,
             Announcement.media_downloadable,

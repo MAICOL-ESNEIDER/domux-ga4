@@ -32,6 +32,16 @@ def parse_category(value):
     raise ApiError(f"El comunicado necesita una categoría: {names}.")
 
 
+def parse_category_label(category, value):
+    """El nombre del tipo cuando la categoría es «otra» (3 a 40 letras); en las demás no se guarda."""
+    if category != "otra":
+        return None
+    label = " ".join(value.split()) if isinstance(value, str) else ""
+    if not 3 <= len(label) <= 40:
+        raise ApiError("Con la categoría «Otra», escribe el nombre del tipo de comunicado (de 3 a 40 letras).")
+    return label[0].upper() + label[1:]
+
+
 def parse_tower_id(value):
     """La torre a la que va el comunicado; sin torre es para toda la unidad (HU-061)."""
     if value is None:

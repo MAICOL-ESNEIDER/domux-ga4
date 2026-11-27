@@ -32,8 +32,13 @@ enum class TextSize(val key: String, val label: String, val factor: Float) {
 object AppPreferences {
     private const val FILE = "domux_preferencias"
     private const val KEY_TEXT_SIZE = "tamano_texto"
+    private const val KEY_24_HOURS = "hora_24"
 
     var textSize by mutableStateOf(TextSize.NORMAL)
+        private set
+
+    /** true: horas de 0 a 23 (14:30); false (de fábrica): con a. m. y p. m. (2:30 p. m.), como se usa en Colombia. */
+    var use24Hours by mutableStateOf(false)
         private set
 
     /** Lee lo guardado. Si no hay nada (o no se puede leer), queda todo como viene de fábrica. */
@@ -42,6 +47,21 @@ object AppPreferences {
             TextSize.fromKey(preferences(context).getString(KEY_TEXT_SIZE, null))
         } catch (exception: Exception) {
             TextSize.NORMAL
+        }
+        use24Hours = try {
+            preferences(context).getBoolean(KEY_24_HOURS, false)
+        } catch (exception: Exception) {
+            false
+        }
+    }
+
+    /** Cambia cómo se muestran las horas en toda la app y lo guarda. */
+    fun save24Hours(context: Context, value: Boolean) {
+        use24Hours = value
+        try {
+            preferences(context).edit().putBoolean(KEY_24_HOURS, value).apply()
+        } catch (exception: Exception) {
+            // Si no se puede guardar, vale hasta que se cierre la app.
         }
     }
 

@@ -294,7 +294,7 @@ private fun AnnouncementCard(
                 canSave = announcement.mediaDownloadable || Session.isAdmin
             )
             Text(
-                "Por ${announcement.authorName ?: "Administración"} · ${announcement.createdAt.orEmpty()}",
+                "Por ${announcement.authorName ?: "Administración"} · ${whenText(announcement.createdAt)}",
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
@@ -348,6 +348,7 @@ private fun AnnouncementForm(
     var title by rememberSaveable { mutableStateOf("") }
     var detail by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf<String?>(null) }
+    var categoryLabel by rememberSaveable { mutableStateOf("") }
     var towerId by rememberSaveable { mutableStateOf<Int?>(null) }
     var expiresAt by rememberSaveable { mutableStateOf("") }
     var eventDate by rememberSaveable { mutableStateOf("") }
@@ -366,6 +367,7 @@ private fun AnnouncementForm(
             title = ""
             detail = ""
             category = null
+            categoryLabel = ""
             towerId = null
             expiresAt = ""
             eventDate = ""
@@ -419,6 +421,17 @@ private fun AnnouncementForm(
                             label = { Text(option.label) }
                         )
                     }
+                }
+                if (category == "otra") {
+                    OutlinedTextField(
+                        value = categoryLabel,
+                        onValueChange = { categoryLabel = it.take(40) },
+                        label = { Text("Nombre del tipo *") },
+                        supportingText = { Text("Por ejemplo: Mascotas, Cumpleaños, Novedades.") },
+                        isError = attempted && categoryLabel.trim().length < 3,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
                 if (attempted && category == null) {
                     Text(
@@ -484,12 +497,15 @@ private fun AnnouncementForm(
                         val chosenCategory = category
                         if (title.isBlank() || detail.isBlank() || chosenCategory == null) {
                             onNotice("Escribe el título y el mensaje, y elige la categoría.")
+                        } else if (chosenCategory == "otra" && categoryLabel.trim().length < 3) {
+                            onNotice("Escribe el nombre del tipo de comunicado (de 3 a 40 letras).")
                         } else {
                             onPublish(
                                 CreateAnnouncementRequest(
                                     title = title.trim(),
                                     message = detail.trim(),
                                     category = chosenCategory,
+                                    categoryLabel = categoryLabel.trim().takeIf { chosenCategory == "otra" },
                                     towerId = towerId,
                                     expiresAt = expiresAt.ifBlank { null },
                                     eventDate = eventDate.ifBlank { null },

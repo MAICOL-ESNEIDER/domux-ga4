@@ -26,6 +26,7 @@ from services.announcement_service import (
     current_only,
     mark_as_read,
     parse_category,
+    parse_category_label,
     parse_expiry,
     parse_tower_id,
     unread_count,
@@ -243,6 +244,7 @@ def create_announcement():
     if error := _media_and_event_error(data, "eventDate", "eventTime"):
         return error_response(400, error)
     category = parse_category(data.get("category"))
+    category_label = parse_category_label(category, data.get("categoryLabel"))
     tower_id = parse_tower_id(data.get("towerId"))
     expires_at = parse_expiry(data.get("expiresAt"))
 
@@ -250,6 +252,7 @@ def create_announcement():
         title=data["title"].strip(),
         message=data["message"].strip(),
         category=category,
+        category_label=category_label,
         tower_id=tower_id,
         expires_at=expires_at,
         event_date=data.get("eventDate"),
@@ -262,7 +265,7 @@ def create_announcement():
     db.session.add(announcement)
     notify_residents(
         "Anuncio urgente" if category == "urgente" else "Nuevo anuncio",
-        f"{ANNOUNCEMENT_CATEGORIES[category]}: {announcement.title}",
+        f"{category_label or ANNOUNCEMENT_CATEGORIES[category]}: {announcement.title}",
         "announcement",
         tower_id=tower_id,
     )

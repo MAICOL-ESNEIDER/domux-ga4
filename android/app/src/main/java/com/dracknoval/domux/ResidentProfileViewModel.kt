@@ -20,7 +20,8 @@ data class ResidentProfileUiState(
     val phone: String = "",
     // Lo que está mal en el teléfono después de tocar «Guardar cambios»; se borra al escribir.
     val phoneError: String? = null,
-    val socialNetworks: String = "",
+    // La contraseña actual: se pide solo si cambia el correo o el teléfono.
+    val currentPassword: String = "",
     val loading: Boolean = true,
     val busy: Boolean = false,
     val message: String = "",
@@ -29,7 +30,7 @@ data class ResidentProfileUiState(
 
 /**
  * ViewModel de «Mi perfil» (HU-019): carga los datos del residente y de su hogar, y guarda lo
- * único que él puede cambiar (correo, teléfono y redes sociales). Lo demás lo cambia la
+ * único que él puede cambiar (correo y teléfono, con su contraseña actual). Lo demás lo cambia la
  * administración por una PQRS.
  */
 class ResidentProfileViewModel : DomuxViewModel() {
@@ -61,8 +62,8 @@ class ResidentProfileViewModel : DomuxViewModel() {
         _state.update { it.copy(phone = value, phoneError = null) }
     }
 
-    fun onSocialNetworks(value: String) {
-        _state.update { it.copy(socialNetworks = value) }
+    fun onCurrentPassword(value: String) {
+        _state.update { it.copy(currentPassword = value) }
     }
 
     fun load() {
@@ -74,8 +75,7 @@ class ResidentProfileViewModel : DomuxViewModel() {
                     it.copy(
                         user = profile,
                         email = profile.email.orEmpty(),
-                        phone = profile.phone.orEmpty(),
-                        socialNetworks = profile.socialNetworks.orEmpty()
+                        phone = profile.phone.orEmpty()
                     )
                 }
                 val unit = attempt("No se pudo cargar la información del hogar") { api.getMyUnit(auth()) }?.body()?.unit
@@ -85,8 +85,19 @@ class ResidentProfileViewModel : DomuxViewModel() {
         }
     }
 
+    /** Si lo que está escrito cambia el correo o el teléfono guardados (entonces se pide la contraseña). */
+    fun contactChanged(state: ResidentProfileUiState = _state.value): Boolean {
+        val saved = state.user ?: return false
+        return state.email.trim().lowercase() != saved.email.orEmpty().lowercase() ||
+            phoneToSend(state.phone).orEmpty() != saved.phone.orEmpty()
+    }
+
     fun save() {
         val current = _state.value
+        if (contactChanged(current) && current.currentPassword.isBlank()) {
+            showError("Para cambiar tu correo o tu teléfono escribe tu contraseña actual.")
+            return
+        }
         phoneProblem(current.phone)?.let { problem ->
             _state.update { it.copy(phoneError = problem) }
             showError(problem)
@@ -100,13 +111,13 @@ class ResidentProfileViewModel : DomuxViewModel() {
                         ResidentProfileUpdateRequest(
                             phone = phoneToSend(current.phone),
                             email = current.email.trim(),
-                            socialNetworks = current.socialNetworks.trim()
+                            currentPassword = current.currentPassword.ifBlank { null }
                         )
                     )
                 }
             } ?: return@launch
-            response.body()?.user?.let { saved -> _state.update { it.copy(user = saved) } }
-            showSuccess("Tus datos quedaron guardados.")
+            response.body()?.user?.let { saved -> _state.update { it.copy(user = saved, currentPassword = "") } }
+            showSuccess(response.body()?.message ?: "Tus datos quedaron guardados.")
         }
     }
 }

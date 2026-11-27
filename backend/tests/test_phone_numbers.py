@@ -129,10 +129,15 @@ class PhoneEverywhereTests(unittest.TestCase):
         self.assertEqual(db.session.get(User, self.resident.id).phone, "3112223333")
 
     def test_the_resident_profile_saves_only_the_ten_digits(self):
-        response = self.call("PUT", "/api/profile", {"phone": "+57 320 000 1111"}, user=self.resident)
+        # Cambiar el teléfono pide la contraseña actual.
+        refused = self.call("PUT", "/api/profile", {"phone": "+57 320 000 1111"}, user=self.resident)
+        self.assertEqual(refused.status_code, 403)
+        response = self.call("PUT", "/api/profile", {"phone": "+57 320 000 1111", "currentPassword": "Clave-de-prueba-1*"},
+                             user=self.resident)
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(db.session.get(User, self.resident.id).contact_unverified)
         self.assertEqual(db.session.get(User, self.resident.id).phone, "3200001111")
-        wrong = self.call("PUT", "/api/profile", {"phone": "320 000"}, user=self.resident)
+        wrong = self.call("PUT", "/api/profile", {"phone": "320 000", "currentPassword": "Clave-de-prueba-1*"}, user=self.resident)
         self.assertEqual(wrong.status_code, 400)
         self.assertEqual(wrong.get_json()["error"], PROBLEM)
 

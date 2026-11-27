@@ -47,7 +47,13 @@ DOCUMENT_SLUGS = (
     "cookies",
     "responsable",
     "licencias-terceros",
+    "compromiso-porteria",
+    "compromiso-administracion",
 )
+
+#: Para quién es cada documento (dato «para» del encabezado). Sin el dato, es para todos.
+AUDIENCES = {"residentes": "RESIDENT", "porteria": "GUARD", "administracion": "ADMIN"}
+ALL_ROLES = ["RESIDENT", "GUARD", "ADMIN"]
 
 #: Estado de un documento: todavía sin texto final, o publicado y con validez.
 PENDING = "pendiente"
@@ -56,7 +62,7 @@ STATUSES = (PENDING, IN_FORCE)
 
 #: Los datos que lleva el encabezado de cada archivo. Los tres primeros son obligatorios.
 REQUIRED_FIELDS = ("titulo", "resumen", "estado")
-OPTIONAL_FIELDS = ("version", "vigente_desde")
+OPTIONAL_FIELDS = ("version", "vigente_desde", "para")
 
 #: El título del aviso que llevan los textos en espera; un documento vigente no puede conservarlo.
 PLACEHOLDER_HEADING = "documento en preparación"
@@ -200,8 +206,22 @@ def _load(slug, directory):
         "status": data["estado"],
         "version": data.get("version") or None,
         "effectiveFrom": data.get("vigente_desde") or None,
+        "audience": _audience(data.get("para")),
         "blocks": parse_blocks(body),
     }
+
+
+def _audience(value):
+    """Los roles a los que va dirigido: «para: porteria» o «para: residentes, administracion». Vacío = todos."""
+    if not value or value.strip() == "todos":
+        return list(ALL_ROLES)
+    roles = []
+    for word in value.split(","):
+        role = AUDIENCES.get(word.strip())
+        if role is None:
+            raise LegalDocumentError(f"el dato «para» no reconoce «{word.strip()}»; usa residentes, porteria o administracion")
+        roles.append(role)
+    return roles
 
 
 def list_documents(directory=None):

@@ -77,7 +77,7 @@ private fun NotificationCard(item: NotificationItem) {
                 if (!item.isRead) DomuxStatusBadge("Nueva", DomuxBadgeTone.PROGRESS)
             }
             Text(item.message)
-            Text(item.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
+            Text(whenText(item.createdAt), style = MaterialTheme.typography.bodySmall)
         }
     }
 }

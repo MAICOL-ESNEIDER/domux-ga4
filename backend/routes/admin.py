@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from auth import close_sessions, role_required, token_required
 from errors import ApiError, error_response
@@ -403,6 +403,9 @@ def update_user(user_id):
     _update_role(user, data)
     _update_occupancy_and_apartment(user, data)
     _update_active_flag(user, data)
+    # La administración revisó la ficha: el contacto que cambió el residente queda verificado.
+    if data.get("contactVerified") is True:
+        user.contact_unverified = False
     if user.role == "RESIDENT" and user.is_active and user.apartment_ref.is_retired:
         return error_response(
             400, "El apartamento de este residente ya no existe: asígnale otro apartamento."
@@ -650,7 +653,7 @@ def update_resident_profile():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return error_response(400, "El cuerpo de la solicitud debe ser un objeto JSON válido.")
-    allowed_fields = {"phone", "email", "socialNetworks"}
+    allowed_fields = {"phone", "email", "socialNetworks", "currentPassword"}
     unexpected_fields = set(data) - allowed_fields
     if unexpected_fields:
         return error_response(
@@ -658,9 +661,20 @@ def update_resident_profile():
             "Solo puedes editar teléfono, correo y redes sociales. "
             f"Campos no permitidos: {', '.join(sorted(unexpected_fields))}.",
         )
-    if not data:
+    if not {key for key in data if key != "currentPassword"}:
         return error_response(400, "Indica al menos un dato permitido para actualizar.")
     user = g.current_user
+    # Cambiar el correo o el teléfono pide la contraseña actual (así nadie con el celular desbloqueado los
+    # cambia) y deja el dato «pendiente de verificar» hasta que la administración lo revise.
+    new_email = data["email"].strip().lower() if isinstance(data.get("email"), str) else None
+    new_phone = normalize_phone(data["phone"])[0] if "phone" in data else None
+    changes_contact = (new_email is not None and new_email != (user.email or "").lower()) or (
+        "phone" in data and new_phone != user.phone
+    )
+    if changes_contact:
+        password = data.get("currentPassword")
+        if not isinstance(password, str) or not check_password_hash(user.password_hash, password):
+            return error_response(403, "Para cambiar tu correo o tu teléfono escribe tu contraseña actual.")
     if "phone" in data:
         phone, phone_error = normalize_phone(data["phone"])
         if phone_error:
@@ -681,5 +695,11 @@ def update_resident_profile():
         if duplicate:
             return error_response(409, "Ese correo ya está registrado.")
         user.email = email
+    if changes_contact:
+        user.contact_unverified = True
     db.session.commit()
-    return jsonify({"message": "Perfil actualizado", "user": user.to_dict()})
+    message = (
+        "Perfil actualizado. Tu nuevo dato de contacto queda pendiente de verificar por la administración."
+        if changes_contact else "Perfil actualizado"
+    )
+    return jsonify({"message": message, "user": user.to_dict()})

@@ -18,6 +18,16 @@ administración.
 
 ### Añadido
 
+**App del residente: lo que faltaba de la versión reducida**
+- «Mis paquetes» y «Mis visitas y mi QR» son pantallas separadas, y el inicio trae atajos y el botón «Más».
+- El QR de visitas lleva el nombre y el documento de cada persona (hasta 5), revisados; la portería ve qué documento debe pedir.
+- Preferencia «Formato de la hora»: 12 horas (2:30 p. m.) o 24 horas (14:30), en toda la app.
+- Reservas: las franjas que no se pueden elegir dicen si están «Ocupadas» o «Cerradas».
+- Comunicados de tipo «Otra» con un nombre que escribe la administración (app y web).
+- Mi perfil: ya no pide redes sociales; cambiar el correo o el teléfono pide la contraseña actual y queda «pendiente de verificar» hasta que la administración lo revise.
+- Textos legales por rol: la portería y la administración tienen su propio compromiso con los datos.
+- Sin internet o con el servidor despertando, la app vuelve a intentar sola dos veces antes de mostrar el error.
+
 **Reglas de la unidad conectadas: QR automático y motos por cupo**
 - QR automático: cuando el guardia registra la entrada de una visita que se queda los días de la regla o más (2 por defecto), DOMUX le crea al residente un QR para ese visitante, válido los días de la estadía, y le avisa para que lo comparta.
 - Motos por cupo de carro: un parqueadero de visitantes se puede marcar «para motos» (app y web). Ahí caben las motos de la regla (6 por defecto); con el cupo lleno queda ocupado y se libera cuando sale una. El guardia elige «Carro» o «Moto» al registrar la entrada.

@@ -280,12 +280,16 @@ class LegalApiTests(unittest.TestCase):
         self.assertEqual([document["slug"] for document in documents], list(DOCUMENT_SLUGS))
         for document in documents:
             self.assertEqual(
-                set(document), {"slug", "title", "summary", "status", "version", "effectiveFrom"}, document["slug"],
+                set(document), {"slug", "title", "summary", "status", "version", "effectiveFrom", "audience"}, document["slug"],
             )
             self.assertTrue(document["title"] and document["summary"], document["slug"])
             self.assertEqual(document["status"], "vigente")
             self.assertEqual(document["version"], "0.1")
             self.assertEqual(document["effectiveFrom"], "2026-11-25")
+        by_slug = {document["slug"]: document["audience"] for document in documents}
+        self.assertEqual(by_slug["compromiso-porteria"], ["GUARD"])
+        self.assertEqual(by_slug["compromiso-administracion"], ["ADMIN"])
+        self.assertEqual(by_slug["terminos"], ["RESIDENT", "GUARD", "ADMIN"])
 
     def test_a_document_is_public_and_carries_its_blocks(self):
         for slug in DOCUMENT_SLUGS:

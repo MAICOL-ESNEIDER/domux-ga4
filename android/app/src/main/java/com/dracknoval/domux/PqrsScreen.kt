@@ -358,7 +358,7 @@ private fun PqrsCard(
             if (pqrs.isArchived) {
                 Text("Archivada", style = MaterialTheme.typography.labelSmall)
             }
-            Text(pqrs.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
+            Text(whenText(pqrs.createdAt), style = MaterialTheme.typography.bodySmall)
             if (expanded) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 val messages = pqrs.messages.orEmpty()
@@ -373,7 +373,7 @@ private fun PqrsCard(
                 } else {
                     messages.forEach { item ->
                         Text(
-                            "${item.authorName ?: item.authorRole} · ${item.createdAt.orEmpty()}",
+                            "${item.authorName ?: item.authorRole} · ${whenText(item.createdAt)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.secondary
                         )

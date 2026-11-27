@@ -62,6 +62,7 @@ fun PreferencesScreen(navController: NavController, viewModel: PreferencesViewMo
         ) {
             DomuxMessageBanner(state.message, isError = false) { viewModel.dismissMessage() }
             TextSizeCard(current = AppPreferences.textSize) { AppPreferences.saveTextSize(context, it) }
+            HourFormatCard(use24 = AppPreferences.use24Hours) { AppPreferences.save24Hours(context, it) }
             AccountsCard(
                 accounts = state.accounts,
                 onForget = { viewModel.forget(context, it) },
@@ -105,6 +106,34 @@ private fun TextSizeCard(current: TextSize, onChoose: (TextSize) -> Unit) {
                 }
             }
             Text("Así se ve el texto con este tamaño.", color = DomuxColor.TextSoft)
+        }
+    }
+}
+
+/** «Formato de la hora»: con a. m. y p. m. o de 24 horas; el cambio se ve de una vez en toda la app. */
+@Composable
+private fun HourFormatCard(use24: Boolean, onChoose: (Boolean) -> Unit) {
+    DomuxCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "Formato de la hora",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() }
+            )
+            Column(Modifier.selectableGroup()) {
+                listOf(false to "12 horas (2:30 p. m.)", true to "24 horas (14:30)").forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .selectable(selected = value == use24, onClick = { onChoose(value) }, role = Role.RadioButton),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = value == use24, onClick = null)
+                        Text(label, modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
+            }
         }
     }
 }

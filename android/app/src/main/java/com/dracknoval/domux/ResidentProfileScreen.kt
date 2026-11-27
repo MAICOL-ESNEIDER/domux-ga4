@@ -19,6 +19,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -70,10 +73,20 @@ private fun ProfileContent(
                 label = { Text("Correo") }, singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             DomuxPhoneField(state.phone, viewModel::onPhone, error = state.phoneError)
-            OutlinedTextField(
-                state.socialNetworks, viewModel::onSocialNetworks,
-                label = { Text("Redes sociales (opcional)") }, modifier = Modifier.fillMaxWidth()
-            )
+            if (viewModel.contactChanged(state)) {
+                OutlinedTextField(
+                    state.currentPassword, viewModel::onCurrentPassword,
+                    label = { Text("Tu contraseña actual *") },
+                    supportingText = { Text("Se pide para cambiar el correo o el teléfono.") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (profile.contactPendingVerification) {
+                DomuxStatusBadge("Contacto pendiente de verificar por la administración", DomuxBadgeTone.PROGRESS)
+            }
             Button(
                 onClick = { viewModel.save() },
                 enabled = !state.busy,
