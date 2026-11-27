@@ -20,6 +20,9 @@ administración.
 
 - App de administración: nueva pantalla «Reglas de la unidad» (en «Más») para cambiar desde el celular los mismos plazos y límites que ya se cambiaban en la web.
 
+**Limpieza de la base para la exposición**
+- Una limpieza que se hace una sola vez (se pide con `DOMUX_EXPO_ACCION=limpiar`): borra las pruebas sueltas (2 comunicados, 2 PQRS con fotos sin relación, 3 paquetes «de prueba», 1 visita pendiente y los intentos de inicio de sesión fallidos), deja un solo ejemplo vencido de cada cosa y crea copias nuevas que siguen vigentes el 1 de diciembre. Antes de borrar, cada fila queda escrita en el registro del servidor para poder reponerla.
+
 **Nuevo ícono de DOMUX**
 - El logo nuevo (edificios azules con una D) es el ícono de la app en el celular (adaptable, con fondo azul noche, resplandor celeste y versión monocromática para Android 13), la marca dentro de la app y el logo y el favicon de la web de administración.
 
