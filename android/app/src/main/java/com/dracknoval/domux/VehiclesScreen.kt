@@ -1,5 +1,9 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.dracknoval.domux
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,7 +22,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -652,7 +655,7 @@ private fun ResidentVehicleCard(
                 style = MaterialTheme.typography.bodySmall
             )
             if (isGuard) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(onClick = { onMovement(vehicle, "entrada") }, enabled = !busy) {
                         Text("Registrar entrada")
                     }

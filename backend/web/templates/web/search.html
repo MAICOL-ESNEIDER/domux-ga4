@@ -38,7 +38,7 @@
   </ul>
   {% if group.more %}
   <p class="small muted mb-0">Hay más resultados de los que se muestran.
-    {% if group.all_url %}<a href="{{ group.all_url }}">Ver todos en {{ group.label }}</a>{% else %}Escribe más del nombre para afinar la búsqueda.{% endif %}</p>
+    {% if group.all_url %}<a class="btn btn-outline btn-small" href="{{ group.all_url }}">Ver todos en {{ group.label }}</a>{% else %}Escribe más del nombre para afinar la búsqueda.{% endif %}</p>
   {% endif %}
 </section>
 {% endfor %}

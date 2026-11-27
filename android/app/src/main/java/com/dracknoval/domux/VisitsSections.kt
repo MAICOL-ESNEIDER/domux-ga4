@@ -1,5 +1,9 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.dracknoval.domux
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,7 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -302,7 +305,7 @@ private fun VisitCard(
                 )
             }
             if (isResident && visit.approvalStatus == "pendiente") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(onClick = { onDecision("aprobada") }, enabled = !busy) { Text("Autorizar") }
                     TextButton(onClick = { onDecision("rechazada") }, enabled = !busy) { Text("Rechazar") }
                 }
@@ -693,7 +696,7 @@ fun QrEntrySection(
                     scanned.qrPass?.vehicle?.let { vehicle ->
                         Text("Vienen en: ${vehicle.describe()}", style = MaterialTheme.typography.bodyMedium)
                         if (state.qrVehicleVisitId != null) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(onClick = onEnterVehicle, enabled = !state.busy) { Text(if (vehicle.type == "moto") "Registrar entrada de la moto" else "Registrar entrada del carro") }
                                 TextButton(onClick = onSkipVehicle) { Text("No entra") }
                             }
@@ -1027,7 +1030,7 @@ private fun CallGuide(visit: Visit, busy: Boolean, onAuthorize: () -> Unit, onRe
                 "3. Marca lo que te respondió:",
             style = MaterialTheme.typography.bodySmall
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(onClick = onAuthorize, enabled = !busy) { Text("Sí autorizó") }
             TextButton(onClick = onReject, enabled = !busy) { Text("No autorizó") }
         }

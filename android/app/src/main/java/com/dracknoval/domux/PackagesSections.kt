@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.dracknoval.domux
 
 import androidx.compose.foundation.horizontalScroll
@@ -19,7 +21,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -435,7 +436,7 @@ fun PickupCodeDialog(item: PackageItem, code: PickupCodeData, onDismiss: () -> U
                 shareError?.let {
                     Text("⚠ $it", color = DomuxColor.Bad, style = MaterialTheme.typography.bodySmall)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(onClick = {
                         shareError = if (bitmap == null) {
                             "No se pudo generar la imagen del QR."

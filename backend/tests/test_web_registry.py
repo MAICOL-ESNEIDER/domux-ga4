@@ -924,7 +924,7 @@ class WebVehicleTests(RegistryWebCase):
         self.assertIn("Pasó el máximo de 3 días", body)
         self.assertIn("4 días", body)
         self.assertIn("Guardia", body)
-        self.assertIn(f'<a href="/web/visitas/{record.visit_id}">Ver la visita</a>', body)
+        self.assertIn(f'<a class="btn btn-outline btn-small" href="/web/visitas/{record.visit_id}">Ver la visita</a>', body)
 
     def test_a_vehicle_that_left_says_when_and_who_let_it_out(self):
         self.entry("DEF456", days_ago=8, exited=True)

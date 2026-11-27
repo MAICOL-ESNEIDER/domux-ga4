@@ -90,7 +90,7 @@
 {# «download»: True si quien lo subió permitió descargarlo, False si no; None donde no aplica (portería). #}
 {% if kind == "document" %}
 <p class="attachment attachment-document">
-  <a href="{{ url }}" download>{{ "Abrir" if download is false else "Descargar" }} el documento PDF</a>
+  <a class="btn btn-outline btn-small" href="{{ url }}" download>{{ "Abrir" if download is false else "Descargar" }} el documento PDF</a>
   <span class="small">Se guarda en tu equipo; ábrelo con tu lector de PDF.{% if download is false %} Quien lo subió no permitió compartirlo: úsalo solo para atender el caso.{% endif %}</span>
 </p>
 {% else %}
@@ -103,9 +103,9 @@
   <img src="{{ url }}" alt="{{ alt }}" loading="lazy">
   {% endif %}
   <figcaption class="small">
-    <a href="{{ url }}" target="_blank" rel="noopener">Abrir {{ {"video": "el video", "audio": "el audio"}.get(kind, "la foto") }} en otra pestaña</a>
+    <a class="btn btn-outline btn-small" href="{{ url }}" target="_blank" rel="noopener">Abrir {{ {"video": "el video", "audio": "el audio"}.get(kind, "la foto") }} en otra pestaña</a>
     {% if download %}
-    · <a href="{{ url }}?descargar=1" download>Descargar</a>
+    <a class="btn btn-outline btn-small" href="{{ url }}?descargar=1" download>Descargar</a>
     {% elif download is false %}
     · <span>Solo para ver: quien lo subió no permitió descargarlo.</span>
     {% endif %}
