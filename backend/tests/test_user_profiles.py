@@ -5,7 +5,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 from app import create_app
 from auth import generate_token
 from extensions import db
-from models import Pet, ResidentialUnit, User, Vehicle
+from models import AuditLog, Pet, ResidentialUnit, User, Vehicle
 from werkzeug.security import generate_password_hash
 from time_utils import now_colombia
 
@@ -96,16 +96,72 @@ class UserProfileTests(unittest.TestCase):
         allowed = self.client.put(
             "/api/profile",
             headers=self.headers(self.resident),
-            json={"phone": "", "email": "resident-updated@test.local", "socialNetworks": ""},
+            json={"phone": "", "email": "Resident-Updated@test.local", "socialNetworks": ""},
         )
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(self.resident.phone, "")
         self.assertEqual(self.resident.social_networks, "")
         self.assertEqual(self.resident.email, "resident-updated@test.local")
+        self.assertEqual(allowed.json["user"]["email"], "resident-updated@test.local")
+        self.assertEqual(AuditLog.query.filter_by(
+            entity_type="USER",
+            entity_id=self.resident.id,
+            action="profile_updated",
+        ).count(), 1)
+
+        invalid_email = self.client.put(
+            "/api/profile",
+            headers=self.headers(self.resident),
+            json={"email": "not-an-email"},
+        )
+        self.assertEqual(invalid_email.status_code, 400)
+
+        for is_active in (True, False):
+            self.admin.is_active = is_active
+            db.session.commit()
+            duplicate_email = self.client.put(
+                "/api/profile",
+                headers=self.headers(self.resident),
+                json={"email": self.admin.email.upper()},
+            )
+            self.assertEqual(duplicate_email.status_code, 409)
 
     def test_profile_endpoints_are_role_restricted(self):
-        response = self.client.get("/api/profile", headers=self.headers(self.guard))
-        self.assertEqual(response.status_code, 403)
+        for user in (self.admin, self.guard):
+            with self.subTest(role=user.role):
+                profile = self.client.get("/api/profile", headers=self.headers(user))
+                self.assertEqual(profile.status_code, 200)
+                self.assertEqual(profile.json["user"]["id"], user.id)
+
+                unit_profile = self.client.get(
+                    "/api/profile/unit", headers=self.headers(user)
+                )
+                self.assertEqual(unit_profile.status_code, 403)
+
+                updated_email = f"{user.role.lower()}-updated@test.local"
+                updated = self.client.put(
+                    "/api/profile",
+                    headers=self.headers(user),
+                    json={"email": updated_email.upper(), "phone": "3001234567"},
+                )
+                self.assertEqual(updated.status_code, 200)
+                self.assertEqual(updated.json["user"]["email"], updated_email)
+                self.assertEqual(updated.json["user"]["phone"], "3001234567")
+                self.assertEqual(user.email, updated_email)
+                self.assertEqual(user.phone, "3001234567")
+
+                for protected_field, value in (
+                    ("role", "RESIDENT"),
+                    ("apartment", "Torre 9 · Apto 999"),
+                    ("isActive", False),
+                ):
+                    rejected = self.client.put(
+                        "/api/profile",
+                        headers=self.headers(user),
+                        json={protected_field: value},
+                    )
+                    self.assertEqual(rejected.status_code, 400)
+
         response = self.client.put(
             "/api/admin/units",
             headers=self.headers(self.resident),

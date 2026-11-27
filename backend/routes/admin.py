@@ -1,5 +1,6 @@
 import base64
 import binascii
+import re
 from datetime import date, datetime
 
 from flask import Blueprint, g, jsonify, request
@@ -708,7 +709,7 @@ def update_unit_profile():
 
 @bp.get("/profile")
 @token_required
-@role_required("RESIDENT")
+@role_required("RESIDENT", "ADMIN", "GUARD")
 def get_resident_profile():
     return jsonify({"user": g.current_user.to_dict()})
 
@@ -718,6 +719,8 @@ def get_resident_profile():
 @role_required("RESIDENT")
 def get_resident_unit_profile():
     user = g.current_user
+    if user.role != "RESIDENT":
+        return error_response(403, "No tienes permiso para consultar esta ficha de apartamento.")
     if not user.apartment:
         return error_response(404, "Tu cuenta no tiene un apartamento asociado.")
     unit = ResidentialUnit.query.filter_by(apartment=user.apartment).first()
@@ -728,7 +731,7 @@ def get_resident_unit_profile():
 
 @bp.put("/profile")
 @token_required
-@role_required("RESIDENT")
+@role_required("RESIDENT", "ADMIN", "GUARD")
 def update_resident_profile():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -756,9 +759,11 @@ def update_resident_profile():
             return error_response(400, "Las redes sociales deben ser texto de máximo 500 caracteres.")
         user.social_networks = data["socialNetworks"].strip()
     if "email" in data:
-        if not isinstance(data["email"], str) or "@" not in data["email"] or len(data["email"]) > 160:
+        if not isinstance(data["email"], str) or len(data["email"]) > 160:
             return error_response(400, "Correo inválido.")
         email = data["email"].strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            return error_response(400, "Correo inválido.")
         duplicate = User.query.filter(
             db.func.lower(User.email) == email,
             User.id != user.id,
@@ -766,5 +771,13 @@ def update_resident_profile():
         if duplicate:
             return error_response(409, "Ese correo ya está registrado.")
         user.email = email
+    db.session.add(AuditLog(
+        entity_type="USER",
+        entity_id=user.id,
+        action="profile_updated",
+        actor_id=user.id,
+        actor_role=user.role,
+        details="El usuario actualizó su perfil.",
+    ))
     db.session.commit()
     return jsonify({"message": "Perfil actualizado", "user": user.to_dict()})
