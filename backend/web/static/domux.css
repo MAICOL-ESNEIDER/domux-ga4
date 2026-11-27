@@ -1,8 +1,9 @@
 /*
  * Identidad visual de la web de administración (HU-087): el mismo azul de acento y los mismos tonos
  * de estado que la app. Tiene tres apariencias que cada persona elige en «Preferencias» y que se
- * guardan en su navegador: «Mixto» (menú oscuro y contenido claro, la de siempre), «Oscuro» (todo
- * oscuro) y «Automático» (Mixto, y Oscuro si el equipo está en modo oscuro). Todo el diseño vive aquí
+ * guardan en su navegador: «Oscuro» (todo oscuro, la que viene de fábrica), «Mixto» (menú oscuro y
+ * contenido claro) y «Automático» (Mixto, y Oscuro si el equipo está en modo oscuro). La página de
+ * presentación de DOMUX es siempre oscura. Todo el diseño vive aquí
  * porque la política de seguridad no permite estilos dentro de la página.
  */
 

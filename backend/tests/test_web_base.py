@@ -86,7 +86,7 @@ class WebBaseTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
         for text in ("Descargar la app (Android)", "Entrar a la administración", "Documentación de la API",
-                     "releases/download/ultima/domux.apk", 'href="/web/login"', 'href="/docs"'):
+                     'href="/descargar"', 'href="/web/login"', 'href="/docs"', "data-tema-fijo"):
             self.assertIn(text, body)
         # Es pública y no trae datos de nadie: ni cuentas de prueba ni contraseñas.
         self.assertNotIn("@domux.com", body)
