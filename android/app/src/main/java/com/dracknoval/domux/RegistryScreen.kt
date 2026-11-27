@@ -282,7 +282,9 @@ fun RegistryScreen(
                     onReenter = { visit ->
                         visitsVm.enterQrExistingVisit(visit, "Reingreso de ${visit.visitorName} registrado.")
                     },
-                    onExit = { pendingQrExit = it }
+                    onExit = { pendingQrExit = it },
+                    onEnterVehicle = { visitsVm.enterQrVehicle() },
+                    onSkipVehicle = { visitsVm.skipQrVehicle() }
                 )
 
                 Session.isResident && tab == 0 -> PackageListSection(

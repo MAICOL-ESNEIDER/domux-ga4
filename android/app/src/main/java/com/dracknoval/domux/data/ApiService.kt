@@ -1,5 +1,6 @@
 package com.dracknoval.domux.data
 
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -123,11 +124,24 @@ interface ApiService {
     ): Response<ComplexInfoResponse>
 
     // Zonas comunes (solo administración): cambiar reglas, cerrar y reabrir.
+    // El cuerpo va armado a mano (jsonBody) para poder mandar «capacity: null» = sin aforo.
     @PUT("api/common-areas/{id}/rules")
     suspend fun updateCommonAreaRules(
         @Header("Authorization") auth: String,
         @Path("id") id: Int,
-        @Body body: Map<String, @JvmSuppressWildcards Any?>
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    @POST("api/common-areas")
+    suspend fun createCommonArea(
+        @Header("Authorization") auth: String,
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    @DELETE("api/common-areas/{id}")
+    suspend fun retireCommonArea(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Int
     ): Response<ResponseBody>
 
     @POST("api/common-areas/{id}/close")

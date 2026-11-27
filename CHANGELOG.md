@@ -18,6 +18,11 @@ administración.
 
 ### Añadido
 
+**Zonas completas en la app, verificar contacto y vehículo en el QR**
+- App de administración: en «Datos de la unidad y zonas» ya se crean y retiran zonas y se cambian todas sus reglas (nombre, horario, duración de la franja, aforo, anticipación, plazo para cancelar, reservas por semana, franjas seguidas, día de mantenimiento y día completo).
+- App de administración: en Usuarios aparece «pendiente de verificar» y el botón «Ya lo verifiqué» cuando un residente cambió su correo o teléfono.
+- QR de visitas: el residente puede marcar «¿Vienen en vehículo?» y anotar tipo (carro o moto), placa, marca y color. El guardia lo ve al leer el QR y, después de la entrada de la persona, registra la del vehículo con un toque.
+
 **La app y la web de administración se parecen más**
 - App de administración: nueva pantalla «Datos de la unidad y zonas» (nombre, NIT, dirección y teléfono de portería; horario, aforo y anticipación de cada zona; cerrar y reabrir una zona), igual que «Datos de la unidad» y «Zonas comunes y reglas» de la web.
 - La administración solo consulta los paquetes de los residentes: entregar, cambiar de estado, archivar y sacar de archivados quedan para la portería; ella solo lo hace con los paquetes de la unidad.

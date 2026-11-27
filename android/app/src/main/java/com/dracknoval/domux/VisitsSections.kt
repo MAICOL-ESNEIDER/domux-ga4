@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.mutableStateListOf
 import com.dracknoval.domux.data.CreateVisitQrPassRequest
+import com.dracknoval.domux.data.QrVehicle
 import com.dracknoval.domux.data.QrVisitor
 import com.dracknoval.domux.data.RegisterVisitRequest
 import com.dracknoval.domux.data.ResidentSummary
@@ -653,7 +654,9 @@ fun QrEntrySection(
     onEnterNew: (name: String, stayMinutes: Int?, onSuccess: () -> Unit) -> Unit,
     onLinkVisit: (Visit) -> Unit,
     onReenter: (Visit) -> Unit,
-    onExit: (Visit) -> Unit
+    onExit: (Visit) -> Unit,
+    onEnterVehicle: () -> Unit = {},
+    onSkipVehicle: () -> Unit = {}
 ) {
     var visitorName by rememberSaveable { mutableStateOf("") }
     var stay by remember { mutableStateOf<Int?>(null) }
@@ -686,6 +689,15 @@ fun QrEntrySection(
                     )
                     if (!scanned.canRegister) {
                         Text("Este QR está vencido o revocado: solo se permite registrar la salida.")
+                    }
+                    scanned.qrPass?.vehicle?.let { vehicle ->
+                        Text("Vienen en: ${vehicle.describe()}", style = MaterialTheme.typography.bodyMedium)
+                        if (state.qrVehicleVisitId != null) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = onEnterVehicle, enabled = !state.busy) { Text(if (vehicle.type == "moto") "Registrar entrada de la moto" else "Registrar entrada del carro") }
+                                TextButton(onClick = onSkipVehicle) { Text("No entra") }
+                            }
+                        }
                     }
                     // Los nombres que el residente anotó al crear el QR, para tocarlos en vez de escribirlos (HU-033).
                     val pendingNames = scanned.pendingVisitorNames.orEmpty()
@@ -789,6 +801,12 @@ fun ResidentQrSection(
     var endDate by rememberSaveable { mutableStateOf(dayText(0)) }
     // Una fila por persona: nombre y apellido, y su documento (los dos obligatorios). Máximo 5.
     val people = remember { mutableStateListOf(QrVisitorRow()) }
+    // ¿Vienen en vehículo? Si sí: tipo, placa (obligatoria) y, si se quiere, marca y color.
+    var withVehicle by rememberSaveable { mutableStateOf(false) }
+    var vehicleType by rememberSaveable { mutableStateOf("carro") }
+    var plate by rememberSaveable { mutableStateOf("") }
+    var brand by rememberSaveable { mutableStateOf("") }
+    var color by rememberSaveable { mutableStateOf("") }
     var attempted by rememberSaveable { mutableStateOf(false) }
     var shareError by remember { mutableStateOf<String?>(null) }
     val active = state.activeQrPass
@@ -836,10 +854,33 @@ fun ResidentQrSection(
                 if (people.size < QR_MAX_PEOPLE) {
                     TextButton(onClick = { people.add(QrVisitorRow()) }) { Text("Agregar otra persona") }
                 }
+                FilterChip(
+                    selected = withVehicle,
+                    onClick = { withVehicle = !withVehicle },
+                    label = { Text(if (withVehicle) "Vienen en vehículo: sí" else "¿Vienen en vehículo? Toca si es así") }
+                )
+                if (withVehicle) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = vehicleType == "carro", onClick = { vehicleType = "carro" }, label = { Text("Carro") })
+                        FilterChip(selected = vehicleType == "moto", onClick = { vehicleType = "moto" }, label = { Text("Moto") })
+                    }
+                    OutlinedTextField(
+                        value = plate,
+                        onValueChange = { plate = it.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(7) },
+                        label = { Text("Placa *") },
+                        supportingText = { Text("Como ABC123 (carro) o ABC12D (moto)") },
+                        isError = attempted && plate.length < 5,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(brand, { brand = it.take(40) }, label = { Text("Marca (opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(color, { color = it.take(30) }, label = { Text("Color (opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 Button(
                     onClick = {
                         attempted = true
                         val problem = people.firstNotNullOfOrNull { qrNameProblem(it.name) ?: qrDocumentProblem(it.document) }
+                            ?: if (withVehicle && plate.length < 5) "escribe la placa del vehículo" else null
                         if (problem != null) {
                             onMessage("Revisa los datos de las personas: $problem")
                         } else {
@@ -847,11 +888,15 @@ fun ResidentQrSection(
                                 validFrom = startDate,
                                 validUntil = endDate,
                                 maxPeople = people.size,
-                                visitors = people.map { QrVisitor(it.name.trim(), cleanDocument(it.document)) }
+                                visitors = people.map { QrVisitor(it.name.trim(), cleanDocument(it.document)) },
+                                vehicle = if (withVehicle) {
+                                    QrVehicle(vehicleType, plate, brand.trim().ifBlank { null }, color.trim().ifBlank { null })
+                                } else null
                             )
                             onCreate(request) {
                                 people.clear()
                                 people.add(QrVisitorRow())
+                                withVehicle = false; plate = ""; brand = ""; color = ""
                                 attempted = false
                             }
                         }
@@ -911,6 +956,7 @@ fun ResidentQrSection(
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text("Válido del ${active.validFrom} al ${active.validUntil}")
+                    active.vehicle?.let { Text("Vehículo: ${it.describe()}") }
                     active.visitorNames.orEmpty().takeIf { it.isNotEmpty() }?.let { names ->
                         Text("Invitados: ${names.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                     }

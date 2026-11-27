@@ -402,6 +402,19 @@ class UsersViewModel : DomuxViewModel() {
         }
     }
 
+    /** La administración confirmó con el residente el correo o el teléfono que cambió desde la app. */
+    fun verifyContact(user: UserData) {
+        viewModelScope.launch {
+            withBusy {
+                attempt("No se pudo marcar el contacto como verificado") {
+                    api.updateUser(auth(), user.id, UpdateUserRequest(contactVerified = true))
+                }
+            } ?: return@launch
+            showSuccess("Listo: el contacto de ${user.fullName ?: user.name} quedó verificado.")
+            load()
+        }
+    }
+
     // ---- PIN del guardia (HU-010) ----
 
     fun startPin(user: UserData) {

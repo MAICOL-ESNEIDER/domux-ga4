@@ -7674,6 +7674,24 @@ paths:
                         type: string
                         nullable: true
                   description: Cada persona con nombre y apellido y su documento (los dos obligatorios y revisados). Si viene, reemplaza a visitorNames
+                vehicle:
+                  type: object
+                  nullable: true
+                  description: El vehículo en el que llegan (opcional)
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                      - carro
+                      - moto
+                    plate:
+                      type: string
+                    brand:
+                      type: string
+                      nullable: true
+                    color:
+                      type: string
+                      nullable: true
       responses:
         '201':
           description: Código QR creado
@@ -10937,6 +10955,24 @@ components:
                 type: string
                 nullable: true
           description: Visitantes con el documento que anotó el residente
+        vehicle:
+          type: object
+          nullable: true
+          description: El vehículo en el que llegan (opcional)
+          properties:
+            type:
+              type: string
+              enum:
+              - carro
+              - moto
+            plate:
+              type: string
+            brand:
+              type: string
+              nullable: true
+            color:
+              type: string
+              nullable: true
         registeredPeople:
           type: integer
         remainingPeople:

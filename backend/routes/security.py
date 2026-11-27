@@ -899,6 +899,10 @@ def create_visit_qr_pass():
         max_people=max_people,
     )
     qr_pass.visitors = visitors
+    vehicle = visit_service.clean_qr_vehicle(data.get("vehicle"))
+    if vehicle:
+        qr_pass.vehicle_type, qr_pass.vehicle_plate = vehicle["type"], vehicle["plate"]
+        qr_pass.vehicle_brand, qr_pass.vehicle_color = vehicle["brand"], vehicle["color"]
     db.session.add(qr_pass)
     db.session.commit()
     result = qr_pass.to_dict(include_token=True)
