@@ -105,6 +105,16 @@ interface ApiService {
     @GET("api/unit-info")
     suspend fun getComplexInfo(@Header("Authorization") auth: String): Response<ComplexInfoResponse>
 
+    // Reglas de la unidad (solo administración): los plazos y límites que cambia la administración.
+    @GET("api/admin/unit-rules")
+    suspend fun getUnitRules(@Header("Authorization") auth: String): Response<UnitRulesView>
+
+    @PUT("api/admin/unit-rules")
+    suspend fun updateUnitRules(
+        @Header("Authorization") auth: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<UnitRulesView>
+
     @GET("api/unit-info/logo")
     suspend fun getComplexLogo(@Header("Authorization") auth: String): Response<ResponseBody>
 

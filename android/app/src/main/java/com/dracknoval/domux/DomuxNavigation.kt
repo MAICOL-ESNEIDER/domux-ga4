@@ -69,6 +69,7 @@ fun moreDestinations(): List<DomuxDestination> = when {
         DomuxDestination("Usuarios", "createUser", R.drawable.ic_group),
         DomuxDestination("Estructura de la unidad", "structure", R.drawable.ic_building),
         Documents,
+        DomuxDestination("Reglas de la unidad", "unitRules", R.drawable.ic_settings),
         Notifications,
         Preferences,
         Legal
