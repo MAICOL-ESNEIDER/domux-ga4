@@ -3,6 +3,7 @@ package com.dracknoval.domux
 import androidx.lifecycle.viewModelScope
 import com.dracknoval.domux.data.CreateVisitQrPassRequest
 import com.dracknoval.domux.data.ExpectedVisitRequest
+import com.dracknoval.domux.data.RegisterVehicleEntryRequest
 import com.dracknoval.domux.data.QrVisitorEntryRequest
 import com.dracknoval.domux.data.QrVisitorExitRequest
 import com.dracknoval.domux.data.RegisterVisitRequest
@@ -46,7 +47,9 @@ data class VisitsUiState(
     val scannedToken: String? = null,
     val qrInspection: VisitQrInspectionResponse? = null,
     // Técnicos y contratistas que la administración espera para las zonas comunes.
-    val expected: List<Visit> = emptyList()
+    val expected: List<Visit> = emptyList(),
+    // La visita que acaba de entrar por un QR que trae vehículo: falta registrar la entrada del vehículo.
+    val qrVehicleVisitId: Int? = null
 )
 
 /**
@@ -339,18 +342,43 @@ class VisitsViewModel : DomuxViewModel() {
     fun enterQrVisitor(name: String, stayMinutes: Int?, onSuccess: () -> Unit) {
         val token = _state.value.scannedToken ?: return
         viewModelScope.launch {
-            withBusy {
+            val response = withBusy {
                 attempt("No se pudo registrar el ingreso QR") {
                     api.enterVisitQr(
                         auth(), token, QrVisitorEntryRequest(visitorName = name.trim(), expectedStayMinutes = stayMinutes)
                     )
                 }
             } ?: return@launch
-            showSuccess("Entrada por QR registrada.")
+            val hasVehicle = _state.value.qrInspection?.qrPass?.vehicle != null
+            _state.update { it.copy(qrVehicleVisitId = if (hasVehicle) response.body()?.visit?.id else null) }
+            showSuccess(if (hasVehicle) "Entrada por QR registrada. Falta la entrada del vehículo." else "Entrada por QR registrada.")
             onSuccess()
             inspectQr(token)
             loadVisits(1)
         }
+    }
+
+    /** Registra la entrada del vehículo que trae el QR, a nombre de la visita que acaba de entrar. */
+    fun enterQrVehicle() {
+        val visitId = _state.value.qrVehicleVisitId ?: return
+        val vehicle = _state.value.qrInspection?.qrPass?.vehicle ?: return
+        viewModelScope.launch {
+            withBusy {
+                attempt("No se pudo registrar la entrada del vehículo") {
+                    api.registerVehicleEntry(
+                        auth(), RegisterVehicleEntryRequest(plate = vehicle.plate, visitId = visitId, vehicleType = vehicle.type)
+                    )
+                }
+            }?.body()?.let { body ->
+                _state.update { it.copy(qrVehicleVisitId = null) }
+                val spot = body.vehicleEntry?.spotCode?.let { " en el parqueadero $it" }.orEmpty()
+                showSuccess("Entró el vehículo ${vehicle.plate}$spot.")
+            }
+        }
+    }
+
+    fun skipQrVehicle() {
+        _state.update { it.copy(qrVehicleVisitId = null) }
     }
 
     /** Vincula una visita ya registrada al QR y la hace entrar, o registra el reingreso de quien salió. */

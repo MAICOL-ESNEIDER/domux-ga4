@@ -177,3 +177,41 @@ class QrVisitorsTests(RulesTests):
         self.assertEqual(self.create(twins).status_code, 400)
         six = [{"name": f"Persona Número{chr(65 + i)}", "document": f"10203040{i}"} for i in range(6)]
         self.assertEqual(self.create(six, max_people=6).status_code, 400)
+
+
+class QrVehicleTests(QrVisitorsTests):
+    """El QR puede decir en qué vehículo llegan; el guardia lo ve al leerlo y registra su entrada."""
+
+    def test_el_qr_guarda_el_vehiculo_y_la_porteria_lo_ve(self):
+        from time_utils import colombia_today
+
+        today = colombia_today().isoformat()
+        response = self.client.post("/api/visits/qr-passes", headers=self.auth(self.resident), json={
+            "validFrom": today, "validUntil": today, "maxPeople": 1,
+            "visitors": [{"name": "Laura Gómez", "document": "1020304050"}],
+            "vehicle": {"type": "carro", "plate": "abc 123", "brand": "Mazda", "color": "Rojo"},
+        })
+        self.assertEqual(response.status_code, 201, response.get_json())
+        qr = response.get_json()["qrPass"]
+        self.assertEqual(qr["vehicle"], {"type": "carro", "plate": "ABC123", "brand": "Mazda", "color": "Rojo"})
+        inspected = self.client.get(f"/api/visits/qr/{qr['token']}", headers=self.auth(self.guard)).get_json()
+        self.assertEqual(inspected["qrPass"]["vehicle"]["plate"], "ABC123")
+
+    def test_placa_invalida_y_sin_vehiculo(self):
+        from time_utils import colombia_today
+
+        today = colombia_today().isoformat()
+        body = {"validFrom": today, "validUntil": today, "maxPeople": 1,
+                "visitors": [{"name": "Laura Gómez", "document": "1020304050"}]}
+        bad = self.client.post("/api/visits/qr-passes", headers=self.auth(self.resident),
+                               json={**body, "vehicle": {"type": "carro", "plate": "12-ABC"}})
+        self.assertEqual(bad.status_code, 400)
+        plain = self.client.post("/api/visits/qr-passes", headers=self.auth(self.resident), json=body)
+        self.assertIsNone(plain.get_json()["qrPass"]["vehicle"])
+
+    def test_la_administracion_verifica_el_contacto_cambiado(self):
+        self.resident.contact_unverified = True
+        db.session.commit()
+        response = self.client.put(f"/api/users/{self.resident.id}", json={"contactVerified": True}, headers=self.auth(self.admin))
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertFalse(db.session.get(User, self.resident.id).contact_unverified)

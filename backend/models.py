@@ -1641,6 +1641,11 @@ class VisitQrPass(db.Model):
     valid_until = db.Column(db.String(10), nullable=False)
     max_people = db.Column(db.Integer, nullable=False)
     visitor_names = db.Column(db.Text, nullable=True)
+    # Si vienen en vehículo: tipo («carro» o «moto»), placa, marca y color (los dos últimos opcionales).
+    vehicle_type = db.Column(db.String(10), nullable=True)
+    vehicle_plate = db.Column(db.String(10), nullable=True)
+    vehicle_brand = db.Column(db.String(40), nullable=True)
+    vehicle_color = db.Column(db.String(30), nullable=True)
     revoked = db.Column(db.Boolean, default=False, nullable=False)
     revoked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
@@ -1693,6 +1698,10 @@ class VisitQrPass(db.Model):
             "maxPeople": self.max_people,
             "visitorNames": self.names,
             "visitors": self.visitors,
+            "vehicle": {
+                "type": self.vehicle_type, "plate": self.vehicle_plate,
+                "brand": self.vehicle_brand, "color": self.vehicle_color,
+            } if self.vehicle_plate else None,
             "registeredPeople": registered_people,
             "remainingPeople": max(0, self.max_people - registered_people),
             "revoked": self.revoked,

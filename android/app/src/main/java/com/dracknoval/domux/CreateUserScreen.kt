@@ -345,6 +345,9 @@ private fun UserCard(user: UserData, viewModel: UsersViewModel, navController: N
             }
             Text(user.email)
             Text("Teléfono: ${user.phone.orEmpty()} · Documento: ${user.documentId.orEmpty()}")
+            if (user.contactPendingVerification) {
+                DomuxStatusBadge("Cambió su correo o teléfono: pendiente de verificar", DomuxBadgeTone.PROGRESS)
+            }
             Text("Rol: ${roleLabel(user.role)} · Apto: ${user.apartment ?: "—"}")
             Text(
                 "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
@@ -355,6 +358,9 @@ private fun UserCard(user: UserData, viewModel: UsersViewModel, navController: N
             }
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 TextButton(onClick = { viewModel.startEdit(user) }) { Text("Editar") }
+                if (user.contactPendingVerification) {
+                    TextButton(onClick = { viewModel.verifyContact(user) }) { Text("Ya lo verifiqué") }
+                }
                 TextButton(onClick = { viewModel.startReset(user) }) { Text("Restablecer contraseña") }
                 if (user.role == "GUARD") {
                     TextButton(onClick = { viewModel.startPin(user) }) {

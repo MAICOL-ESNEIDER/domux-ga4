@@ -65,7 +65,9 @@ data class UpdateUserRequest(
     val isActive: Boolean? = null,
     val dataProcessingConsent: Boolean? = null,
     val birthDate: String? = null,
-    val parentalConsent: Boolean? = null
+    val parentalConsent: Boolean? = null,
+    // true: la administración ya revisó el correo o el teléfono que cambió el residente.
+    val contactVerified: Boolean? = null
 )
 data class ResetPasswordRequest(val password: String)
 data class ChangeOwnPasswordRequest(val currentPassword: String, val newPassword: String)
@@ -629,8 +631,15 @@ data class VisitQrPass(
     val token: String? = null,
     val qrData: String? = null,
     // Los nombres que el residente escribió al crear el QR (HU-033).
-    val visitorNames: List<String>? = null
+    val visitorNames: List<String>? = null,
+    // El vehículo en el que llegan, si el residente lo anotó.
+    val vehicle: QrVehicle? = null
 )
+/** El vehículo del QR: «carro» o «moto», placa y, si se anotaron, marca y color. */
+data class QrVehicle(val type: String = "carro", val plate: String, val brand: String? = null, val color: String? = null) {
+    fun describe(): String =
+        listOfNotNull(if (type == "moto") "Moto" else "Carro", plate, brand, color).joinToString(" · ")
+}
 data class VisitQrPassListResponse(val qrPasses: List<VisitQrPass>?)
 data class CreateVisitQrPassRequest(
     val validFrom: String,
@@ -638,7 +647,9 @@ data class CreateVisitQrPassRequest(
     val maxPeople: Int,
     val visitorNames: List<String>? = null,
     // Cada persona con nombre y apellido y su documento: la portería lo compara al llegar.
-    val visitors: List<QrVisitor>? = null
+    val visitors: List<QrVisitor>? = null,
+    // Si vienen en vehículo (opcional).
+    val vehicle: QrVehicle? = null
 )
 data class QrVisitor(val name: String, val document: String? = null)
 data class VisitQrPassResponse(val qrPass: VisitQrPass?)

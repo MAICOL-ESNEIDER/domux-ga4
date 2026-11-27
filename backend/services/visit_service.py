@@ -147,6 +147,29 @@ def clean_qr_visitors(value, max_people):
     return visitors
 
 
+def clean_qr_vehicle(value):
+    """El vehículo en el que llegan (opcional): tipo, placa colombiana y, si se quiere, marca y color."""
+    if value in (None, {}):
+        return None
+    if not isinstance(value, dict):
+        raise ApiError("El vehículo debe traer el tipo y la placa.")
+    from services.vehicle_service import clean_plate
+
+    vehicle_type = value.get("type") or "carro"
+    if vehicle_type not in ("carro", "moto"):
+        raise ApiError("El tipo de vehículo debe ser «carro» o «moto».")
+    texts = {}
+    for key, limit, label in (("brand", 40, "La marca"), ("color", 30, "El color")):
+        text = value.get(key)
+        if text is not None and not isinstance(text, str):
+            raise ApiError(f"{label} debe ser texto.")
+        text = " ".join((text or "").split())
+        if len(text) > limit:
+            raise ApiError(f"{label} puede tener hasta {limit} caracteres.")
+        texts[key] = text or None
+    return {"type": vehicle_type, "plate": clean_plate(value.get("plate")), **texts}
+
+
 def pending_visitor_names(qr_pass):
     """Los nombres del QR que todavía no tienen una visita registrada con ese nombre."""
     registered = {visit.visitor_name.casefold() for visit in qr_pass.visits}
