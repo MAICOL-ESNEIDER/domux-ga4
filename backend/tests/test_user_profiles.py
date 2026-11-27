@@ -81,9 +81,11 @@ class UserProfileTests(unittest.TestCase):
         allowed = self.client.put(
             "/api/profile",
             headers=self.headers(self.resident),
-            json={"phone": "", "email": "resident-updated@test.local", "socialNetworks": ""},
+            json={"phone": "", "email": "resident-updated@test.local", "socialNetworks": "", "currentPassword": "Resident123*"},
         )
         self.assertEqual(allowed.status_code, 200)
+        self.assertTrue(self.resident.contact_unverified)
+        self.assertIn("pendiente de verificar", allowed.get_json()["message"])
         self.assertEqual(self.resident.phone, "")
         self.assertEqual(self.resident.social_networks, "")
         self.assertEqual(self.resident.email, "resident-updated@test.local")

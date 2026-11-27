@@ -36,6 +36,8 @@ ANNOUNCEMENT_CATEGORIES = {
     "asamblea": "Asamblea",
     "seguridad": "Seguridad",
     "zonas_comunes": "Zonas comunes",
+    # «Otra»: la administración escribe el nombre del tipo (category_label), por ejemplo «Mascotas».
+    "otra": "Otra",
 }
 
 #: Tipos de parqueadero de la unidad (HU-015).
@@ -162,6 +164,8 @@ class User(db.Model):
     legal_accepted_at = db.Column(db.DateTime, nullable=True)
     legal_accepted_version = db.Column(db.String(200), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    # El residente cambió su correo o su teléfono y la administración todavía no lo verificó.
+    contact_unverified = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     created_at = db.Column(db.DateTime, default=utc_now)
 
     # Entre usuarios y apartamentos hay dos llaves (apartment_id y el retiro lógico
@@ -244,6 +248,7 @@ class User(db.Model):
             "apartmentNumber": self.apartment_number,
             "occupancyType": self.occupancy_type or "propietario",
             "socialNetworks": self.social_networks or "",
+            "contactPendingVerification": bool(self.contact_unverified),
             "birthDate": self.birth_date,
             "age": self.age,
             "isMinor": self.is_minor,
@@ -904,6 +909,7 @@ class Announcement(RetirableMixin, db.Model):
     title = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(20), nullable=True)
+    category_label = db.Column(db.String(40), nullable=True)
     tower_id = db.Column(
         db.Integer,
         db.ForeignKey("towers.id", name="fk_announcements_tower_id_towers"),
@@ -934,7 +940,7 @@ class Announcement(RetirableMixin, db.Model):
             "title": self.title or "",
             "message": self.message or "",
             "category": self.category,
-            "categoryLabel": ANNOUNCEMENT_CATEGORIES.get(self.category),
+            "categoryLabel": (self.category_label or "Otra") if self.category == "otra" else ANNOUNCEMENT_CATEGORIES.get(self.category),
             "towerId": self.tower_id,
             "towerName": self.tower.name if self.tower else None,
             "expiresAt": self.expires_at.isoformat() if self.expires_at else None,
@@ -1642,14 +1648,40 @@ class VisitQrPass(db.Model):
     resident = db.relationship("User")
     visits = db.relationship("Visit", back_populates="qr_pass")
 
+    # Cada línea de visitor_names es un visitante: «Nombre» o «Nombre<TAB>documento» (el documento lo
+    # escribe el residente al crear el QR y el guardia lo compara con el que muestra la persona).
+
+    @property
+    def visitors(self):
+        """Los visitantes del QR: lista de {"name", "document"} (document puede ser None)."""
+        result = []
+        for line in (self.visitor_names or "").split("\n"):
+            if not line:
+                continue
+            name, _, document = line.partition("\t")
+            result.append({"name": name, "document": document or None})
+        return result
+
+    @visitors.setter
+    def visitors(self, values):
+        lines = [f"{item['name']}\t{item['document']}" if item.get("document") else item["name"] for item in values]
+        self.visitor_names = "\n".join(lines) or None
+
     @property
     def names(self):
         """Los nombres de visitantes escritos al crear el QR, en una lista."""
-        return [name for name in (self.visitor_names or "").split("\n") if name]
+        return [item["name"] for item in self.visitors]
 
     @names.setter
     def names(self, values):
-        self.visitor_names = "\n".join(values) or None
+        self.visitors = [{"name": name, "document": None} for name in values]
+
+    def document_of(self, name):
+        """El documento que el residente anotó para ese visitante, o None."""
+        for item in self.visitors:
+            if item["name"].casefold() == (name or "").strip().casefold():
+                return item["document"]
+        return None
 
     def to_dict(self, include_token=False):
         registered_people = len(self.visits)
@@ -1660,6 +1692,7 @@ class VisitQrPass(db.Model):
             "validUntil": self.valid_until,
             "maxPeople": self.max_people,
             "visitorNames": self.names,
+            "visitors": self.visitors,
             "registeredPeople": registered_people,
             "remainingPeople": max(0, self.max_people - registered_people),
             "revoked": self.revoked,

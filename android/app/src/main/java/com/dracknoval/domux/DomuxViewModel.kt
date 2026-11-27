@@ -4,8 +4,12 @@ import androidx.lifecycle.ViewModel
 import com.dracknoval.domux.data.Session
 import com.dracknoval.domux.data.mensajeDeError
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import retrofit2.Response
 import java.io.IOException
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.UnknownHostException
 
 /**
  * Base de los ViewModels de la app (portería, PQRS, reservas, perfil, notificaciones...): hace
@@ -72,7 +76,7 @@ abstract class DomuxViewModel : ViewModel() {
         request: suspend () -> Response<T>
     ): Response<T>? {
         return try {
-            request()
+            withConnectionRetries(request)
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: IOException) {
@@ -83,5 +87,33 @@ abstract class DomuxViewModel : ViewModel() {
             onError("$failure: ${exception.message ?: "error inesperado"}.")
             null
         }
+    }
+
+    /**
+     * Si no se pudo ni siquiera conectar (sin internet o el servidor despertando), vuelve a intentar
+     * solo, dos veces, con una pausa corta. Solo en esos casos: ahí la solicitud nunca llegó al servidor,
+     * así que repetirla no puede guardar nada dos veces.
+     */
+    private suspend fun <T> withConnectionRetries(request: suspend () -> Response<T>): Response<T> {
+        var wait = CONNECTION_RETRY_FIRST_WAIT_MS
+        repeat(CONNECTION_RETRIES) {
+            try {
+                return request()
+            } catch (exception: IOException) {
+                if (!isNotConnected(exception)) throw exception
+                delay(wait)
+                wait *= 2
+            }
+        }
+        return request()
+    }
+
+    companion object {
+        const val CONNECTION_RETRIES = 2
+        const val CONNECTION_RETRY_FIRST_WAIT_MS = 2_000L
+
+        /** Errores en los que la solicitud no salió del celular. */
+        fun isNotConnected(exception: IOException): Boolean =
+            exception is UnknownHostException || exception is ConnectException || exception is NoRouteToHostException
     }
 }

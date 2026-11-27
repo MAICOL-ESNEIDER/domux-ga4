@@ -21,7 +21,9 @@ val announcementCategories = listOf(
     AnnouncementCategory("urgente", "Urgente"),
     AnnouncementCategory("asamblea", "Asamblea"),
     AnnouncementCategory("seguridad", "Seguridad"),
-    AnnouncementCategory("zonas_comunes", "Zonas comunes")
+    AnnouncementCategory("zonas_comunes", "Zonas comunes"),
+    // «Otra»: la administración escribe el nombre del tipo (por ejemplo «Mascotas»).
+    AnnouncementCategory("otra", "Otra")
 )
 
 /** Todo lo que la pantalla de Anuncios necesita para dibujarse. */

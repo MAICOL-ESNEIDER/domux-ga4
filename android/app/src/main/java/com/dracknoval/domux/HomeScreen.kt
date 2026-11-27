@@ -353,7 +353,7 @@ private fun ResidentHome(
         TodoCard(
             icon = R.drawable.ic_person,
             title = "${visit.visitorName} está en la portería",
-            detail = listOfNotNull(visitTypeLabel(visit.type), visit.createdAt?.let { "llegó $it" }).joinToString(" · ") +
+            detail = listOfNotNull(visitTypeLabel(visit.type), visit.createdAt?.let { "llegó ${whenText(it)}" }).joinToString(" · ") +
                 ". ¿Lo dejas entrar?"
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -376,7 +376,7 @@ private fun ResidentHome(
             icon = R.drawable.ic_package,
             title = if (state.waitingPackagesTotal == 1) "Tienes un paquete en portería"
             else "Tienes ${state.waitingPackagesTotal} paquetes en portería",
-            detail = listOfNotNull(first?.carrier, first?.arrivedAt?.let { "llegó $it" }).joinToString(" · "),
+            detail = listOfNotNull(first?.carrier, first?.arrivedAt?.let { "llegó ${whenText(it)}" }).joinToString(" · "),
             onClick = { navController.navigate("registry?tab=paquetes") }
         ) {
             OutlinedButton(
@@ -420,7 +420,31 @@ private fun ResidentHome(
         onClick = { navController.openMainDestination("reservations") },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
     ) { Text("Reservar una zona común") }
+
+    // Atajos a lo que está en «Mi hogar», y «Más» para ver todas las opciones.
+    SectionTitle("Atajos")
+    residentShortcuts.chunked(2).forEach { row ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            row.forEach { (label, icon, route) ->
+                OutlinedButton(
+                    onClick = { navController.navigate(route) },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                ) {
+                    Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text(label)
+                }
+            }
+        }
+    }
 }
+
+private val residentShortcuts = listOf(
+    Triple("Mis paquetes", R.drawable.ic_package, "registry?tab=paquetes"),
+    Triple("Mis visitas y QR", R.drawable.ic_qr_scan, "registry?tab=visitas"),
+    Triple("Mi perfil", R.drawable.ic_person, "profile"),
+    Triple("Más", R.drawable.ic_more, "more")
+)
 
 @Composable
 private fun ReservationCard(reservation: Reservation, onClick: () -> Unit) {
@@ -428,7 +452,7 @@ private fun ReservationCard(reservation: Reservation, onClick: () -> Unit) {
     TodoCard(
         icon = R.drawable.ic_event,
         title = reservation.commonAreaName ?: "Zona común",
-        detail = "${humanDate(reservation.date)} · ${reservation.timeSlot}",
+        detail = "${humanDate(reservation.date)} · ${whenText(reservation.timeSlot)}",
         onClick = onClick
     ) {
         DomuxStatusBadge(
@@ -484,7 +508,7 @@ private fun AdminHome(summary: AdminSummaryResponse?, loading: Boolean, navContr
         reservations.take(3).forEach { item ->
             TodoCard(
                 icon = R.drawable.ic_event,
-                title = "${item.commonAreaName ?: "Zona común"} · ${humanDate(item.date)} · ${item.timeSlot.orEmpty()}",
+                title = "${item.commonAreaName ?: "Zona común"} · ${humanDate(item.date)} · ${whenText(item.timeSlot)}",
                 detail = listOfNotNull(item.residentName, item.apartment, item.attendees?.let { "$it personas" })
                     .joinToString(" · "),
                 onClick = { navController.openMainDestination("reservations") }
@@ -635,7 +659,7 @@ private fun GuardHome(state: HomeUiState, navController: NavController, onShift:
         TodoCard(
             icon = R.drawable.ic_schedule,
             title = visit.visitorName,
-            detail = listOfNotNull(visit.apartment?.let { "Para $it" }, visit.createdAt?.let { "llegó $it" }).joinToString(" · "),
+            detail = listOfNotNull(visit.apartment?.let { "Para $it" }, visit.createdAt?.let { "llegó ${whenText(it)}" }).joinToString(" · "),
             onClick = { navController.navigate("registry?tab=visitas") }
         )
     }
@@ -729,7 +753,7 @@ private fun NotificationsDialog(
                                     }
                                     Text(item.message, color = DomuxColor.TextSoft)
                                     Text(
-                                        item.createdAt.orEmpty(),
+                                        whenText(item.createdAt),
                                         color = DomuxColor.TextMuted,
                                         style = MaterialTheme.typography.bodySmall
                                     )

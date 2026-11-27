@@ -19,6 +19,8 @@
               help="Lo que quieres contar, con fechas y horas si aplican.") }}
   {{ select("category", "Categoría", category_options, values.category, required=True, blank="Elige una categoría",
             help="Ayuda a que los residentes encuentren el comunicado. «Urgente» llega como aviso urgente.") }}
+  {{ field("categoryLabel", "Nombre del tipo (solo si eliges «Otra»)", values.categoryLabel, maxlength=40,
+           help="Por ejemplo: Mascotas, Cumpleaños, Novedades. Es lo que ven los residentes.") }}
   {{ select("towerId", "¿A quién le llega?", towers, values.towerId, blank="Toda la unidad",
             help="Si eliges una torre, solo lo ven los residentes de esa torre.") }}
   {{ field("expiresAt", "Vence el", values.expiresAt, type="date", extra={"min": today},

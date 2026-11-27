@@ -213,7 +213,7 @@ private fun PackageCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(item.createdAt.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                Text(whenText(item.createdAt), style = MaterialTheme.typography.bodySmall)
                 if (item.isDeleted) {
                     DomuxStatusBadge("Archivado", DomuxBadgeTone.PROGRESS)
                 } else {

@@ -320,9 +320,9 @@ private fun VehicleEntryDetails(entry: VisitorVehicleEntryData, showSpot: Boolea
                 }
             )
         }
-        Text("Entró: ${entry.enteredAt.orEmpty()}")
+        Text("Entró: ${whenText(entry.enteredAt)}")
         if (entry.exitedAt != null) {
-            Text("Salió: ${entry.exitedAt} · estuvo ${durationText(entry.parkedMinutes)}")
+            Text("Salió: ${whenText(entry.exitedAt)} · estuvo ${durationText(entry.parkedMinutes)}")
         } else {
             Text("Lleva adentro: ${durationText(entry.parkedMinutes)} (máximo ${entry.maxDays} días)")
         }

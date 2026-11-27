@@ -144,3 +144,36 @@ class RulesTests(unittest.TestCase):
             f"/api/admin/parking-spots/{resident_spot.id}", json={"forMotos": True}, headers=self.auth(self.admin)
         )
         self.assertEqual(refused.status_code, 400)
+
+
+class QrVisitorsTests(RulesTests):
+    """El QR del residente lleva nombre y documento revisados de cada persona (máximo las de la regla)."""
+
+    def create(self, visitors, max_people=None):
+        from time_utils import colombia_today
+
+        today = colombia_today().isoformat()
+        return self.client.post("/api/visits/qr-passes", headers=self.auth(self.resident), json={
+            "validFrom": today, "validUntil": today, "maxPeople": max_people or len(visitors), "visitors": visitors,
+        })
+
+    def test_nombre_y_documento_quedan_en_el_qr_y_en_la_visita(self):
+        response = self.create([{"name": "Laura Gómez", "document": "1.020.304.050"}])
+        self.assertEqual(response.status_code, 201, response.get_json())
+        qr = response.get_json()["qrPass"]
+        self.assertEqual(qr["visitors"], [{"name": "Laura Gómez", "document": "1020304050"}])
+        inspected = self.client.get(f"/api/visits/qr/{qr['token']}", headers=self.auth(self.guard)).get_json()
+        self.assertEqual(inspected["pendingVisitors"][0]["document"], "1020304050")
+        entry = self.client.post(f"/api/visits/qr/{qr['token']}/entry", json={"visitorName": "Laura Gómez"},
+                                 headers=self.auth(self.guard))
+        self.assertEqual(entry.status_code, 201, entry.get_json())
+        self.assertEqual(entry.get_json()["visit"]["visitorDocument"], "1020304050")
+
+    def test_validaciones(self):
+        self.assertEqual(self.create([{"name": "Laura", "document": "1020304050"}]).status_code, 400)
+        self.assertEqual(self.create([{"name": "Laura Gómez", "document": "12"}]).status_code, 400)
+        self.assertEqual(self.create([{"name": "Laura G0mez", "document": "1020304050"}]).status_code, 400)
+        twins = [{"name": "Laura Gómez", "document": "1020304050"}, {"name": "Ana Ruiz", "document": "1020304050"}]
+        self.assertEqual(self.create(twins).status_code, 400)
+        six = [{"name": f"Persona Número{chr(65 + i)}", "document": f"10203040{i}"} for i in range(6)]
+        self.assertEqual(self.create(six, max_people=6).status_code, 400)

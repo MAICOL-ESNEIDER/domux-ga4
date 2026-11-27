@@ -62,7 +62,7 @@ class LegalViewModel : DomuxViewModel() {
                 if (slug.isEmpty()) {
                     val response = attempt("No se pudieron cargar los documentos") { api.getLegalDocuments() }
                     _state.update { current ->
-                        current.copy(documents = response?.body()?.documents ?: current.documents)
+                        current.copy(documents = response?.body()?.documents?.let(::forCurrentRole) ?: current.documents)
                     }
                 } else {
                     val response = attempt("No se pudo cargar el documento") { api.getLegalDocument(slug) }
@@ -72,3 +72,12 @@ class LegalViewModel : DomuxViewModel() {
         }
     }
 }
+
+
+/**
+ * Los documentos que le tocan a quien tiene la sesión: los de todos y los de su rol (el compromiso de la
+ * portería solo lo ve la portería). Sin sesión, antes de entrar, se ven todos.
+ */
+fun forCurrentRole(documents: List<LegalDocumentSummary>, role: String? = com.dracknoval.domux.data.Session.role): List<LegalDocumentSummary> =
+    if (role.isNullOrBlank()) documents
+    else documents.filter { it.audience.isNullOrEmpty() || role in it.audience }

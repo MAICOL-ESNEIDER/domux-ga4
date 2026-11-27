@@ -5,6 +5,7 @@ routes/security.py solo leen la solicitud y responden. Las funciones lanzan
 ApiError con un mensaje claro y ninguna hace commit.
 """
 
+import re
 from datetime import date, timedelta
 
 from sqlalchemy.orm import selectinload
@@ -106,6 +107,44 @@ def clean_visitor_names(value, max_people):
             f"{'persona' if max_people == 1 else 'personas'}."
         )
     return names
+
+
+_NAME_LETTERS = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .-]+$")
+_DOCUMENT = re.compile(r"^[A-Za-z0-9]{5,15}$")
+
+
+def clean_qr_visitors(value, max_people):
+    """Lee los visitantes del QR con su nombre y su documento, los dos obligatorios y revisados.
+
+    El nombre debe tener nombre y apellido (solo letras); el documento, de 5 a 15 letras o números
+    (cédula, tarjeta de identidad, cédula de extranjería o pasaporte). No puede haber más que personas
+    en el QR, ni nombres o documentos repetidos.
+    """
+    if not isinstance(value, list) or not value:
+        raise ApiError("Escribe el nombre y el documento de cada persona del QR.")
+    visitors, seen_names, seen_documents = [], set(), set()
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise ApiError("Cada visitante debe traer nombre y documento.")
+        name = " ".join(str(item.get("name") or "").split())
+        document = "".join(str(item.get("document") or "").split()).replace(".", "").replace("-", "").upper()
+        if len(name.split()) < 2 or not _NAME_LETTERS.match(name):
+            raise ApiError(f"Persona {index}: escribe nombre y apellido, solo con letras.")
+        if len(name) > MAX_VISITOR_NAME_LENGTH:
+            raise ApiError(f"Persona {index}: el nombre puede tener hasta {MAX_VISITOR_NAME_LENGTH} caracteres.")
+        if not _DOCUMENT.match(document):
+            raise ApiError(f"Persona {index}: el documento debe tener de 5 a 15 letras o números, sin espacios.")
+        if name.casefold() in seen_names or document in seen_documents:
+            raise ApiError(f"Persona {index}: ya está en la lista.")
+        seen_names.add(name.casefold())
+        seen_documents.add(document)
+        visitors.append({"name": name, "document": document})
+    if len(visitors) > max_people:
+        raise ApiError(
+            f"Escribiste {len(visitors)} personas pero el QR es para {max_people} "
+            f"{'persona' if max_people == 1 else 'personas'}."
+        )
+    return visitors
 
 
 def pending_visitor_names(qr_pass):

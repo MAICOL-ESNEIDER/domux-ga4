@@ -1,11 +1,11 @@
 # Documentos legales de DOMUX
 
-Esta carpeta guarda los textos de los **ocho documentos legales** que DOMUX debe tener publicados: la política de
+Esta carpeta guarda los textos de los **diez documentos legales** (dos de ellos solo para un rol: portería o administración) que DOMUX debe tener publicados: la política de
 datos, el aviso de privacidad, los términos y las demás reglas que la ley pide cuando una aplicación guarda datos
 de personas. Cada documento es **un archivo de texto**. El servidor lo lee y lo muestra en la web, en la app y en la
 API, sin que haga falta tocar nada más.
 
-**Estado de hoy: los ocho archivos son borradores preparados por el equipo.** Están escritos teniendo en cuenta todo lo que hace
+**Estado de hoy: los diez archivos son borradores preparados por el equipo.** Están escritos teniendo en cuenta todo lo que hace
 DOMUX, marcados como `vigente` (versión `0.1`) y cada uno empieza con el aviso «Aviso importante»: todavía no
 los revisó una persona con conocimiento legal ni los adoptó una unidad residencial real, y lo que depende de la unidad
 (quién es el responsable, sus datos de contacto) dice «por completar». Cuando una persona con conocimiento legal los
@@ -22,7 +22,7 @@ Palabras que se usan aquí:
   que la app y la web lo dibujen igual, sin tener que entender ningún formato.
 - **Pipeline**: la revisión automática de GitHub que corre las pruebas con cada cambio.
 
-## 1. Los ocho documentos y dónde se ven
+## 1. Los documentos y dónde se ven
 
 | Archivo | Documento | Dónde se ve hoy | Dónde falta enlazarlo cuando esté el texto |
 |---|---|---|---|
@@ -120,7 +120,7 @@ Ambas terminan con código 0 si todo está bien y con 1 si hay algo que arreglar
 
 ## 5. Cómo agregar otro documento
 
-Hoy son ocho. Para sumar uno nuevo:
+Hoy son diez. Con el dato «para» del encabezado (residentes, porteria o administracion) un documento se muestra solo a esos roles en la app. Para sumar uno nuevo:
 
 1. Crea su archivo en esta carpeta con el encabezado de la sección 2.
 2. Agrega su nombre (el del archivo, sin `.md`) a `DOCUMENT_SLUGS` en `backend/services/legal_service.py`.

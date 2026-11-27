@@ -483,7 +483,9 @@ class ContractContentTests(unittest.TestCase):
         self.call(guard, "GET", "/api/residents", query={"search": "Rosa"})
         self.call(guard, "GET", f"/api/residents/{self.resident.id}/contact")
         self.call(self.resident, "GET", "/api/profile")
-        self.call(self.resident, "PUT", "/api/profile", json={"phone": "3001112233", "socialNetworks": "@rosa"})
+        self.call(self.resident, "PUT", "/api/profile", json={
+            "phone": "3001112233", "socialNetworks": "@rosa", "currentPassword": self.passwords[self.resident.id],
+        })
 
     def walk_unit(self):
         admin, resident = self.admin, self.resident

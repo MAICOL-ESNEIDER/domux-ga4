@@ -119,3 +119,18 @@ class UnitExpectedTests(unittest.TestCase):
             f"/api/packages/{item['id']}/deliver", json={"receivedBy": "Administración"}, headers=self.auth(self.guard)
         )
         self.assertEqual(delivered.status_code, 200, delivered.get_json())
+
+
+class OtherCategoryTests(UnitExpectedTests):
+    def test_comunicado_de_tipo_otra_con_nombre_propio(self):
+        response = self.client.post("/api/announcements", headers=self.auth(self.admin), json={
+            "title": "Feria de mascotas", "message": "El sábado en el parque.", "category": "otra", "categoryLabel": "mascotas",
+        })
+        self.assertEqual(response.status_code, 201, response.get_json())
+        body = response.get_json()
+        item = body.get("announcement", body)
+        self.assertEqual(item["categoryLabel"], "Mascotas")
+        missing = self.client.post("/api/announcements", headers=self.auth(self.admin), json={
+            "title": "Sin nombre", "message": "x", "category": "otra",
+        })
+        self.assertEqual(missing.status_code, 400)

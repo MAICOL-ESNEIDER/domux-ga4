@@ -236,7 +236,7 @@ private fun ReservationCard(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(reservation.commonAreaName ?: "Zona común", style = MaterialTheme.typography.titleMedium)
-            Text("${humanDate(reservation.date)} · ${reservation.timeSlot}")
+            Text("${humanDate(reservation.date)} · ${whenText(reservation.timeSlot)}")
             Text("Residente: ${reservation.residentName.orEmpty()} · ${reservation.apartment.orEmpty()}")
             reservation.attendees?.let { people ->
                 Text("Personas: $people")
@@ -246,7 +246,7 @@ private fun ReservationCard(
             }
             reservation.messages.orEmpty().forEach { item ->
                 Text(
-                    "${item.authorName ?: item.authorRole} · ${item.createdAt.orEmpty()}",
+                    "${item.authorName ?: item.authorRole} · ${whenText(item.createdAt)}",
                     style = MaterialTheme.typography.labelSmall
                 )
                 if (!item.message.isNullOrBlank()) Text(item.message)
@@ -495,17 +495,27 @@ private fun ReservationForm(
                                             enabled = state.fullDayFree,
                                             onClick = onFullDay,
                                             label = {
-                                                Text(if (state.fullDayFree) "Día completo ($whole)" else "Día completo · Ocupado")
+                                                Text(if (state.fullDayFree) "Día completo (${whenText(whole)})" else "Día completo · Ocupado")
                                             }
                                         )
                                     }
                                     state.slots.forEach { time ->
                                         val available = state.availability?.availableSlots?.contains(time) ?: false
+                                        // Ocupado = ya lo reservó alguien; cerrado = la administración no lo abre ese día.
+                                        val occupied = state.availability?.occupiedSlots?.contains(time) ?: false
                                         FilterChip(
                                             selected = state.isChosen(time),
                                             enabled = available,
                                             onClick = { onSlot(time) },
-                                            label = { Text(if (available) time else "$time · Ocupado") }
+                                            label = {
+                                                Text(
+                                                    when {
+                                                        available -> whenText(time)
+                                                        occupied -> "${whenText(time)} · Ocupado"
+                                                        else -> "${whenText(time)} · Cerrado"
+                                                    }
+                                                )
+                                            }
                                         )
                                     }
                                 }

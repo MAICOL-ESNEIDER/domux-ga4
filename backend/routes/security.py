@@ -850,7 +850,13 @@ def create_visit_qr_pass():
             f"Un QR sirve para entre 1 y {rules.qr_max_people} personas. "
             f"Para más personas crea otro QR.",
         )
-    names = visit_service.clean_visitor_names(data.get("visitorNames"), max_people)
+    # La app manda «visitors» (nombre y documento de cada persona, los dos revisados); «visitorNames»
+    # (solo nombres) se sigue aceptando para los clientes anteriores.
+    visitors = (
+        visit_service.clean_qr_visitors(data["visitors"], max_people)
+        if data.get("visitors") is not None
+        else [{"name": name, "document": None} for name in visit_service.clean_visitor_names(data.get("visitorNames"), max_people)]
+    )
     qr_pass = VisitQrPass(
         resident_id=g.current_user.id,
         token=secrets.token_urlsafe(32),
@@ -858,7 +864,7 @@ def create_visit_qr_pass():
         valid_until=valid_until.isoformat(),
         max_people=max_people,
     )
-    qr_pass.names = names
+    qr_pass.visitors = visitors
     db.session.add(qr_pass)
     db.session.commit()
     result = qr_pass.to_dict(include_token=True)
@@ -922,6 +928,9 @@ def inspect_visit_qr(token):
     return jsonify({
         "qrPass": qr_pass.to_dict(),
         "pendingVisitorNames": visit_service.pending_visitor_names(qr_pass),
+        "pendingVisitors": [
+            item for item in qr_pass.visitors if item["name"] in visit_service.pending_visitor_names(qr_pass)
+        ],
         "residentName": qr_pass.resident.full_name,
         "apartment": qr_pass.resident.apartment,
         "canRegister": (
@@ -984,10 +993,14 @@ def enter_visit_qr(token):
         if len(qr_pass.visits) >= qr_pass.max_people:
             return error_response(409, "El QR alcanzó el límite de personas. Debe generarse otro código.")
     if visit is None:
+        # Si el residente anotó el documento de esta persona en el QR, queda en la visita.
+        listed_document = qr_pass.document_of(visitor_name)
         visit = Visit(
             resident_id=qr_pass.resident_id,
             registered_by=g.current_user.id,
             visitor_name=visitor_name,
+            visitor_document=listed_document,
+            media_consent=bool(listed_document),
             type="visitante",
             approval_status="aprobada",
             authorization_method="qr",

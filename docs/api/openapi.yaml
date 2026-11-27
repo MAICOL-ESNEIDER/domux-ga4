@@ -2654,6 +2654,9 @@ paths:
                 dataProcessingConsent:
                   type: boolean
                   description: Obligatorio y verdadero al pasar a ser residente
+                contactVerified:
+                  type: boolean
+                  description: Verdadero cuando la administración revisó el correo o el teléfono que cambió el residente
       responses:
         '200':
           description: Cuenta actualizada
@@ -2859,6 +2862,7 @@ paths:
           - asamblea
           - seguridad
           - zonas_comunes
+          - otra
         description: Solo los de esa categoría
       - name: towerId
         in: query
@@ -2967,6 +2971,11 @@ paths:
                   - asamblea
                   - seguridad
                   - zonas_comunes
+                  - otra
+                categoryLabel:
+                  type: string
+                  description: Con la categoría «otra», el nombre del tipo (de 3 a 40 letras)
+                  maxLength: 40
                 towerId:
                   type: integer
                   description: Torre a la que va; sin torre es para toda la unidad
@@ -3973,6 +3982,8 @@ paths:
           - cookies
           - responsable
           - licencias-terceros
+          - compromiso-porteria
+          - compromiso-administracion
       responses:
         '200':
           description: El documento con su texto
@@ -5355,6 +5366,9 @@ paths:
                   type: string
                   description: Texto de máximo 500 caracteres
                   maxLength: 500
+                currentPassword:
+                  type: string
+                  description: La contraseña actual; obligatoria si cambia el correo o el teléfono
               additionalProperties: false
       responses:
         '200':
@@ -6873,6 +6887,9 @@ paths:
                 dataProcessingConsent:
                   type: boolean
                   description: Obligatorio y verdadero al pasar a ser residente
+                contactVerified:
+                  type: boolean
+                  description: Verdadero cuando la administración revisó el correo o el teléfono que cambió el residente
       responses:
         '200':
           description: Cuenta actualizada
@@ -7644,6 +7661,19 @@ paths:
                     type: string
                     maxLength: 120
                   description: Nombres de los visitantes esperados (sin repetir)
+                visitors:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                    - name
+                    properties:
+                      name:
+                        type: string
+                      document:
+                        type: string
+                        nullable: true
+                  description: Cada persona con nombre y apellido y su documento (los dos obligatorios y revisados). Si viene, reemplaza a visitorNames
       responses:
         '201':
           description: Código QR creado
@@ -7741,6 +7771,19 @@ paths:
                     items:
                       type: string
                     description: Nombres esperados que todavía no han entrado
+                  pendingVisitors:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - name
+                      properties:
+                        name:
+                          type: string
+                        document:
+                          type: string
+                          nullable: true
+                    description: Los mismos, con el documento que anotó el residente
                   residentName:
                     type: string
                   apartment:
@@ -8312,6 +8355,8 @@ components:
           - cookies
           - responsable
           - licencias-terceros
+          - compromiso-porteria
+          - compromiso-administracion
         title:
           type: string
           description: Título del documento
@@ -8335,6 +8380,15 @@ components:
           description: Día desde el que rige el texto, AAAA-MM-DD; nulo mientras está pendiente
           nullable: true
           example: '2026-12-01'
+        audience:
+          type: array
+          description: Roles a los que va dirigido (la app muestra a cada uno los suyos)
+          items:
+            type: string
+            enum:
+            - RESIDENT
+            - GUARD
+            - ADMIN
           format: date
     LegalBlock:
       type: object
@@ -8391,6 +8445,8 @@ components:
           - cookies
           - responsable
           - licencias-terceros
+          - compromiso-porteria
+          - compromiso-administracion
         title:
           type: string
           description: Título del documento
@@ -8414,6 +8470,15 @@ components:
           description: Día desde el que rige el texto, AAAA-MM-DD; nulo mientras está pendiente
           nullable: true
           example: '2026-12-01'
+        audience:
+          type: array
+          description: Roles a los que va dirigido (la app muestra a cada uno los suyos)
+          items:
+            type: string
+            enum:
+            - RESIDENT
+            - GUARD
+            - ADMIN
           format: date
         blocks:
           type: array
@@ -8508,6 +8573,9 @@ components:
         socialNetworks:
           type: string
           description: Redes sociales (texto libre, máximo 500 caracteres)
+        contactPendingVerification:
+          type: boolean
+          description: Cambió su correo o teléfono y la administración todavía no lo verificó
         birthDate:
           type: string
           description: Fecha de nacimiento, AAAA-MM-DD
@@ -9435,6 +9503,7 @@ components:
           - asamblea
           - seguridad
           - zonas_comunes
+          - otra
         categoryLabel:
           type: string
           description: Nombre de la categoría para mostrar
@@ -10808,6 +10877,19 @@ components:
           items:
             type: string
           description: Nombres que el residente anotó
+        visitors:
+          type: array
+          items:
+            type: object
+            required:
+            - name
+            properties:
+              name:
+                type: string
+              document:
+                type: string
+                nullable: true
+          description: Visitantes con el documento que anotó el residente
         registeredPeople:
           type: integer
         remainingPeople:

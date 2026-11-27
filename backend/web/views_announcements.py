@@ -40,7 +40,7 @@ EMPTY_TEXTS = {
 }
 
 #: Los campos de texto del formulario de un comunicado nuevo.
-FORM_FIELDS = ("title", "message", "category", "towerId", "expiresAt", "eventDate", "eventTime")
+FORM_FIELDS = ("title", "message", "category", "categoryLabel", "towerId", "expiresAt", "eventDate", "eventTime")
 
 
 # --- Lo que se pide en la URL -------------------------------------------------------------------
@@ -180,6 +180,7 @@ def announcement_new():
         return _new_page(towers, values, 400)
     body = compact({
         "title": values["title"], "message": values["message"], "category": values["category"],
+        "categoryLabel": values["categoryLabel"] if values["category"] == "otra" else None,
         "towerId": number("towerId"), "expiresAt": values["expiresAt"], "eventDate": values["eventDate"],
         "eventTime": values["eventTime"],
     })
