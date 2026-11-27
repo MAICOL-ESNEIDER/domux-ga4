@@ -535,6 +535,7 @@ fun DomuxScreenScaffold(
             add("Anuncios" to "announcements")
             add("Notificaciones" to "notifications")
             if (Session.isAdmin) {
+                add("Mi perfil" to "profile")
                 add("PQRS" to "pqrs")
                 add("Reservas" to "reservations")
                 add("Paquetería" to "registry?initialTab=0")
@@ -548,6 +549,7 @@ fun DomuxScreenScaffold(
                 add("Mis Paquetes" to "registry?initialTab=0")
                 add("Mis Visitas y QR" to "registry?initialTab=1")
             } else if (Session.isGuard) {
+                add("Mi perfil" to "profile")
                 add("Registrar Visitante" to "registry?initialTab=3")
                 add("Ver Visitas y QR" to "registry?initialTab=2")
                 add("Registrar Paquete" to "registry?initialTab=1")

@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
@@ -69,12 +70,18 @@ fun ResidentProfileScreen(navController: NavController) {
     var attemptedPasswordChange by remember { mutableStateOf(false) }
     var currentPasswordVisible by remember { mutableStateOf(false) }
     var newPasswordVisible by remember { mutableStateOf(false) }
+    var confirmPassword by remember { mutableStateOf("") }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     var message by remember { mutableStateOf("") }
     var messageIsError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun loadProfile() {
+        if (!Session.isResident) {
+            loading = false
+            return
+        }
         loading = true
         try {
             val response = RetrofitClient.api.getProfile(Session.bearer())
@@ -104,85 +111,110 @@ fun ResidentProfileScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             DomuxFeedbackBanner(message, isError = messageIsError) { message = "" }
-            if (loading) CircularProgressIndicator()
-            user?.let { profile ->
-            DomuxCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(profile.fullName ?: profile.name, style = MaterialTheme.typography.titleMedium)
-                    Text("Documento: ${profile.documentId.orEmpty()}")
-                    Text("Apartamento: ${profile.apartment ?: "Sin asignar"}")
-                    Text("Tipo de residente: ${profile.occupancyType?.toDomuxDisplayLabel() ?: "—"}")
-                    Text("Rol: ${profile.role.toDomuxDisplayLabel()}")
-                    profile.recoveryEmail?.takeIf { it.isNotBlank() }?.let {
-                        Text("Correo de recuperación: $it")
+            if (loading) {
+                CircularProgressIndicator()
+            } else if (!Session.isResident) {
+                DomuxCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(Session.userName ?: "Usuario", style = MaterialTheme.typography.titleLarge)
+                        Text(Session.email.orEmpty(), color = Color(0xFF94A3B8))
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                if (Session.isAdmin) "Administrador" else "Guardia de seguridad",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+                Text("Nota: La información de tu cuenta administrativa y permisos de sistema deben ser gestionados por otro administrador.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF94A3B8))
+            } else {
+                user?.let { profile ->
+                    DomuxCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(profile.fullName ?: profile.name, style = MaterialTheme.typography.titleMedium)
+                            Text("Documento: ${profile.documentId.orEmpty()}")
+                            Text("Apartamento: ${profile.apartment ?: "Sin asignar"}")
+                            Text("Tipo de residente: ${profile.occupancyType?.toDomuxDisplayLabel() ?: "—"}")
+                            Text("Rol: ${profile.role.toDomuxDisplayLabel()}")
+                            profile.recoveryEmail?.takeIf { it.isNotBlank() }?.let {
+                                Text("Correo de recuperación: $it")
+                            }
+                        }
+                    }
+                    Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(email, { email = it }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { input ->
+                            phone = input.filter { ch -> ch.isDigit() }.take(10)
+                        },
+                        label = { Text("Teléfono") },
+                        isError = phone.isNotEmpty() && phone.length != 10,
+                        supportingText = { Text("10 dígitos (ej. 3001234567)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        socialNetworks, { socialNetworks = it }, label = { Text("Redes sociales (opcional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        enabled = !busy,
+                        onClick = {
+                            if (phone.length != 10) {
+                                message = "El teléfono debe tener exactamente 10 dígitos."
+                                messageIsError = true
+                                return@Button
+                            }
+                            busy = true
+                            message = ""
+                            scope.launch {
+                                try {
+                                    val response = RetrofitClient.api.updateProfile(
+                                        Session.bearer(),
+                                        ResidentProfileUpdateRequest(
+                                            phone = phone,
+                                            email = email,
+                                            socialNetworks = socialNetworks
+                                        )
+                                    )
+                                    if (response.isSuccessful) {
+                                        user = response.body()?.user
+                                        message = "Tus datos fueron actualizados exitosamente."
+                                        messageIsError = false
+                                    } else {
+                                        message = mensajeDeError(response.code(), response.errorBody()?.string())
+                                        messageIsError = true
+                                    }
+                                } catch (exception: Exception) {
+                                    if (exception is CancellationException) throw exception
+                                    message = "No se pudo guardar el perfil: ${exception.message}"
+                                    messageIsError = true
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (busy) "Guardando..." else "Guardar cambios") }
+
+                    Text(
+                        "Para cambiar apartamento, tipo de residente, parentesco, documento, mascotas o vehículos, " +
+                            "solicítalo a administración mediante una PQRS o en la oficina.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    TextButton(onClick = { navController.navigate("pqrs") }) {
+                        Text("Crear PQRS para solicitar un cambio")
                     }
                 }
             }
-            Text("Datos que puedes actualizar", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(email, { email = it }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { input ->
-                    phone = input.filter { ch -> ch.isDigit() }.take(10)
-                },
-                label = { Text("Teléfono") },
-                isError = phone.isNotEmpty() && phone.length != 10,
-                supportingText = { Text("10 dígitos (ej. 3001234567)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                socialNetworks, { socialNetworks = it }, label = { Text("Redes sociales (opcional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Button(
-                enabled = !busy,
-                onClick = {
-                    if (phone.length != 10) {
-                        message = "El teléfono debe tener exactamente 10 dígitos."
-                        return@Button
-                    }
-                    busy = true
-                    message = ""
-                    scope.launch {
-                        try {
-                            val response = RetrofitClient.api.updateProfile(
-                                Session.bearer(),
-                                ResidentProfileUpdateRequest(
-                                    phone = phone,
-                                    email = email,
-                                    socialNetworks = socialNetworks
-                                )
-                            )
-                            if (response.isSuccessful) {
-                                user = response.body()?.user
-                                message = "Tus datos fueron actualizados exitosamente."
-                                messageIsError = false
-                            } else {
-                                message = mensajeDeError(response.code(), response.errorBody()?.string())
-                                messageIsError = true
-                            }
-                        } catch (exception: Exception) {
-                            if (exception is CancellationException) throw exception
-                            message = "No se pudo guardar el perfil: ${exception.message}"
-                            messageIsError = true
-                        } finally {
-                            busy = false
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(if (busy) "Guardando..." else "Guardar cambios") }
 
-            Text(
-                "Para cambiar apartamento, tipo de residente, parentesco, documento, mascotas o vehículos, " +
-                    "solicítalo a administración mediante una PQRS o en la oficina.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            TextButton(onClick = { navController.navigate("pqrs") }) {
-                Text("Crear PQRS para solicitar un cambio")
-            }
             DomuxCard(Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(16.dp),
@@ -224,12 +256,34 @@ fun ResidentProfileScreen(navController: NavController) {
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it },
+                        label = { Text("Confirmar nueva contraseña") },
+                        isError = attemptedPasswordChange && confirmPassword != newPassword,
+                        singleLine = true,
+                        visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        trailingIcon = {
+                            val image = if (confirmPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
+                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                Icon(image, "Toggle password visibility")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Button(
                         enabled = !passwordBusy,
                         onClick = {
                             attemptedPasswordChange = true
                             if (currentPassword.isBlank() || !validStrongPassword(newPassword)) {
                                 message = "Revisa la contraseña actual y los requisitos de la nueva contraseña."
+                                messageIsError = true
+                                return@Button
+                            }
+                            if (confirmPassword != newPassword) {
+                                message = "Las contraseñas no coinciden."
+                                messageIsError = true
                                 return@Button
                             }
                             passwordBusy = true
@@ -250,6 +304,7 @@ fun ResidentProfileScreen(navController: NavController) {
                                         messageIsError = false
                                         currentPassword = ""
                                         newPassword = ""
+                                        confirmPassword = ""
                                         attemptedPasswordChange = false
                                     } else {
                                         message = mensajeDeError(response.code(), response.errorBody()?.string())
@@ -270,8 +325,9 @@ fun ResidentProfileScreen(navController: NavController) {
                     }
                 }
             }
-        }
-            unit?.let { profile ->
+
+            if (Session.isResident) {
+                unit?.let { profile ->
             Text("Información del hogar", style = MaterialTheme.typography.titleLarge)
             profile.residents.forEach { resident ->
                 Text(
@@ -329,6 +385,7 @@ fun ResidentProfileScreen(navController: NavController) {
                         }
                     }
                 }
+            }
             }
         }
             Spacer(Modifier.height(6.dp))

@@ -134,6 +134,7 @@ fun HomeScreen(navController: NavController) {
     val modules = buildList {
         add(HomeModule("Anuncios", "Comunicados", Icons.Rounded.Campaign, "announcements", Color(0xFFFFB300)))
         if (Session.isAdmin) {
+            add(HomeModule("Mi perfil", "Mis datos y cuenta", Icons.Rounded.HomeWork, "profile", Color(0xFF3B82F6)))
             add(HomeModule("PQRS", "Gestión de solicitudes", Icons.Rounded.Forum, "pqrs", Color(0xFF00E5FF)))
             add(HomeModule("Reservas", "Zonas comunes", Icons.Rounded.EventAvailable, "reservations", Color(0xFF10B981)))
             add(HomeModule("Paquetería", "Administrar paquetes", Icons.Rounded.Inventory2, "registry?initialTab=0", Color(0xFFA855F7)))
@@ -147,6 +148,7 @@ fun HomeScreen(navController: NavController) {
             add(HomeModule("Mis Paquetes", "Paquetes recibidos", Icons.Rounded.Inventory2, "registry?initialTab=0", Color(0xFFA855F7)))
             add(HomeModule("Mis Visitas y QR", "Mis registros", Icons.Rounded.Badge, "registry?initialTab=1", Color(0xFFA855F7)))
         } else if (Session.isGuard) {
+            add(HomeModule("Mi perfil", "Mis datos y cuenta", Icons.Rounded.HomeWork, "profile", Color(0xFF3B82F6)))
             add(HomeModule("Registrar Visitante", "Visitas y portería", Icons.Rounded.Badge, "registry?initialTab=3", Color(0xFFFF6D00)))
             add(HomeModule("Ver Visitas y QR", "Visitas activas", Icons.Rounded.Badge, "registry?initialTab=2", Color(0xFFFF6D00)))
             add(HomeModule("Registrar Paquete", "Registrar en portería", Icons.Rounded.Inventory2, "registry?initialTab=1", Color(0xFFA855F7)))

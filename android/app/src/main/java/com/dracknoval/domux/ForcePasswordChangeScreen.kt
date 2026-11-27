@@ -186,7 +186,7 @@ fun ForcePasswordChangeScreen(navController: NavController) {
                     return@Button
                 }
                 if (confirmPassword != newPassword) {
-                    message = "Confirma correctamente tu nueva contraseña."
+                    message = "Las contraseñas no coinciden."
                     return@Button
                 }
                 if (normalizedRecoveryEmail.isNotEmpty() &&

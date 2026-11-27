@@ -125,6 +125,8 @@ fun CreateUserScreen(navController: NavController) {
     var phone by remember { mutableStateOf("") }
     var documentId by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var resetConfirmPassword by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("") }
     var apartment by remember { mutableStateOf("") }
     var occupancyType by remember { mutableStateOf("propietario") }
@@ -185,7 +187,7 @@ fun CreateUserScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DomuxSectionTabs(
-                listOf("Usuarios ($totalUsers)", "Crear usuario", "Migración de datos"),
+                listOf("Usuarios ($totalUsers)", "Crear usuario", "Migración"),
                 selectedTab
             ) { selectedTab = it }
             if (message.isNotBlank()) DomuxFeedbackBanner(message) { message = "" }
@@ -215,6 +217,7 @@ fun CreateUserScreen(navController: NavController) {
                 UserInput(phone, { phone = it }, "Teléfono", required = true, showMissingError = attemptedSubmit)
                 UserInput(documentId, { documentId = it }, "Documento", required = true, showMissingError = attemptedSubmit)
                 UserInput(password, { password = it }, "Contraseña temporal", required = true, password = true, showMissingError = attemptedSubmit)
+                UserInput(confirmPassword, { confirmPassword = it }, "Confirmar contraseña temporal", required = true, password = true, showMissingError = attemptedSubmit)
                 Text(
                     "Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.",
                     style = MaterialTheme.typography.bodySmall
@@ -279,6 +282,10 @@ fun CreateUserScreen(navController: NavController) {
                             message = "Completa todos los campos obligatorios y revisa la contraseña."
                             return@Button
                         }
+                        if (password != confirmPassword) {
+                            message = "Las contraseñas no coinciden."
+                            return@Button
+                        }
                         busy = true
                         message = ""
                         scope.launch {
@@ -297,6 +304,7 @@ fun CreateUserScreen(navController: NavController) {
                                 if (response.isSuccessful) {
                                     name = ""; lastName = ""; email = ""; phone = ""; documentId = ""
                                     password = ""; apartment = ""
+                                    confirmPassword = ""
                                     consentConfirmed = false
                                     birthDate = ""
                                     parentalConsent = false
@@ -464,17 +472,22 @@ fun CreateUserScreen(navController: NavController) {
                                     "Tenencia: ${occupancyOptions.firstOrNull { it.first == user.occupancyType }?.second ?: "—"} · " +
                                         if (user.isActive) "Activo" else "Inactivo"
                                 )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                                androidx.compose.foundation.layout.FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     if (user.id == Session.userId || user.email == Session.email) {
-                                        Text("Tu cuenta (gestionar en Mi Perfil)", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF10B981))
+                                        TextButton(onClick = { navController.navigate("profile") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                                            Text("Tu cuenta (gestionar en Mi Perfil)", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF10B981))
+                                        }
                                     } else {
                                         TextButton(onClick = { editUser = user }) { Text("Editar") }
                                         OutlinedButton(onClick = {
                                             resetUser = user
                                             resetPassword = ""
+                                            resetConfirmPassword = ""
                                         }) { Text("Asignar nueva clave") }
                                     }
                                     if (user.role == "RESIDENT" && !user.apartment.isNullOrBlank()) {
@@ -653,6 +666,10 @@ fun CreateUserScreen(navController: NavController) {
                         resetPassword, { resetPassword = it }, "Nueva contraseña", true,
                         password = true, showMissingError = attemptedReset
                     )
+                    UserInput(
+                        resetConfirmPassword, { resetConfirmPassword = it }, "Confirmar contraseña", true,
+                        password = true, showMissingError = attemptedReset
+                    )
                     Text("Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.", style = MaterialTheme.typography.bodySmall)
                 }
             },
@@ -661,6 +678,10 @@ fun CreateUserScreen(navController: NavController) {
                     attemptedReset = true
                     if (!validStrongPassword(resetPassword)) {
                         message = "La contraseña no cumple los requisitos."
+                        return@TextButton
+                    }
+                    if (resetPassword != resetConfirmPassword) {
+                        message = "Las contraseñas no coinciden."
                         return@TextButton
                     }
                     pendingPasswordReset = user.id to resetPassword
