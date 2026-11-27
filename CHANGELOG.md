@@ -18,6 +18,10 @@ administración.
 
 ### Añadido
 
+**Avisos al celular activados**
+- Firebase quedó configurado: la APK ya se arma con los avisos al celular y el servidor puede mandarlos.
+- La APK publicada también se actualiza cuando se lanza la revisión a mano desde GitHub («Run workflow»).
+
 **Zonas completas en la app, verificar contacto y vehículo en el QR**
 - App de administración: en «Datos de la unidad y zonas» ya se crean y retiran zonas y se cambian todas sus reglas (nombre, horario, duración de la franja, aforo, anticipación, plazo para cancelar, reservas por semana, franjas seguidas, día de mantenimiento y día completo).
 - App de administración: en Usuarios aparece «pendiente de verificar» y el botón «Ya lo verifiqué» cuando un residente cambió su correo o teléfono.
