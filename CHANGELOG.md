@@ -209,6 +209,8 @@ administración.
 - Se quitó el plan funerario de las mascotas (DEF-013).
 
 ### Seguridad
+
+- La API ahora manda las cabeceras `X-Content-Type-Options: nosniff` y `Cache-Control: no-store` (y HSTS en producción), como ya hacía la web.
 - La cuenta se bloquea 15 minutos tras 5 intentos fallidos (HU-006, SEC-001 y SEC-011).
 - Contraseña temporal: cuando la administración crea una cuenta o restablece una contraseña, la
   persona debe cambiarla en su primer ingreso, y al cambiarla se cierran las sesiones que habían
