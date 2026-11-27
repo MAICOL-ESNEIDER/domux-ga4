@@ -90,6 +90,10 @@ def apartment_label(tower_name, code):
     return f"{tower_name}{APARTMENT_LABEL_SEPARATOR}{code}"
 
 
+
+#: Lo que se muestra en lugar del apartamento en una visita o un paquete de la unidad.
+UNIT_PLACE_LABEL = "Administración (zonas comunes)"
+
 class RetirableMixin:
     """Retiro lógico (DEC-090 y ADR-013): la fila nunca se borra, se marca.
 
@@ -433,6 +437,8 @@ class ParkingSpot(RetirableMixin, db.Model):
         index=True,
     )
     occupied = db.Column(db.Boolean, nullable=False, default=False, server_default=false())
+    # Parqueadero de carro que se usa para motos: caben varias (regla «motos por cupo de carro»).
+    for_motos = db.Column(db.Boolean, nullable=False, default=False, server_default=false())
 
     apartment = db.relationship("Apartment", back_populates="parking_spots", lazy="joined")
 
@@ -445,6 +451,7 @@ class ParkingSpot(RetirableMixin, db.Model):
             "apartmentId": self.apartment_id,
             "apartment": self.apartment.label if self.apartment else None,
             "isOccupied": bool(self.occupied),
+            "forMotos": bool(self.for_motos),
         }
 
 
@@ -1404,6 +1411,8 @@ class PackageItem(db.Model):
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     deleted_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    # Paquete de la unidad (repuestos, materiales, plantas, herramientas): lo registra la administración.
+    for_unit = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
 
     resident = db.relationship("User", foreign_keys=[resident_id])
     guard = db.relationship("User", foreign_keys=[registered_by])
@@ -1449,8 +1458,9 @@ class PackageItem(db.Model):
             "deletedAt": _fmt(self.deleted_at),
             "deliveredTo": self.delivered_to,
             "deliveredByName": self.delivered_by.full_name if self.delivered_by else None,
+            "forUnit": bool(self.for_unit),
             "residentName": self.resident.full_name if self.resident else None,
-            "apartment": self.resident.apartment if self.resident else None,
+            "apartment": UNIT_PLACE_LABEL if self.for_unit else (self.resident.apartment if self.resident else None),
             "registeredByName": self.guard.full_name if self.guard else None,
         }
 
@@ -1547,6 +1557,11 @@ class Visit(db.Model):
     qr_pass_id = db.Column(db.Integer, db.ForeignKey("visit_qr_passes.id"), nullable=True, index=True)
     expected_stay_minutes = db.Column(db.Integer, nullable=True)
     overstay_alerted_at = db.Column(db.DateTime, nullable=True)
+    # Visita de la unidad: la administración espera a un técnico o contratista para las zonas comunes.
+    # Va a nombre de la cuenta de administración y ya llega autorizada.
+    for_unit = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
+    expected_date = db.Column(db.String(10), nullable=True)
+    expected_time = db.Column(db.String(5), nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now)
 
     resident = db.relationship("User", foreign_keys=[resident_id])
@@ -1594,9 +1609,12 @@ class Visit(db.Model):
             "insideMinutes": self.inside_minutes(),
             "isOverstay": self.is_overstay(),
             "createdAt": _fmt(self.created_at),
+            "forUnit": bool(self.for_unit),
+            "expectedDate": self.expected_date,
+            "expectedTime": self.expected_time,
             "events": [event.to_dict() for event in self.events],
             "residentName": self.resident.full_name if self.resident else None,
-            "apartment": self.resident.apartment if self.resident else None,
+            "apartment": UNIT_PLACE_LABEL if self.for_unit else (self.resident.apartment if self.resident else None),
             "registeredByName": self.guard.full_name if self.guard else None,
         }
 

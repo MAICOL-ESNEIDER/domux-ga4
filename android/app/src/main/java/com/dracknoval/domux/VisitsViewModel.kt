@@ -2,6 +2,7 @@ package com.dracknoval.domux
 
 import androidx.lifecycle.viewModelScope
 import com.dracknoval.domux.data.CreateVisitQrPassRequest
+import com.dracknoval.domux.data.ExpectedVisitRequest
 import com.dracknoval.domux.data.QrVisitorEntryRequest
 import com.dracknoval.domux.data.QrVisitorExitRequest
 import com.dracknoval.domux.data.RegisterVisitRequest
@@ -43,7 +44,9 @@ data class VisitsUiState(
     val activeQrPass: VisitQrPass? = null,
     // El QR que el guardia escaneó y lo que el servidor dijo de él.
     val scannedToken: String? = null,
-    val qrInspection: VisitQrInspectionResponse? = null
+    val qrInspection: VisitQrInspectionResponse? = null,
+    // Técnicos y contratistas que la administración espera para las zonas comunes.
+    val expected: List<Visit> = emptyList()
 )
 
 /**
@@ -81,7 +84,10 @@ class VisitsViewModel : DomuxViewModel() {
     // --- Historial con filtros (HU-030 y HU-032) ---------------------------------
 
     fun refresh() {
-        viewModelScope.launch { loadVisits(1) }
+        viewModelScope.launch {
+            loadVisits(1)
+            if (Session.isAdmin || Session.isGuard) loadExpected()
+        }
     }
 
     private suspend fun loadVisits(page: Int, append: Boolean = false) {
@@ -194,6 +200,33 @@ class VisitsViewModel : DomuxViewModel() {
         }
     }
 
+    private suspend fun loadExpected() {
+        val response = attempt("No se pudieron cargar los técnicos esperados") { api.getExpectedUnitVisits(auth()) } ?: return
+        _state.update { it.copy(expected = response.body()?.visits.orEmpty()) }
+    }
+
+    /** La administración anuncia un técnico o contratista para las zonas comunes. */
+    fun registerExpected(request: ExpectedVisitRequest, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            withBusy {
+                attempt("No se pudo anunciar la visita") { api.registerExpectedUnitVisit(auth(), request) }
+            } ?: return@launch
+            showSuccess("Listo: la portería ya sabe que llega ${request.visitorName}.")
+            onSuccess()
+            loadExpected()
+        }
+    }
+
+    fun cancelExpected(visit: Visit) {
+        viewModelScope.launch {
+            withBusy {
+                attempt("No se pudo cancelar") { api.cancelExpectedUnitVisit(auth(), visit.id) }
+            } ?: return@launch
+            showSuccess("Visita esperada cancelada.")
+            loadExpected()
+        }
+    }
+
     fun authorizeByCall(visit: Visit) {
         viewModelScope.launch {
             withBusy {
@@ -215,6 +248,7 @@ class VisitsViewModel : DomuxViewModel() {
             showSuccess("Entrada registrada.")
             onSuccess()
             loadVisits(1)
+            if (visit.forUnit) loadExpected()
         }
     }
 

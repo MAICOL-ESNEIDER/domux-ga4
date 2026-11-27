@@ -202,7 +202,7 @@ class SecurityWorkflowTests(unittest.TestCase):
     def test_package_registration_status_trash_and_restore_never_delete(self):
         registration = self.client.post(
             "/api/packages",
-            headers=self.auth(self.admin),
+            headers=self.auth(self.guard),
             json={
                 "residentId": self.resident.id,
                 "description": "Caja especial",

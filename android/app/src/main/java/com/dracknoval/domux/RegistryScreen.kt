@@ -64,6 +64,7 @@ fun RegistryScreen(
                 "registrar-paquete" -> if (Session.isResident) 0 else 1
                 "registrar-visita" -> if (Session.isGuard) 3 else 0
                 "escanear" -> if (Session.isGuard) 4 else 0
+                "esperados" -> if (Session.isResident) 0 else 5
                 else -> 0
             }
         )
@@ -122,15 +123,17 @@ fun RegistryScreen(
     val allTabs = when {
         Session.isResident -> listOf("Mis paquetes", "Mis visitas", "Código QR")
         Session.isGuard -> listOf(
-            "Paquetes", "Registrar paquete", "Visitas", "Registrar visita", "Ingreso por QR"
+            "Paquetes", "Registrar paquete", "Visitas", "Registrar visita", "Ingreso por QR", "Esperados"
         )
-        // La administración consulta las visitas, pero no las registra (ADR-015).
-        else -> listOf("Paquetes", "Registrar paquete", "Visitas")
+        // La administración consulta las visitas de los residentes, pero no las registra (ADR-015):
+        // solo anuncia técnicos y contratistas para las zonas comunes y los paquetes de la unidad.
+        else -> listOf("Paquetes", "Paquete para la unidad", "Visitas", "", "", "Técnicos esperados")
     }
     // Las pestañas que se ven (su número en allTabs): el guardia solo ve las de la sección abierta.
     val visibleTabs = when {
         Session.isGuard && guardOnPackages -> listOf(0, 1)
-        Session.isGuard -> listOf(2, 3, 4)
+        Session.isGuard -> listOf(2, 3, 4, 5)
+        Session.isAdmin -> listOf(0, 1, 2, 5)
         else -> allTabs.indices.toList()
     }
     val title = when {
@@ -214,7 +217,23 @@ fun RegistryScreen(
                     busy = packages.busy,
                     onMessage = { packagesVm.showNotice(it) },
                     onRegister = { request, onSuccess -> packagesVm.register(request, onSuccess) },
-                    onRegistered = { selectedTab = 0 }
+                    onRegistered = { selectedTab = 0 },
+                    forUnit = Session.isAdmin
+                )
+
+                canRegister && tab == 5 -> ExpectedVisitsSection(
+                    modifier = Modifier.weight(1f),
+                    expected = visits.expected,
+                    busy = visits.busy,
+                    isAdmin = Session.isAdmin,
+                    onMessage = { visitsVm.showNotice(it) },
+                    onRegister = { request, onSuccess -> visitsVm.registerExpected(request, onSuccess) },
+                    onCancel = { visit ->
+                        confirmation = "¿Cancelar la visita de ${visit.visitorName}? La portería dejará de esperarla." to {
+                            visitsVm.cancelExpected(visit)
+                        }
+                    },
+                    onEntry = { pendingEntry = it }
                 )
 
                 canRegister && tab == 2 -> VisitListSection(

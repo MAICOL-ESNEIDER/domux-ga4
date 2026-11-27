@@ -1,0 +1,74 @@
+{% extends "web/base.html" %}
+{% from "web/_macros.html" import registry_tabs %}
+{% from "web/_forms.html" import field, textarea %}
+{% set page_title = "Esperados por la administración" %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Esperados por la administración</h1>
+    <p>Anuncia con anticipación a los técnicos o contratistas que vienen a trabajar en las zonas comunes y los paquetes de la unidad (repuestos, materiales, plantas, herramientas). La portería los ve como esperados. Las visitas y los paquetes de los residentes los registra la portería.</p>
+  </div>
+</div>
+
+{{ registry_tabs("esperados") }}
+
+<div class="grid grid-2">
+<form method="post" action="{{ url_for('web.registry_expected_visit_new') }}" class="card" aria-label="Anunciar un técnico o contratista">
+  {{ csrf_input() }}
+  <h2>Técnico o contratista</h2>
+  {{ field("visitorName", "Persona o empresa", values.visitorName, required=True, maxlength=120) }}
+  {{ textarea("description", "Trabajo que va a hacer", values.description, required=True, rows=3,
+              help="Ejemplo: mantenimiento del ascensor de la Torre 1.") }}
+  {{ field("visitorDocument", "Documento (opcional)", values.visitorDocument, maxlength=40) }}
+  {{ field("expectedDate", "Día en que llega", values.expectedDate, type="date", required=True, extra={"min": today}) }}
+  {{ field("expectedTime", "Hora aproximada (opcional)", values.expectedTime, type="time") }}
+  <div class="form-actions"><button type="submit" class="btn">Avisar a la portería</button></div>
+</form>
+
+<form method="post" action="{{ url_for('web.registry_expected_package_new') }}" class="card" aria-label="Anunciar un paquete de la unidad">
+  {{ csrf_input() }}
+  <h2>Paquete de la unidad</h2>
+  {{ field("description", "Qué llega", values.description, required=True, maxlength=200,
+           help="Ejemplo: repuestos de la bomba de agua, plantas para el jardín.") }}
+  {{ field("carrier", "Transportadora (opcional)", values.carrier, maxlength=60) }}
+  {{ field("trackingNumber", "Número de guía (opcional)", values.trackingNumber, maxlength=60) }}
+  {{ field("eventDate", "Día en que llega (opcional)", values.eventDate, type="date", extra={"min": today}) }}
+  {{ field("eventTime", "Hora aproximada (opcional)", values.eventTime, type="time") }}
+  <div class="form-actions"><button type="submit" class="btn">Avisar a la portería</button></div>
+</form>
+</div>
+
+<section class="card" aria-label="Técnicos esperados">
+  <h2>Técnicos y contratistas esperados ({{ visits|length }})</h2>
+  {% if visits %}
+  <ul class="list">
+    {% for visit in visits %}
+    <li>
+      <strong>{{ visit.visitorName }}</strong> — {{ visit.description }}<br>
+      <span class="muted">Llega el {{ visit.expectedDate }}{% if visit.expectedTime %} a las {{ visit.expectedTime }}{% endif %}</span>
+      <form method="post" action="{{ url_for('web.registry_expected_visit_cancel', visit_id=visit.id) }}" class="inline">
+        {{ csrf_input() }}
+        <button type="submit" class="btn btn-quiet">Cancelar</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No hay técnicos ni contratistas esperados.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-label="Paquetes de la unidad por llegar">
+  <h2>Paquetes de la unidad por llegar ({{ packages|length }})</h2>
+  {% if packages %}
+  <ul class="list">
+    {% for item in packages %}
+    <li><strong>{{ item.description }}</strong>{% if item.carrier %} · {{ item.carrier }}{% endif %}{% if item.eventDate %} · llega el {{ item.eventDate }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No hay paquetes de la unidad por llegar.</p>
+  {% endif %}
+</section>
+{% endblock %}

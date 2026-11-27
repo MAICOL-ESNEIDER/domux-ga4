@@ -84,8 +84,13 @@ class RolePermissionTests(unittest.TestCase):
                 self.assertEqual(self.call(self.admin, method, path, body).status_code, 403)
 
     def test_administration_keeps_packages_and_visit_history(self):
-        registered = self.call(self.admin, "POST", "/api/packages", {
+        # La administración no registra paquetes de residentes (eso es de la portería), solo los de la unidad.
+        refused = self.call(self.admin, "POST", "/api/packages", {
             "residentId": self.resident.id, "description": "Caja", "status": "pendiente",
+        })
+        self.assertEqual(refused.status_code, 403)
+        registered = self.call(self.admin, "POST", "/api/packages", {
+            "description": "Repuestos del ascensor", "status": "pendiente",
         })
         self.assertEqual(registered.status_code, 201)
         package_id = registered.get_json()["packageItem"]["id"]

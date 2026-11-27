@@ -507,11 +507,14 @@ data class PackageItem(
     val hoursWaiting: Int? = null,
     val claimAlert: String? = null,
     // El residente ya generó un código de entrega que sigue vigente (HU-048).
-    val hasPickupCode: Boolean = false
+    val hasPickupCode: Boolean = false,
+    // Paquete de la unidad: lo espera la administración, no un residente.
+    val forUnit: Boolean = false
 )
 data class PackagesListResponse(val packages: List<PackageItem>?, val total: Int = 0)
 data class RegisterPackageRequest(
-    val residentId: Int,
+    // Vacío cuando la administración registra un paquete de la unidad (repuestos, materiales, plantas...).
+    val residentId: Int?,
     val description: String?,
     val mediaUrl: String? = null,
     val mediaType: String? = null,
@@ -562,8 +565,21 @@ data class Visit(
     // Estadía que el guardia anotó (en minutos), cuánto lleva adentro y si ya se pasó (HU-031).
     val expectedStayMinutes: Int? = null,
     val insideMinutes: Int? = null,
-    val isOverstay: Boolean = false
+    val isOverstay: Boolean = false,
+    // Visita de la unidad: un técnico o contratista que la administración espera para las zonas comunes.
+    val forUnit: Boolean = false,
+    val expectedDate: String? = null,
+    val expectedTime: String? = null
 )
+/** Lo que la administración envía para anunciar a un técnico o contratista. */
+data class ExpectedVisitRequest(
+    val visitorName: String,
+    val description: String,
+    val expectedDate: String,
+    val expectedTime: String? = null,
+    val visitorDocument: String? = null
+)
+data class ExpectedVisitsResponse(val visits: List<Visit>?)
 data class VisitsListResponse(
     val visits: List<Visit>?,
     val page: Int = 1,

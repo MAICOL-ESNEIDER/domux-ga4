@@ -414,13 +414,15 @@ fun PackageRegistrationSection(
     busy: Boolean,
     onMessage: (String) -> Unit,
     onRegister: (request: RegisterPackageRequest, onSuccess: () -> Unit) -> Unit,
-    onRegistered: () -> Unit
+    onRegistered: () -> Unit,
+    // La administración solo registra paquetes de la unidad: sin residente y, casi siempre, «por llegar».
+    forUnit: Boolean = false
 ) {
     var resident by remember { mutableStateOf<ResidentSummary?>(null) }
     var description by rememberSaveable { mutableStateOf("") }
     var carrier by rememberSaveable { mutableStateOf("") }
     var tracking by rememberSaveable { mutableStateOf("") }
-    var status by rememberSaveable { mutableStateOf("pendiente") }
+    var status by rememberSaveable { mutableStateOf(if (forUnit) "por_llegar" else "pendiente") }
     var date by rememberSaveable { mutableStateOf("") }
     var time by rememberSaveable { mutableStateOf("") }
     var mediaUrl by remember { mutableStateOf<String?>(null) }
@@ -438,8 +440,17 @@ fun PackageRegistrationSection(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Registrar paquete", style = MaterialTheme.typography.titleMedium)
-                DomuxResidentSearchField(resident, { resident = it })
+                if (forUnit) {
+                    Text("Paquete para la unidad", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Repuestos, materiales, plantas, herramientas u otras cosas para las zonas comunes. " +
+                            "La portería lo verá como esperado y lo recibirá. Los paquetes de los residentes los registra la portería.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    Text("Registrar paquete", style = MaterialTheme.typography.titleMedium)
+                    DomuxResidentSearchField(resident, { resident = it })
+                }
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
@@ -506,8 +517,10 @@ fun PackageRegistrationSection(
                 Button(
                     onClick = {
                         attempted = true
-                        if (resident == null || description.isBlank()) {
-                            onMessage("Selecciona residente y escribe la descripción del paquete.")
+                        if ((!forUnit && resident == null) || description.isBlank()) {
+                            onMessage(
+                                if (forUnit) "Escribe qué es lo que llega." else "Selecciona residente y escribe la descripción del paquete."
+                            )
                         } else {
                             confirming = true
                         }
@@ -526,9 +539,10 @@ fun PackageRegistrationSection(
             confirmLabel = "Confirmar",
             onConfirm = {
                 confirming = false
-                resident?.let { target ->
+                val target = resident
+                if (forUnit || target != null) {
                     val request = RegisterPackageRequest(
-                        residentId = target.id,
+                        residentId = if (forUnit) null else target?.id,
                         description = description.trim(),
                         mediaUrl = mediaUrl,
                         mediaType = mediaType,

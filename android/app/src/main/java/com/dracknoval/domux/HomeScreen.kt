@@ -640,6 +640,22 @@ private fun GuardHome(state: HomeUiState, navController: NavController, onShift:
         )
     }
 
+    if (state.guardExpected.isNotEmpty()) {
+        SectionTitle("Esperados por la administración (${state.guardExpected.size})")
+        state.guardExpected.take(5).forEach { visit ->
+            TodoCard(
+                icon = R.drawable.ic_building,
+                title = visit.visitorName,
+                detail = listOfNotNull(
+                    visit.description,
+                    visit.expectedDate?.let { "llega el $it" },
+                    visit.expectedTime?.let { "a las $it" }
+                ).joinToString(" · "),
+                onClick = { navController.navigate("registry?tab=esperados") }
+            )
+        }
+    }
+
     SectionTitle("Dentro ahora (${state.guardInsideTotal})")
     if (!state.dashboardLoading && state.guardInside.isEmpty()) {
         Text("No hay visitas dentro de la unidad.", color = DomuxColor.TextMuted)

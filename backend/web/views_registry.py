@@ -20,6 +20,7 @@ from services import package_view, visit_view
 from web import bp
 from web.api import Api
 from web.exports import PACKAGE_COLUMNS, VEHICLE_COLUMNS, VISIT_COLUMNS, excel_download, filters_text
+from web.forms import compact, text
 from web.security import login_required
 from web.support import file_response
 
@@ -351,3 +352,60 @@ def registry_vehicles_excel():
         _vehicle_api_filters(filters), words, VEHICLE_COLUMNS,
         url_for("web.registry_vehicles", **_args(filters, VEHICLE_TABS)),
     )
+
+
+# --- Esperados por la administración --------------------------------------------------------------
+#
+# Lo único que la administración registra en la portería: los técnicos y contratistas que vienen a
+# trabajar en las zonas comunes y los paquetes de la unidad (repuestos, materiales, plantas,
+# herramientas). Los anuncia con anticipación y la portería los ve como esperados.
+
+def _expected_page(values=None, status=200):
+    api = Api(g.web_user)
+    result = api.get("/api/visits/expected")
+    if not result.ok:
+        flash(result.error, "error")
+    packages = api.get("/api/packages", status="por_llegar")
+    unit_packages = [item for item in packages.get("packages", []) if item.get("forUnit")] if packages.ok else []
+    return render_template(
+        "web/registry_expected.html", visits=result.get("visits", []), packages=unit_packages,
+        values=values or {}, today=date.today().isoformat(),
+    ), status
+
+
+@bp.get("/esperados")
+@login_required
+def registry_expected():
+    return _expected_page()
+
+
+@bp.post("/esperados/tecnico")
+@login_required
+def registry_expected_visit_new():
+    values = {key: text(key) for key in ("visitorName", "description", "expectedDate", "expectedTime", "visitorDocument")}
+    result = Api(g.web_user).post("/api/visits/expected", compact(values))
+    if result.ok:
+        flash(f"Listo: la portería ya sabe que llega {values['visitorName']}.", "success")
+        return redirect(url_for("web.registry_expected"))
+    flash(result.error, "error")
+    return _expected_page(values, result.status)
+
+
+@bp.post("/esperados/tecnico/<int:visit_id>/cancelar")
+@login_required
+def registry_expected_visit_cancel(visit_id):
+    result = Api(g.web_user).put(f"/api/visits/expected/{visit_id}/cancel")
+    flash("Visita esperada cancelada." if result.ok else result.error, "success" if result.ok else "error")
+    return redirect(url_for("web.registry_expected"))
+
+
+@bp.post("/esperados/paquete")
+@login_required
+def registry_expected_package_new():
+    values = {key: text(key) for key in ("description", "carrier", "trackingNumber", "eventDate", "eventTime")}
+    result = Api(g.web_user).post("/api/packages", {**compact(values), "status": "por_llegar"})
+    if result.ok:
+        flash("Paquete de la unidad anunciado. La portería lo verá como «Por llegar».", "success")
+        return redirect(url_for("web.registry_expected"))
+    flash(result.error, "error")
+    return _expected_page(values, result.status)
