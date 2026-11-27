@@ -99,6 +99,22 @@ class InteraccionesTest : BaseDeFotos() {
     }
 
     @Test
+    fun nuevo_del_residente_abre_el_menu_y_lleva_a_una_reserva_nueva() {
+        entrarComo(Roles.RESIDENTE)
+        abrir("home")
+        compose.onNodeWithContentDescription("Nuevo: crear algo").performClick()
+        compose.waitForIdle()
+        listOf("QR para una visita", "Reserva de zona común", "PQRS (petición, queja o reclamo)", "Ver mis paquetes").forEach {
+            opcionDelMenu(it).assertExists()
+        }
+        opcionDelMenu("Reserva de zona común").performClick()
+        compose.waitForIdle()
+        assertEquals("reservations?residentId={residentId}&tab={tab}", rutaActual())
+        assertEquals("nueva", argumentoActual("tab"))
+        sacarFoto("interaccion-06-nuevo-del-residente-abre-reserva")
+    }
+
+    @Test
     fun la_lupa_abre_el_buscador() {
         entrarComo(Roles.ADMINISTRACION)
         abrir("home")

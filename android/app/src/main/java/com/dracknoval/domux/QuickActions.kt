@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.dracknoval.domux.data.Session
@@ -83,7 +85,9 @@ fun RowScope.DomuxQuickActions(navController: NavController) {
         Button(
             onClick = { menuOpen = true },
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            modifier = Modifier.heightIn(min = 40.dp)
+            modifier = Modifier
+                .heightIn(min = 40.dp)
+                .semantics { contentDescription = "Nuevo: crear algo" }
         ) {
             Icon(painterResource(R.drawable.ic_add), contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
