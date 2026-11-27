@@ -624,7 +624,10 @@ fun DomuxScreenScaffold(
                                         if (currentRoute != destinationRoute ||
                                             (destinationTab != null && destinationTab != currentRegistryTab)
                                         ) {
-                                            navController.navigate(route) { launchSingleTop = true }
+                                            navController.navigate(route) { 
+                                                popUpTo("home") { inclusive = false; saveState = false }
+                                                launchSingleTop = true 
+                                            }
                                         }
                                         isNavigating = false
                                     }
@@ -691,13 +694,15 @@ fun DomuxScreenScaffold(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                if (showBackButton) {
+                                if (showBackButton && currentRoute != "home") {
                                     Surface(
                                         modifier = Modifier.size(40.dp),
                                         color = Color(0xFF091426),
                                         shape = CircleShape,
                                         border = BorderStroke(1.dp, Color(0xFF1E334D)),
-                                        onClick = { navController.popBackStack() }
+                                        onClick = { 
+                                            if (navController.previousBackStackEntry != null) navController.popBackStack() else navController.navigate("home") { launchSingleTop = true }
+                                        }
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Text("←", color = Color(0xFFF8FAFC), fontSize = 21.sp)

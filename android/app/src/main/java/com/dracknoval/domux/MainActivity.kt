@@ -85,7 +85,13 @@ class MainActivity : ComponentActivity() {
                         composable("force_password_change") {
                             ForcePasswordChangeScreen(navController)
                         }
-                        composable("home") { HomeScreen(navController) }
+                        composable("home") { 
+                            val activity = LocalContext.current as? ComponentActivity
+                            androidx.activity.compose.BackHandler {
+                                activity?.finish()
+                            }
+                            HomeScreen(navController) 
+                        }
                         composable("announcements") { AnnouncementsScreen(navController) }
                         composable(
                             "pqrs?residentId={residentId}",

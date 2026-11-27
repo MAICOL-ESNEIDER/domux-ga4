@@ -16,6 +16,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
@@ -192,22 +193,39 @@ private fun MediaAttachmentPickerFiltered(
         if (uri != null) {
             scope.launch {
                 try {
-                    val mimeType = context.contentResolver.getType(uri).orEmpty()
-                    val type = when {
-                        mimeType.startsWith("video/") -> "video"
-                        mimeType.startsWith("audio/") -> "audio"
-                        else -> "document"
-                    }
+                    val mimeType = context.contentResolver.getType(uri).orEmpty().lowercase()
                     val fileName = withContext(Dispatchers.IO) {
                         context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                             val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                             if (cursor.moveToFirst() && nameIndex >= 0) cursor.getString(nameIndex) else null
                         } ?: uri.lastPathSegment ?: "Archivo adjunto"
                     }
-                    val encoded = withContext(Dispatchers.IO) { readAsBase64(context, uri) }
-                    val dataUrl = "data:$mimeType;base64,$encoded"
-                    onAttachment(dataUrl, type, fileName)
-                } catch (exception: Exception) {
+                    val isImage = mimeType.startsWith("image/") || 
+                                  fileName.endsWith(".jpg", true) || 
+                                  fileName.endsWith(".jpeg", true) || 
+                                  fileName.endsWith(".png", true) || 
+                                  fileName.endsWith(".webp", true) || 
+                                  fileName.endsWith(".heic", true)
+                                  
+                    if (isImage) {
+                        val encoded = withContext(Dispatchers.IO) { processImageUriToCompressedBase64(context, uri) }
+                        if (encoded != null) {
+                            val finalMime = if (mimeType.isNotBlank()) mimeType else "image/jpeg"
+                            onAttachment("data:$finalMime;base64,$encoded", "image", fileName)
+                        } else {
+                            onError("No se pudo procesar la imagen.")
+                        }
+                    } else {
+                        val type = when {
+                            mimeType.startsWith("video/") -> "video"
+                            mimeType.startsWith("audio/") -> "audio"
+                            else -> "document"
+                        }
+                        val encoded = withContext(Dispatchers.IO) { readAsBase64(context, uri) }
+                        val dataUrl = "data:$mimeType;base64,$encoded"
+                        onAttachment(dataUrl, type, fileName)
+                    }
+                } catch (exception: Throwable) {
                     onError("No se pudo leer el archivo: ${exception.message}")
                 }
             }
@@ -218,13 +236,23 @@ private fun MediaAttachmentPickerFiltered(
         if (success && currentCameraUri != null) {
             scope.launch {
                 try {
-                    val encoded = withContext(Dispatchers.IO) { processImageUriToCompressedBase64(context, currentCameraUri!!) }
+                    val uri = currentCameraUri!!
+                    val fileExistsAndValid = withContext(Dispatchers.IO) {
+                        context.contentResolver.openFileDescriptor(uri, "r")?.use {
+                            it.statSize > 0
+                        } ?: false
+                    }
+                    if (!fileExistsAndValid) {
+                        onError("La foto capturada está vacía o no existe.")
+                        return@launch
+                    }
+                    val encoded = withContext(Dispatchers.IO) { processImageUriToCompressedBase64(context, uri) }
                     if (encoded != null) {
                         onAttachment("data:image/jpeg;base64,$encoded", "image", "foto_camara.jpg")
                     } else {
                         onError("No se pudo procesar la foto.")
                     }
-                } catch (exception: Exception) {
+                } catch (exception: Throwable) {
                     onError("Error al procesar la captura: ${exception.message}")
                 }
             }
@@ -316,24 +344,48 @@ private fun MediaAttachmentPickerFiltered(
 
 fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri): String? {
     try {
+        var width = 0
+        var height = 0
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { inputStream ->
             BitmapFactory.decodeStream(inputStream, null, options)
-        } ?: return null
-        
-        var scale = 1
-        while (options.outWidth / scale > 1280 || options.outHeight / scale > 1280) {
-            scale *= 2
+            width = options.outWidth
+            height = options.outHeight
         }
         
-        val decodeOptions = BitmapFactory.Options().apply { 
-            inSampleSize = scale 
-            inPreferredConfig = Bitmap.Config.RGB_565
+        var bitmap: Bitmap? = null
+        if (width <= 0 || height <= 0) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(context.contentResolver, uri)
+                bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    decoder.isMutableRequired = true
+                    var scale = 1
+                    while (info.size.width / scale > 1280 || info.size.height / scale > 1280) {
+                        scale *= 2
+                    }
+                    decoder.setTargetSize(info.size.width / scale, info.size.height / scale)
+                }
+            } else {
+                throw Exception("Formato de imagen no soportado o archivo corrupto.")
+            }
+        } else {
+            var scale = 1
+            while (width / scale > 1280 || height / scale > 1280) {
+                scale *= 2
+            }
+            
+            val decodeOptions = BitmapFactory.Options().apply { 
+                inSampleSize = scale 
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            
+            bitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream, null, decodeOptions)
+            } ?: throw Exception("No se pudo decodificar la imagen.")
         }
         
-        var bitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            BitmapFactory.decodeStream(inputStream, null, decodeOptions)
-        } ?: return null
+        var finalBitmap = bitmap ?: return null
         
         try {
             context.contentResolver.openInputStream(uri)?.use { exifStream ->
@@ -346,10 +398,10 @@ fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri
                     ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
                 }
                 if (!matrix.isIdentity) {
-                    val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                    if (rotated != bitmap) {
-                        bitmap.recycle()
-                        bitmap = rotated
+                    val rotated = Bitmap.createBitmap(finalBitmap, 0, 0, finalBitmap.width, finalBitmap.height, matrix, true)
+                    if (rotated !== finalBitmap) {
+                        finalBitmap.recycle()
+                        finalBitmap = rotated
                     }
                 }
             }
@@ -358,13 +410,19 @@ fun processImageUriToCompressedBase64(context: android.content.Context, uri: Uri
         }
         
         val outputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
-        bitmap.recycle()
-        
-        return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+        try {
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
+            if (outputStream.size() > 1_500_000) {
+                outputStream.reset()
+                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 60, outputStream)
+            }
+            return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+        } finally {
+            finalBitmap.recycle()
+        }
     } catch (e: OutOfMemoryError) {
         throw Exception("La imagen es demasiado grande para procesarla.")
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
         throw Exception("No se pudo leer la imagen: ${e.message}")
     }
 }
