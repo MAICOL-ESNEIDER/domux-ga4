@@ -44,6 +44,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -169,9 +171,10 @@ private fun MediaAttachmentPickerFiltered(
     onError: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     var showDialog by rememberSaveable { mutableStateOf(false) }
-    val currentCameraFilePath by rememberUpdatedState(PendingCameraCapture.filePath)
     
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) {
@@ -211,8 +214,7 @@ private fun MediaAttachmentPickerFiltered(
                     if (isImage) {
                         val encoded = withContext(Dispatchers.IO) { processImageUriToCompressedBase64(context, uri) }
                         if (encoded != null) {
-                            val finalMime = if (mimeType.isNotBlank()) mimeType else "image/jpeg"
-                            onAttachment("data:$finalMime;base64,$encoded", "image", fileName)
+                            onAttachment("data:image/jpeg;base64,$encoded", "image", fileName)
                         } else {
                             onError("No se pudo procesar la imagen.")
                         }
@@ -237,7 +239,7 @@ private fun MediaAttachmentPickerFiltered(
         if (success) {
             scope.launch {
                 try {
-                    val filePath = currentCameraFilePath
+                    val filePath = PendingCameraCapture.filePath
                     if (filePath == null) {
                         onError("Ruta de captura no encontrada.")
                         return@launch
@@ -258,6 +260,8 @@ private fun MediaAttachmentPickerFiltered(
                     }
                 } catch (exception: Throwable) {
                     onError("Error al procesar la captura: ${exception.message}")
+                } finally {
+                    PendingCameraCapture.filePath = null
                 }
             }
         }
@@ -276,7 +280,11 @@ private fun MediaAttachmentPickerFiltered(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
-            onClick = { showDialog = true },
+            onClick = {
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                showDialog = true 
+            },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
             Text(if (attachmentName == null) "Adjuntar foto, video o archivo" else "Cambiar adjunto")
@@ -311,6 +319,8 @@ private fun MediaAttachmentPickerFiltered(
                 
                 Button(
                     onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus(force = true)
                         showDialog = false
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                             val file = File(context.cacheDir, "camera_capture_${System.currentTimeMillis()}.jpg")
@@ -326,6 +336,8 @@ private fun MediaAttachmentPickerFiltered(
                 
                 Button(
                     onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus(force = true)
                         showDialog = false
                         galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                     },
@@ -334,6 +346,8 @@ private fun MediaAttachmentPickerFiltered(
                 
                 Button(
                     onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus(force = true)
                         showDialog = false
                         fileLauncher.launch(arrayOf(mimeTypeFilter ?: "*/*"))
                     },

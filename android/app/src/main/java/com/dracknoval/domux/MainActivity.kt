@@ -169,6 +169,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        try {
+            currentFocus?.clearFocus()
+        } catch (_: Exception) {
+            // Ignorar
+        }
+    }
+
     private fun navigateAfterAuthentication() {
         if (Session.mustChangePassword) {
             pendingNotificationRoute = null
