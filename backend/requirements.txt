@@ -13,3 +13,5 @@ firebase-admin==7.7.0
 openpyxl==3.1.5
 # Zonas horarias para la hora de Colombia en Windows, que no las trae (TT-031).
 tzdata==2026.6
+# Para la descarga directa de la app en /descargar (también la usa firebase-admin).
+requests==2.34.2

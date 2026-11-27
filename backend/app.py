@@ -2,7 +2,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request
+from flask import Flask, redirect, render_template, request, send_file
 from flask_cors import CORS
 from flask_migrate import stamp, upgrade
 from sqlalchemy import inspect
@@ -352,6 +352,22 @@ def create_app():
     def root():
         """La dirección principal del servidor es la página de bienvenida de DOMUX (pública, sin datos de nadie)."""
         return render_template("web/landing.html")
+
+    @app.get("/descargar")
+    def download_app():
+        """Descarga directa de la app Android (la dirección del QR del póster).
+
+        La entrega este mismo servidor, como app Android y con su tamaño, para que el celular la
+        instale sin problemas aunque se abra desde el navegador del lector de QR.
+        """
+        from services.app_download import APK_MIME, APK_SOURCE_URL, cached_apk
+
+        path = cached_apk()
+        if path is None:
+            return redirect(APK_SOURCE_URL)
+        response = send_file(path, mimetype=APK_MIME, as_attachment=True, download_name="domux.apk", max_age=0)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.before_request
     def reject_empty_write_fields():
