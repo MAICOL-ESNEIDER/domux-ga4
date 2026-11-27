@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
                             LoginScreen(navController, ::navigateAfterAuthentication)
                         }
                         composable("home") { HomeScreen(navController) }
+                        composable("activity") { GuardActivityScreen(navController) }
                         composable("announcements?tab={tab}", arguments = listOf(tabArg)) { entry ->
                             AnnouncementsScreen(navController, initialTab = entry.arguments?.getString("tab").orEmpty())
                         }

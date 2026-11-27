@@ -689,6 +689,23 @@ def authorize_visit_by_call(visit_id):
     return jsonify({"message": "Autorización telefónica registrada.", "visit": visit.to_dict()})
 
 
+@bp.put("/visits/<int:visit_id>/reject-call")
+@token_required
+@role_required("GUARD")
+def reject_visit_by_call(visit_id):
+    """El guardia llamó al apartamento y el residente dijo que no deja entrar a la visita."""
+    visit = db.session.get(Visit, visit_id)
+    if visit is None:
+        return error_response(404, "Visita no encontrada.")
+    if visit.approval_status != "pendiente":
+        return error_response(400, "Esta visita ya tiene una decisión.")
+    visit.approval_status = "rechazada"
+    visit.authorization_method = "llamada"
+    visit.events.append(VisitEvent(event_type="rechazada", method="llamada", actor_id=g.current_user.id))
+    db.session.commit()
+    return jsonify({"message": "Quedó registrado que el residente no autorizó la entrada.", "visit": visit.to_dict()})
+
+
 def _start_stay(visit, stay):
     """Empieza una estadía: la alerta de estadía larga vuelve a quedar pendiente (HU-031).
 

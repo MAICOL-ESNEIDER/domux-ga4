@@ -74,7 +74,10 @@ fun moreDestinations(): List<DomuxDestination> = when {
         Preferences,
         Legal
     )
-    Session.isGuard -> listOf(Announcements, Documents, Notifications, Preferences, Legal)
+    Session.isGuard -> listOf(
+        DomuxDestination("Entradas y entregas de hoy", "activity", R.drawable.ic_schedule),
+        Announcements, Documents, Notifications, Preferences, Legal
+    )
     else -> listOf(
         DomuxDestination("Mi perfil", "profile", R.drawable.ic_person),
         DomuxDestination("Mis paquetes", "registry?tab=paquetes", R.drawable.ic_package),

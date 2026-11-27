@@ -127,6 +127,11 @@ def admin_summary(admin):
     rules = current_rules()
     packages_over_48, packages_over_72 = _unclaimed_packages(rules)
     unread = Notification.query.filter_by(user_id=admin.id, is_read=False).count()
+    # Avisos de vehículos: los de visitantes que siguen adentro y los que ya pasaron el tiempo máximo.
+    from services.vehicle_service import entries_query
+
+    vehicles_inside = entries_query(inside=True).count()
+    vehicles_overdue = entries_query(overdue=True).count()
     return {
         "counts": {
             "pqrsOpen": pqrs_open,
@@ -138,6 +143,8 @@ def admin_summary(admin):
             "packagesOver48": packages_over_48,
             "packagesOver72": packages_over_72,
             "unreadNotifications": unread,
+            "visitorVehiclesInside": vehicles_inside,
+            "visitorVehiclesOverdue": vehicles_overdue,
         },
         "urgentPqrs": pqrs_rows,
         "pendingReservations": reservation_rows,

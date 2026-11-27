@@ -98,7 +98,7 @@ class NovedadesDeLaVersionTest {
         )
         como(Roles.PORTERIA)
         assertEquals(
-            listOf("Comunicados", "Documentos", "Notificaciones", "Preferencias", "Legal y privacidad"),
+            listOf("Entradas y entregas de hoy", "Comunicados", "Documentos", "Notificaciones", "Preferencias", "Legal y privacidad"),
             moreDestinations().map { it.label }
         )
         como(Roles.RESIDENTE)

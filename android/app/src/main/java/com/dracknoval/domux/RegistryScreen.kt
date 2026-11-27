@@ -257,6 +257,7 @@ fun RegistryScreen(
                     onLoadMore = { visitsVm.loadMore() },
                     onDecision = { _, _ -> },
                     onAuthorizeByCall = { visitsVm.authorizeByCall(it) },
+                    onRejectByCall = { visitsVm.rejectByCall(it) },
                     onEntry = { pendingEntry = it },
                     onExit = { pendingExit = it },
                     initialSearch = visitSearch

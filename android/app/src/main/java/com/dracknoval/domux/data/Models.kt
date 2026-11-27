@@ -727,7 +727,10 @@ data class AdminSummaryCounts(
     // Pasaron las horas del aviso naranja y del rojo de la unidad (48 y 72 por defecto, ver UnitRules).
     val packagesOver48: Int = 0,
     val packagesOver72: Int = 0,
-    val unreadNotifications: Int = 0
+    val unreadNotifications: Int = 0,
+    // Vehículos de visitantes adentro y los que ya pasaron el tiempo máximo de parqueo.
+    val visitorVehiclesInside: Int = 0,
+    val visitorVehiclesOverdue: Int = 0
 )
 data class AdminUrgentPqrs(
     val id: Int,

@@ -18,6 +18,12 @@ administración.
 
 ### Añadido
 
+**Portería: registro más simple, guía por llamada y «Entradas y entregas»**
+- Registrar una visita muestra solo lo obligatorio; la estadía, los detalles y la foto quedan en «Más datos (opcional)».
+- Cuando el residente no responde en la app, la tarjeta de la visita guía al guardia: llamar al apartamento, preguntar y marcar «Sí autorizó» o «No autorizó» (nuevo: queda registrado el rechazo por llamada).
+- Nueva pantalla «Entradas y entregas de hoy»: visitas que entraron o salieron, paquetes recibidos y entregados y vehículos de visitantes del día.
+- La administración ve en su inicio cuántos vehículos de visitantes están adentro y cuántos pasaron el tiempo máximo.
+
 **App del residente: lo que faltaba de la versión reducida**
 - «Mis paquetes» y «Mis visitas y mi QR» son pantallas separadas, y el inicio trae atajos y el botón «Más».
 - El QR de visitas lleva el nombre y el documento de cada persona (hasta 5), revisados; la portería ve qué documento debe pedir.

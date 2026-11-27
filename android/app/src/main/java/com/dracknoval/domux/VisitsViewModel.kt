@@ -227,6 +227,17 @@ class VisitsViewModel : DomuxViewModel() {
         }
     }
 
+    /** El residente dijo por teléfono que no deja entrar a la visita. */
+    fun rejectByCall(visit: Visit) {
+        viewModelScope.launch {
+            withBusy {
+                attempt("No se pudo registrar la respuesta") { api.rejectVisitByCall(auth(), visit.id) }
+            } ?: return@launch
+            showSuccess("Quedó registrado que el residente no autorizó la entrada de ${visit.visitorName}.")
+            loadVisits(1)
+        }
+    }
+
     fun authorizeByCall(visit: Visit) {
         viewModelScope.launch {
             withBusy {
