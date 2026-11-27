@@ -31,6 +31,7 @@ ANNOUNCEMENT_CATEGORIES = {
     "asamblea": ("Asamblea", "neutral"),
     "seguridad": ("Seguridad", "progress"),
     "zonas_comunes": ("Zonas comunes", "neutral"),
+    "otra": ("Otra", "neutral"),
 }
 
 #: Semáforo del plazo de una PQRS (HU-073).

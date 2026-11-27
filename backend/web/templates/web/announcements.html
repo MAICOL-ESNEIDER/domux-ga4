@@ -59,7 +59,7 @@
           <a class="inbox-link" href="{{ url_for('web.announcement_detail', announcement_id=item.id, **list_args) }}"{% if current %} aria-current="true"{% endif %}>
             <span class="inbox-top">
               <strong class="inbox-subject">{{ item.title }}</strong>
-              {% if item.category %}{{ status_badge("announcement", item.category) }}{% endif %}
+              {% if item.category == "otra" %}<span class="badge badge-neutral">{{ item.categoryLabel }}</span>{% elif item.category %}{{ status_badge("announcement", item.category) }}{% endif %}
             </span>
             <span>{{ item.towerName or "Toda la unidad" }} · {{ item.createdAt|date_es }}</span>
             <span class="inbox-deadline">
@@ -85,7 +85,7 @@
       <a class="back-link" href="{{ url_for('web.announcements_list', **list_args) }}">‹ Volver a la lista</a>
       <h2 id="detail-title" tabindex="-1" data-focus-on-load>{{ selected.title }}</h2>
       <p>
-        {% if selected.category %}{{ status_badge("announcement", selected.category) }}{% endif %}
+        {% if selected.category == "otra" %}<span class="badge badge-neutral">{{ selected.categoryLabel }}</span>{% elif selected.category %}{{ status_badge("announcement", selected.category) }}{% endif %}
         {{ badge(selected.towerName or "Toda la unidad", "neutral") }}
         {% if selected.isExpired %}{{ badge("Archivado", "neutral") }}{% endif %}
       </p>

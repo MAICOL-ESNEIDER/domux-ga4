@@ -222,7 +222,7 @@ class AnnouncementCategoryTests(AnnouncementTestCase):
 
         self.assertEqual(self.listed_ids(self.resident, "?category=urgente"), [urgent])
         self.assertEqual(self.client.get(
-            "/api/announcements?category=otra", headers=self.headers(self.resident)
+            "/api/announcements?category=inventada", headers=self.headers(self.resident)
         ).status_code, 400)
 
     def test_old_announcements_without_category_still_show_up(self):
