@@ -20,6 +20,7 @@ from werkzeug.security import generate_password_hash
 from extensions import db
 from models import (
     AuditLog,
+    PackageItem,
     Pet,
     Pqrs,
     PqrsMessage,
@@ -27,6 +28,7 @@ from models import (
     ResidentialUnit,
     User,
     Vehicle,
+    Visit,
 )
 from time_utils import now_colombia
 from validators import (
@@ -464,6 +466,12 @@ def _append_sheet(workbook, name, headers, rows):
     return worksheet
 
 
+def _attachment_label(media_url, media_type):
+    if not media_url:
+        return "No"
+    return f"Sí / {media_type or 'adjunto'}"
+
+
 def generate_census_template_xlsx() -> bytes:
     """Generate an example data migration workbook with a styled header row."""
     workbook = Workbook()
@@ -522,7 +530,7 @@ def generate_legal_report_xlsx(
             "ID", "Fecha Creación", "Fecha Actualización", "Estado", "Archivada",
             "Fecha Archivo", "Categoría", "Asunto", "Descripción", "Respuesta Admin",
             "Residente", "Documento", "Apartamento", "Creada por Admin",
-            "Calificación Satisfacción", "Comentario",
+            "Calificación Satisfacción", "Comentario", "Adjunto",
         ),
         [
             (
@@ -535,6 +543,7 @@ def generate_legal_report_xlsx(
                 item.created_by_admin_id,
                 item.satisfaction_ratings[-1].rating if item.satisfaction_ratings else None,
                 item.satisfaction_ratings[-1].comment if item.satisfaction_ratings else None,
+                _attachment_label(item.media_url, item.media_type),
             )
             for item in pqrs_items
         ],
@@ -542,12 +551,12 @@ def generate_legal_report_xlsx(
     _append_sheet(
         workbook,
         "PQRS_Historial_Chat",
-        ("ID Mensaje", "ID PQRS", "Fecha/Hora", "Autor", "Rol Autor", "Mensaje", "Tipo Adjunto"),
+        ("ID Mensaje", "ID PQRS", "Fecha/Hora", "Autor", "Rol Autor", "Mensaje", "Adjunto"),
         [
             (
                 item.id, item.pqrs_id, _format_datetime(item.created_at),
                 item.author.full_name if item.author else None, item.author_role,
-                item.message, item.media_type,
+                item.message, _attachment_label(item.media_url, item.media_type),
             )
             for item in messages
         ],
@@ -584,7 +593,7 @@ def generate_legal_report_xlsx(
             (
                 item.id, _format_datetime(item.created_at), item.entity_type,
                 item.entity_id, item.action, item.actor.full_name if item.actor else None,
-                item.actor_role, item.details,
+                item.actor_role, "Omitidos por seguridad" if item.details else None,
             )
             for item in audit_logs
         ],
@@ -595,6 +604,131 @@ def generate_legal_report_xlsx(
         "reservationsCount": len(reservations),
         "auditLogsCount": len(audit_logs),
     }
+    stream = io.BytesIO()
+    workbook.save(stream)
+    return stream.getvalue(), counts
+
+
+def generate_scoped_export_xlsx(scope="all") -> tuple[bytes, dict[str, int]]:
+    """Generate an administrative workbook containing only the selected sheets."""
+    expected_sheets = {
+        "all": (
+            "Usuarios_y_Apartamentos", "Fichas_Hogar_Detalle", "PQRS_Radicados",
+            "PQRS_Historial_Chat", "Reservas_Zonas_Comunes", "Visitas_Porteria",
+            "Paqueteria_Porteria", "Logs_Auditoria",
+        ),
+        "users": ("Usuarios_y_Apartamentos", "Fichas_Hogar_Detalle"),
+        "pqrs": ("PQRS_Radicados", "PQRS_Historial_Chat"),
+        "reservations": ("Reservas_Zonas_Comunes",),
+        "security": ("Visitas_Porteria", "Paqueteria_Porteria"),
+        "audit": ("Logs_Auditoria",),
+    }
+    if scope not in expected_sheets:
+        raise ValueError("Alcance de exportación inválido.")
+
+    report_bytes, counts = generate_legal_report_xlsx()
+    workbook = load_workbook(io.BytesIO(report_bytes))
+
+    if scope in ("all", "users"):
+        users = User.query.order_by(User.id).all()
+        units = ResidentialUnit.query.order_by(ResidentialUnit.apartment).all()
+        _append_sheet(
+            workbook,
+            "Usuarios_y_Apartamentos",
+            (
+                "ID", "Nombre", "Apellido", "Correo", "Teléfono", "Documento",
+                "Rol", "Apartamento", "Tenencia", "Estado Activo", "Fecha Creación",
+            ),
+            [
+                (
+                    user.id, user.name, user.last_name, user.email, user.phone,
+                    user.document_id, user.role, user.apartment, user.occupancy_type,
+                    bool(user.is_active), _format_datetime(user.created_at),
+                )
+                for user in users
+            ],
+        )
+        _append_sheet(
+            workbook,
+            "Fichas_Hogar_Detalle",
+            ("Apartamento", "Parqueadero", "Cuarto Útil", "Integrantes", "Mascotas", "Vehículos"),
+            [
+                (
+                    unit.apartment,
+                    unit.parking_identifier,
+                    unit.storage_identifier,
+                    ", ".join(
+                        member.name + (f" {member.last_name}" if member.last_name else "")
+                        for member in unit.members
+                    ),
+                    ", ".join(f"{pet.name} ({pet.species})" for pet in unit.pets),
+                    ", ".join(
+                        f"{vehicle.plate} ({vehicle.vehicle_type})"
+                        for vehicle in unit.vehicles
+                    ),
+                )
+                for unit in units
+            ],
+        )
+
+    if scope in ("all", "security"):
+        visits = Visit.query.order_by(Visit.id).all()
+        packages = PackageItem.query.filter_by(is_deleted=False).order_by(PackageItem.id).all()
+        _append_sheet(
+            workbook,
+            "Visitas_Porteria",
+            (
+                "Radicado", "Residente", "Visitante", "Descripción", "Estado",
+                "Fecha Creación", "Fecha Entrada", "Fecha Salida", "Adjunto",
+            ),
+            [
+                (
+                    f"VIS-{item.created_at.year if item.created_at else now_colombia().year}-{item.id:04d}",
+                    item.resident.full_name if item.resident else None,
+                    item.visitor_name,
+                    item.description,
+                    item.approval_status,
+                    _format_datetime(item.created_at),
+                    _format_datetime(item.entered_at),
+                    _format_datetime(item.exited_at),
+                    _attachment_label(item.visitor_photo_url, item.visitor_photo_type),
+                )
+                for item in visits
+            ],
+        )
+        _append_sheet(
+            workbook,
+            "Paqueteria_Porteria",
+            (
+                "Radicado", "Residente", "Descripción", "Estado", "Fecha Creación",
+                "Fecha Entrega", "Entregado a", "Recibido por", "Adjunto",
+                "Adjunto Entrega",
+            ),
+            [
+                (
+                    f"PAQ-{item.created_at.year if item.created_at else now_colombia().year}-{item.id:04d}",
+                    item.resident.full_name if item.resident else None,
+                    item.description,
+                    item.status,
+                    _format_datetime(item.created_at),
+                    _format_datetime(item.delivered_at),
+                    item.delivered_to,
+                    item.delivered_by.full_name if item.delivered_by else None,
+                    _attachment_label(item.media_url, item.media_type),
+                    _attachment_label(item.delivery_media_url, item.media_type),
+                )
+                for item in packages
+            ],
+        )
+
+    for sheet_name in tuple(workbook.sheetnames):
+        if sheet_name not in expected_sheets[scope]:
+            del workbook[sheet_name]
+    for position, sheet_name in enumerate(expected_sheets[scope]):
+        current_position = workbook.index(workbook[sheet_name])
+        if current_position != position:
+            workbook.move_sheet(workbook[sheet_name], offset=position - current_position)
+
     stream = io.BytesIO()
     workbook.save(stream)
     return stream.getvalue(), counts

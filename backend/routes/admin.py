@@ -1,5 +1,6 @@
 import base64
 import binascii
+import json
 import re
 from datetime import date, datetime
 
@@ -23,7 +24,7 @@ from time_utils import now_colombia
 from services.excel_service import (
     MIME_XLSX,
     generate_census_template_xlsx,
-    generate_legal_report_xlsx,
+    generate_scoped_export_xlsx,
     import_census_from_bytes,
 )
 from validators import (
@@ -115,10 +116,36 @@ def post_import_census():
 @token_required
 @role_required("ADMIN")
 def get_legal_report():
-    workbook_bytes, counts = generate_legal_report_xlsx()
+    scope = request.args.get("scope", "all").strip().lower()
+    filenames = {
+        "all": "Respaldo_Completo_DOMUX",
+        "users": "Exportacion_Usuarios_DOMUX",
+        "pqrs": "Exportacion_PQRS_DOMUX",
+        "reservations": "Exportacion_Reservas_DOMUX",
+        "security": "Exportacion_Porteria_DOMUX",
+        "audit": "Exportacion_Auditoria_DOMUX",
+    }
+    if scope not in filenames:
+        return error_response(
+            400,
+            "Alcance inválido. Los valores permitidos son: all, users, pqrs, "
+            "reservations, security y audit.",
+        )
+
+    db.session.add(AuditLog(
+        entity_type="excel_export",
+        action="exported",
+        actor_id=g.current_user.id,
+        actor_role=g.current_user.role,
+        details=json.dumps({"scope": scope}),
+    ))
+    db.session.flush()
+    workbook_bytes, counts = generate_scoped_export_xlsx(scope)
+    db.session.commit()
     return jsonify({
-        "message": "Reporte legal generado exitosamente.",
-        "fileName": f"Reporte_Legal_DOMUX_{now_colombia().date().isoformat()}.xlsx",
+        "message": "Exportación generada exitosamente.",
+        "scope": scope,
+        "fileName": f"{filenames[scope]}_{now_colombia().date().isoformat()}.xlsx",
         "mimeType": MIME_XLSX,
         "base64": _encode_base64(workbook_bytes),
         **counts,

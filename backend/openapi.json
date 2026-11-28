@@ -110,7 +110,27 @@
       "post": {"tags": ["Admin"], "summary": "Importar censo", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Censo importado"}}}
     },
     "/api/admin/export/legal-report": {
-      "get": {"tags": ["Admin"], "summary": "Exportar reporte legal", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Archivo Excel"}}}
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Exportar respaldo Excel",
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["all", "users", "pqrs", "reservations", "security", "audit"],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {"description": "Archivo Excel"},
+          "400": {"description": "Alcance de exportación inválido"}
+        }
+      }
     },
     "/api/admin/archive-history": {
       "post": {"tags": ["Admin"], "summary": "Archivar historial", "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Archivo generado"}}}
